@@ -19,6 +19,22 @@ jobs:
             cmake .
             make
       - run:
+          name: Run Poisson test
+          command: |
+            cd src/
+            mpirun -np 3 ./dolfin-scaling-test \
+            --problem_type poisson \
+            --scaling_type weak \
+            --ndofs 500000 \
+            --petsc.log_view \
+            --petsc.ksp_view \
+            --petsc.ksp_type cg \
+            --petsc.ksp_rtol 1.0e-8 \
+            --petsc.pc_type hypre \
+            --petsc.pc_hypre_type boomeramg \
+            --petsc.pc_hypre_boomeramg_strong_threshold 0.5 \
+            --petsc.options_left
+      - run:
           name: Run elasticity test
           command: |
             cd src/
