@@ -10,7 +10,8 @@ jobs:
           name: Compile UFL files
           command: |
             cd src/
-            ffc -l dolfin *.ufl
+            ffc -l dolfin Elasticity.ufl
+            ffc -l dolfin Poisson.ufl
       - run:
           name: Build test program
           command: |
