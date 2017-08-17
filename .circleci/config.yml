@@ -25,7 +25,7 @@ jobs:
             mpirun -np 3 ./dolfin-scaling-test \
             --problem_type poisson \
             --scaling_type weak \
-            --ndofs 500000 \
+            --ndofs 50000 \
             --petsc.log_view \
             --petsc.ksp_view \
             --petsc.ksp_type cg \
