@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: fenicsproject/pybind11-testing:latest
+      - image: fenicsproject/performance-tests:latest
     working_directory: ~/working
     steps:
       - checkout
