@@ -7,7 +7,12 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Build test cost
+          name: Compile UFL files
+          command: |
+            cd src/
+            ffc -l dolfin *.ufl
+      - run:
+          name: Build test program
           command: |
             cd src/
             cmake .
