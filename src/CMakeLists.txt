@@ -1,0 +1,17 @@
+cmake_minimum_required(VERSION 3.5)
+
+set(PROJECT_NAME dolfin-scaling-test)
+project(${PROJECT_NAME})
+
+# Get DOLFIN configuration data (DOLFINConfig.cmake must be in
+# DOLFIN_CMAKE_CONFIG_PATH)
+find_package(DOLFIN REQUIRED)
+include(${DOLFIN_USE_FILE})
+
+set(CMAKE_BUILD_TYPE "Release")
+
+# Executable
+add_executable(${PROJECT_NAME} main.cpp)
+
+# Target libraries
+target_link_libraries(${PROJECT_NAME} dolfin)
