@@ -150,6 +150,12 @@ mpirun -np 8 ./dolfin-scaling-test \
 Reference performance data is provided [here](performance.md) to help
 in assessing performance on a given system.
 
+
+## Test status
+
+The code is tested on CircleCI.  
+[![CircleCI](https://circleci.com/bb/fenics-project/performance-tests.svg?style=svg)](https://circleci.com/bb/fenics-project/performance-tests)
+
 ## Authors and license
 
 The tests have been developed by Chris N. Richardson
