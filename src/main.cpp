@@ -4,32 +4,40 @@
 
 #include <set>
 #include <string>
-#include <dolfin.h>
-#include "poisson_problem.h"
-#include "elasticity_problem.h"
-#include "mesh.h"
+#include <utility>
 
-using namespace dolfin;
+#include <dolfin/function/Function.h>
+#include <dolfin/function/FunctionSpace.h>
+#include <dolfin/common/timing.h>
+#include <dolfin/common/Timer.h>
+#include <dolfin/io/XDMFFile.h>
+#include <dolfin/la/PETScKrylovSolver.h>
+#include <dolfin/la/PETScKrylovSolver.h>
+#include <dolfin/la/PETScMatrix.h>
+#include <dolfin/la/PETScVector.h>
+#include <dolfin/parameter/GlobalParameters.h>
+#include <dolfin/parameter/Parameters.h>
+
+#include "elasticity_problem.h"
+#include "poisson_problem.h"
+#include "mesh.h"
 
 int main(int argc, char *argv[])
 {
-  SubSystemsManager::init_mpi();
+  dolfin::SubSystemsManager::init_mpi();
 
   // Parse command line options (will intialise PETSc if any PETSc
   // options are present, e.g. --petsc.pc_type=jacobi)
-  parameters.parse(argc, argv);
+  dolfin::parameters.parse(argc, argv);
 
   // Intialise PETSc (if not already initialised when parsing
   // parameters)
-  SubSystemsManager::init_petsc();
+  dolfin::SubSystemsManager::init_petsc();
 
   // Default parameters
-  Parameters application_parameters("application_parameters");
+  dolfin::Parameters application_parameters("application_parameters");
   application_parameters.add("problem_type", "poisson", {"poisson", "elasticity"});
   application_parameters.add("scaling_type", "weak", {"weak", "strong"});
-  //application_parameters.add("pc", "BoomerAMG", {"BoomerAMG", "GAMG"});
-  application_parameters.add("pc", "GAMG", {"BoomerAMG", "GAMG"});
-  //application_parameters.add("ndofs", 640000);
   application_parameters.add("ndofs", 640);
   application_parameters.add("output", false);
   application_parameters.add("output_dir", "./out");
@@ -40,13 +48,12 @@ int main(int argc, char *argv[])
   // Extract parameters
   const std::string problem_type = application_parameters["problem_type"];
   const std::string scaling_type = application_parameters["scaling_type"];
-  const std::string preconditioner = application_parameters["pc"];
   const std::size_t ndofs = application_parameters["ndofs"];
   const bool output = application_parameters["output"];
   const std::string output_dir = application_parameters["output_dir"];
 
   // Set mesh partitioner
-  parameters["mesh_partitioner"] = "SCOTCH";
+  dolfin::parameters["mesh_partitioner"] = "SCOTCH";
 
   bool strong_scaling;
   if (scaling_type == "strong")
@@ -69,7 +76,7 @@ int main(int argc, char *argv[])
   std::shared_ptr<const dolfin::Mesh> mesh;
   if (problem_type == "poisson")
   {
-    Timer t0("ZZZ Create Mesh");
+    dolfin::Timer t0("ZZZ Create Mesh");
     mesh = create_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1);
     t0.stop();
 
@@ -81,7 +88,7 @@ int main(int argc, char *argv[])
   }
   else if (problem_type == "elasticity")
   {
-    Timer t0("ZZZ Create Mesh");
+    dolfin::Timer t0("ZZZ Create Mesh");
     mesh = create_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3);
     t0.stop();
 
@@ -96,42 +103,42 @@ int main(int argc, char *argv[])
     throw std::runtime_error("Unknown problem type: " + problem_type);
 
   // Print simulation summary
-  if (MPI::rank(mesh->mpi_comm()) == 0)
+  if (dolfin::MPI::rank(mesh->mpi_comm()) == 0)
   {
     std::cout << "----------------------------------------------------------------" << std::endl;
     std::cout << "Test problem summary" << std::endl;
     std::cout << "  Problem type:   "   << problem_type << std::endl;
-    std::cout << "  Preconditioner: " << preconditioner << std::endl;
     std::cout << "  Scaling type:   "   << scaling_type << std::endl;
     std::cout << "  Num processes:  "  << num_processes << std::endl;
     std::cout << "  Total degrees of freedom:               " <<  u->function_space()->dim() << std::endl;
     std::cout << "  Average degrees of freedom per process: "
-              << u->function_space()->dim()/MPI::size(mesh->mpi_comm()) << std::endl;
+              << u->function_space()->dim()/dolfin::MPI::size(mesh->mpi_comm()) << std::endl;
     std::cout << "----------------------------------------------------------------" << std::endl;
   }
 
   // Create solver
-  PETScKrylovSolver solver(mesh->mpi_comm());
+  dolfin::PETScKrylovSolver solver(mesh->mpi_comm());
   solver.set_from_options();
   solver.set_operator(A);
 
   // Solve
-  Timer t5("ZZZ Solve");
+  dolfin::Timer t5("ZZZ Solve");
   std::size_t num_iter = solver.solve(*u->vector(), *b);
   t5.stop();
 
   if (output)
   {
-    Timer t6("ZZZ Output");
+    dolfin::Timer t6("ZZZ Output");
     //  Save solution in XDMF format
-    std::string filename = output_dir + "/solution-" + std::to_string(num_processes) + ".xdmf";
-    XDMFFile file(filename);
+    std::string filename = output_dir + "/solution-" + std::to_string(num_processes)
+      + ".xdmf";
+    dolfin::XDMFFile file(filename);
     file.write(*u);
     t6.stop();
   }
 
   // Display timings
-  list_timings(TimingClear::clear, {TimingType::wall});
+  list_timings(dolfin::TimingClear::clear, {dolfin::TimingType::wall});
 
   // Report number of Krylov iterations
   if (dolfin::MPI::rank(mesh->mpi_comm()) == 0)

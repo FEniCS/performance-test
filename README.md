@@ -153,7 +153,7 @@ in assessing performance on a given system.
 
 ## Test status
 
-The code is tested on CircleCI.  
+The code is tested on CircleCI.
 [![CircleCI](https://circleci.com/bb/fenics-project/performance-tests.svg?style=svg)](https://circleci.com/bb/fenics-project/performance-tests)
 
 ## Authors and license

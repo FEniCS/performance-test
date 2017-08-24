@@ -7,13 +7,16 @@
 #include <memory>
 #include <utility>
 #include <dolfin/common/Array.h>
+#include <dolfin/common/Timer.h>
 #include <dolfin/fem/SystemAssembler.h>
+#include <dolfin/function/Constant.h>
 #include <dolfin/function/Expression.h>
 #include <dolfin/function/Function.h>
 #include <dolfin/function/FunctionSpace.h>
 #include <dolfin/la/PETScMatrix.h>
 #include <dolfin/la/PETScVector.h>
 #include <dolfin/mesh/Mesh.h>
+#include <dolfin/mesh/SubDomain.h>
 
 #include "Poisson.h"
 
