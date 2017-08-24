@@ -12,7 +12,6 @@
 #include <dolfin/common/Timer.h>
 #include <dolfin/io/XDMFFile.h>
 #include <dolfin/la/PETScKrylovSolver.h>
-#include <dolfin/la/PETScKrylovSolver.h>
 #include <dolfin/la/PETScMatrix.h>
 #include <dolfin/la/PETScVector.h>
 #include <dolfin/parameter/GlobalParameters.h>
