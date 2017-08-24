@@ -6,8 +6,9 @@
 
 #include <memory>
 #include <dolfin/common/MPI.h>
-#include <dolfin/generation/BoxMesh.h>
+#include <dolfin/generation/UnitCubeMesh.h>
 #include <dolfin/mesh/Mesh.h>
+#include <dolfin/refinement/refine.h>
 
 namespace
 {
