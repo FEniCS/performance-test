@@ -85,7 +85,7 @@ mpirun -np 8 ./dolfin-scaling-test \
 --petsc.options_left
 ```
 
-For a weak scaling test, with 8 MPI processes and 10M
+For a strong scaling test, with 8 MPI processes and 10M
 degrees-of-freedom in total:
 
 
