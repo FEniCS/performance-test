@@ -77,7 +77,7 @@ create_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
   auto mesh =
       std::make_shared<const dolfin::mesh::Mesh>(dolfin::generation::BoxMesh(
           comm, {{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}, {Nx, Ny, Nz},
-          dolfin::mesh::CellType::tetrahedron, dolfin::mesh::GhostMode::none));
+          dolfin::mesh::CellType::Type::tetrahedron, dolfin::mesh::GhostMode::none));
 
   if (dolfin::MPI::rank(mesh->mpi_comm()) == 0) {
     std::cout << "UnitCube (" << Nx << "x" << Ny << "x" << Nz

@@ -6,8 +6,10 @@
 #include <string>
 #include <utility>
 
+#include <dolfin/common/SubSystemsManager.h>
 #include <dolfin/common/Timer.h>
 #include <dolfin/common/timing.h>
+#include <dolfin/fem/Form.h>
 #include <dolfin/function/Function.h>
 #include <dolfin/function/FunctionSpace.h>
 #include <dolfin/io/XDMFFile.h>
@@ -19,12 +21,13 @@
 #include "mesh.h"
 #include "poisson_problem.h"
 
-int main(int argc, char *argv[]) {
-  dolfin::SubSystemsManager::init_mpi();
+int main(int argc, char* argv[])
+{
+  dolfin::common::SubSystemsManager::init_mpi();
 
   // Intialise PETSc (if not already initialised when parsing
   // parameters)
-  dolfin::SubSystemsManager::init_petsc();
+  dolfin::common::SubSystemsManager::init_petsc();
 
   // Default parameters
   // dolfin::Parameters application_parameters("application_parameters");
@@ -39,21 +42,22 @@ int main(int argc, char *argv[]) {
   //  application_parameters.parse(argc, argv);
 
   // Extract parameters
-  const std::string problem_type =
-      "poisson"; // application_parameters["problem_type"];
-  const std::string scaling_type =
-      "weak";                      // application_parameters["scaling_type"];
+  const std::string problem_type
+      = "poisson"; // application_parameters["problem_type"];
+  const std::string scaling_type
+      = "weak";                    // application_parameters["scaling_type"];
   const std::size_t ndofs = 50000; // application_parameters["ndofs"];
   const bool output = true;        // application_parameters["output"];
-  const std::string output_dir =
-      "output"; // application_parameters["output_dir"];
+  const std::string output_dir
+      = "output"; // application_parameters["output_dir"];
 
   bool strong_scaling;
   if (scaling_type == "strong")
     strong_scaling = true;
   else if (scaling_type == "weak")
     strong_scaling = false;
-  else {
+  else
+  {
     throw std::runtime_error("Scaling type '" + scaling_type + "` unknown");
     strong_scaling = true;
   }
@@ -66,7 +70,8 @@ int main(int argc, char *argv[]) {
   std::shared_ptr<dolfin::la::PETScVector> b;
   std::shared_ptr<dolfin::function::Function> u;
   std::shared_ptr<const dolfin::mesh::Mesh> mesh;
-  if (problem_type == "poisson") {
+  if (problem_type == "poisson")
+  {
     dolfin::common::Timer t0("ZZZ Create Mesh");
     mesh = create_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1);
     t0.stop();
@@ -76,7 +81,9 @@ int main(int argc, char *argv[]) {
     A = std::get<0>(data);
     b = std::get<1>(data);
     u = std::get<2>(data);
-  } else if (problem_type == "elasticity") {
+  }
+  else if (problem_type == "elasticity")
+  {
     dolfin::common::Timer t0("ZZZ Create Mesh");
     mesh = create_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3);
     t0.stop();
@@ -87,11 +94,13 @@ int main(int argc, char *argv[]) {
     A = std::get<0>(data);
     b = std::get<1>(data);
     u = std::get<2>(data);
-  } else
+  }
+  else
     throw std::runtime_error("Unknown problem type: " + problem_type);
 
   // Print simulation summary
-  if (dolfin::MPI::rank(mesh->mpi_comm()) == 0) {
+  if (dolfin::MPI::rank(mesh->mpi_comm()) == 0)
+  {
     std::cout
         << "----------------------------------------------------------------"
         << std::endl;
@@ -102,8 +111,8 @@ int main(int argc, char *argv[]) {
     std::cout << "  Total degrees of freedom:               "
               << u->function_space()->dim() << std::endl;
     std::cout << "  Average degrees of freedom per process: "
-              << u->function_space()->dim() /
-                     dolfin::MPI::size(mesh->mpi_comm())
+              << u->function_space()->dim()
+                     / dolfin::MPI::size(mesh->mpi_comm())
               << std::endl;
     std::cout
         << "----------------------------------------------------------------"
@@ -120,11 +129,12 @@ int main(int argc, char *argv[]) {
   std::size_t num_iter = solver.solve(*u->vector(), *b);
   t5.stop();
 
-  if (output) {
+  if (output)
+  {
     dolfin::common::Timer t6("ZZZ Output");
     //  Save solution in XDMF format
-    std::string filename =
-        output_dir + "/solution-" + std::to_string(num_processes) + ".xdmf";
+    std::string filename
+        = output_dir + "/solution-" + std::to_string(num_processes) + ".xdmf";
     dolfin::io::XDMFFile file(mesh->mpi_comm(), filename);
     file.write(*u);
     t6.stop();
