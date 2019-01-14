@@ -69,7 +69,7 @@ int main(int argc, char* argv[])
   std::shared_ptr<dolfin::la::PETScMatrix> A;
   std::shared_ptr<dolfin::la::PETScVector> b;
   std::shared_ptr<dolfin::function::Function> u;
-  std::shared_ptr<const dolfin::mesh::Mesh> mesh;
+  std::shared_ptr<dolfin::mesh::Mesh> mesh;
   if (problem_type == "poisson")
   {
     dolfin::common::Timer t0("ZZZ Create Mesh");

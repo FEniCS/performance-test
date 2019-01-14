@@ -79,14 +79,16 @@ public:
                 values,
             const Eigen::Ref<const dolfin::EigenRowArrayXXd> x) const
   {
-    double dx = x[0] - 0.5;
-    double dz = x[2] - 0.5;
-    double r = dx * dx + dz * dz;
+    for (Eigen::Index i = 0; i < x.rows(); ++i)
+    {
+      double dx = x(i, 0) - 0.5;
+      double dz = x(i, 2) - 0.5;
+      double r = dx * dx + dz * dz;
 
-    values[0] = -dz * std::sqrt(r) * x[1];
-    values[2] = dx * std::sqrt(r) * x[1];
-
-    values[1] = 1.0;
+      values(i, 0) = -dz * std::sqrt(r) * x(i, 1);
+      values(i, 1) = 1.0;
+      values(i, 2) = dx * std::sqrt(r) * x(i, 1);
+    }
   }
 };
 
@@ -96,10 +98,10 @@ class DirichletBoundary : public dolfin::mesh::SubDomain
   dolfin::EigenArrayXb inside(Eigen::Ref<const dolfin::EigenRowArrayXXd> x,
                               bool on_boundary) const
   {
-    dolfin::EigenArrayXb boundary(x.rows());
-
-    //    return x[1] < 1.0e-8;
-    return boundary;
+    dolfin::EigenArrayXb b(x.rows());
+    for (Eigen::Index i = 0; i < x.rows(); ++i)
+      b(i, 0) = (x(i, 1) < 1.0e-8);
+    return b;
   }
 };
 
@@ -125,11 +127,8 @@ problem(std::shared_ptr<const dolfin::mesh::Mesh> mesh)
   dolfin::common::Timer t1("ZZZ Assemble");
 
   // Define boundary condition
-  auto u0 = std::make_shared<dolfin::function::Expression>(
-      [](PetscScalar* values, const double* x, const int64_t* cell_idx, int np,
-         int value_size, int gdim,
-         int num_cells) { std::fill(values, values + np * 3, 0.0); },
-      {3});
+  auto u0 = std::make_shared<dolfin::function::Function>(V);
+  u0->vector()->set(0.0);
 
   auto boundary = std::make_shared<DirichletBoundary>();
   auto bc = std::make_shared<dolfin::fem::DirichletBC>(V, u0, boundary);
@@ -150,7 +149,9 @@ problem(std::shared_ptr<const dolfin::mesh::Mesh> mesh)
   // auto a = std::make_shared<Elasticity::BilinearForm>(V, V);
   // auto L = std::make_shared<Elasticity::LinearForm>(V);
 
-  auto f = std::make_shared<Source>();
+  auto f_expr = Source();
+  auto f = std::make_shared<dolfin::function::Function>(V);
+  f->interpolate(f_expr);
 
   //  L->f = f;
   L->set_coefficient_index_to_name_map(form_L->coefficient_number_map);
