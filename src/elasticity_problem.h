@@ -6,11 +6,9 @@
 
 #include <memory>
 #include <utility>
-#include <dolfin/common/Array.h>
 #include <dolfin/common/Timer.h>
 #include <dolfin/fem/DirichletBC.h>
 #include <dolfin/fem/SystemAssembler.h>
-#include <dolfin/function/Constant.h>
 #include <dolfin/function/Expression.h>
 #include <dolfin/function/Function.h>
 #include <dolfin/function/FunctionSpace.h>
@@ -27,16 +25,16 @@ namespace elastic
   // Function to compute the near nullspace for elasticity - it is
   // made up of the six rigid body modes
 
-  dolfin::VectorSpaceBasis build_near_nullspace(const dolfin::FunctionSpace& V,
-                                                const dolfin::GenericVector& x)
+  dolfin::la::VectorSpaceBasis build_near_nullspace(const dolfin::function::FunctionSpace& V,
+                                                    const dolfin::la::PETScVector& x)
   {
     // Get subspaces
-    auto V0 = V.sub(0);
-    auto V1 = V.sub(1);
-    auto V2 = V.sub(2);
+    auto V0 = V.sub({0});
+    auto V1 = V.sub({1});
+    auto V2 = V.sub({2});
 
     // Create vectors for nullspace basis
-    std::vector<std::shared_ptr<dolfin::GenericVector>> basis(6);
+    std::vector<std::shared_ptr<dolfin::la::PETScVector>> basis(6);
     for (std::size_t i = 0; i < basis.size(); ++i)
       basis[i] = x.copy();
 
@@ -60,13 +58,13 @@ namespace elastic
       basis[i]->apply("add");
 
     // Create vector space and orthonormalize
-    dolfin::VectorSpaceBasis vector_space(basis);
+    dolfin::la::VectorSpaceBasis vector_space(basis);
     vector_space.orthonormalize();
     return vector_space;
   }
 
   // Source term (right-hand side)
-  class Source : public dolfin::Expression
+  class Source : public dolfin::function::Expression
   {
   public:
 
@@ -87,27 +85,27 @@ namespace elastic
   };
 
   // Bottom (x[1] = 0) surface
-  class DirichletBoundary : public dolfin::SubDomain
+  class DirichletBoundary : public dolfin::mesh::SubDomain
   {
-    bool inside(const dolfin::Array<double>& x, bool on_boundary) const
+    bool inside(const Eigen::Array<double, Eigen::Dynamic>& x, bool on_boundary) const
     { return x[1] < 1.0e-8; }
   };
 
-std::tuple<std::shared_ptr<dolfin::PETScMatrix>,
-  std::shared_ptr<dolfin::PETScVector>,
-  std::shared_ptr<dolfin::Function>>
-  problem(std::shared_ptr<const dolfin::Mesh> mesh)
+  std::tuple<std::shared_ptr<dolfin::la::PETScMatrix>,
+    std::shared_ptr<dolfin::la::PETScVector>,
+    std::shared_ptr<dolfin::function::Function>>
+    problem(std::shared_ptr<const dolfin::mesh::Mesh> mesh)
   {
-    dolfin::Timer t0("ZZZ FunctionSpace");
+    dolfin::common::Timer t0("ZZZ FunctionSpace");
     auto V = std::make_shared<Elasticity::FunctionSpace>(mesh);
     t0.stop();
 
-    dolfin::Timer t1("ZZZ Assemble");
+    dolfin::common::Timer t1("ZZZ Assemble");
 
     // Define boundary condition
     auto u0 = std::make_shared<dolfin::Constant>(0.0, 0.0, 0.0);
     auto boundary = std::make_shared<DirichletBoundary>();
-    auto bc = std::make_shared<dolfin::DirichletBC>(V, u0, boundary);
+    auto bc = std::make_shared<dolfin::fem::DirichletBC>(V, u0, boundary);
 
     // Define variational forms
     auto a = std::make_shared<Elasticity::BilinearForm>(V, V);
@@ -128,8 +126,8 @@ std::tuple<std::shared_ptr<dolfin::PETScMatrix>,
     dolfin::SystemAssembler assembler(a, L, {bc});
 
     // Assemble system
-    auto A = std::make_shared<dolfin::PETScMatrix>();
-    auto b = std::make_shared<dolfin::PETScVector>();
+    auto A = std::make_shared<dolfin::la::PETScMatrix>();
+    auto b = std::make_shared<dolfin::la::PETScVector>();
     assembler.assemble(*A, *b);
 
     t1.stop();
@@ -137,15 +135,15 @@ std::tuple<std::shared_ptr<dolfin::PETScMatrix>,
 
     dolfin::Timer t2("ZZZ Create near-nullspace");
     // Create Function to hold solution
-    auto u = std::make_shared<dolfin::Function>(V);
+    auto u = std::make_shared<dolfin::function::Function>(V);
 
     // Build near-nullspace and attach to matrix
     dolfin::VectorSpaceBasis nullspace = build_near_nullspace(*V, *u->vector());
     A->set_near_nullspace(nullspace);
     t2.stop();
 
-    return std::tuple<std::shared_ptr<dolfin::PETScMatrix>,
-      std::shared_ptr<dolfin::PETScVector>,
-      std::shared_ptr<dolfin::Function>>(A, b, u);
+    return std::tuple<std::shared_ptr<dolfin::la::PETScMatrix>,
+      std::shared_ptr<dolfin::la::PETScVector>,
+      std::shared_ptr<dolfin::function::Function>>(A, b, u);
   }
 }

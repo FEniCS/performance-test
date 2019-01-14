@@ -6,10 +6,8 @@
 
 #include <memory>
 #include <utility>
-#include <dolfin/common/Array.h>
 #include <dolfin/common/Timer.h>
 #include <dolfin/fem/SystemAssembler.h>
-#include <dolfin/function/Constant.h>
 #include <dolfin/function/Expression.h>
 #include <dolfin/function/Function.h>
 #include <dolfin/function/FunctionSpace.h>
@@ -23,7 +21,7 @@
 namespace poisson
 {
   // Source term (right-hand side)
-  class Source : public dolfin::Expression
+  class Source : public dolfin::function::Expression
   {
   public:
     void eval(dolfin::Array<double>& values,
@@ -36,7 +34,7 @@ namespace poisson
   };
 
   // Normal derivative (Neumann boundary condition)
-  class dUdN : public dolfin::Expression
+  class dUdN : public dolfin::function::Expression
   {
   public:
     void eval(dolfin::Array<double>& values,
@@ -45,28 +43,28 @@ namespace poisson
   };
 
   // Sub domain for Dirichlet boundary condition
-  class DirichletBoundary : public dolfin::SubDomain
+  class DirichletBoundary : public dolfin::mesh::SubDomain
   {
   public:
     bool inside(const dolfin::Array<double>& x, bool on_boundary) const
     { return x[0] < DOLFIN_EPS or x[0] > (1.0 - DOLFIN_EPS); }
   };
 
-  std::tuple<std::shared_ptr<dolfin::PETScMatrix>,
-    std::shared_ptr<dolfin::PETScVector>,
-    std::shared_ptr<dolfin::Function>>
-    problem(std::shared_ptr<const dolfin::Mesh> mesh)
+  std::tuple<std::shared_ptr<dolfin::la::PETScMatrix>,
+    std::shared_ptr<dolfin::la::PETScVector>,
+    std::shared_ptr<dolfin::function::Function>>
+    problem(std::shared_ptr<const dolfin::mesh::Mesh> mesh)
   {
-    dolfin::Timer t0("ZZZ FunctionSpace");
+    dolfin::common::Timer t0("ZZZ FunctionSpace");
     auto V = std::make_shared<Poisson::FunctionSpace>(mesh);
     t0.stop();
 
-    dolfin::Timer t1("ZZZ Assemble");
+    dolfin::common::Timer t1("ZZZ Assemble");
 
     // Define boundary condition
     auto u0 = std::make_shared<dolfin::Constant>(0.0);
     auto boundary = std::make_shared<DirichletBoundary>();
-    auto bc = std::make_shared<dolfin::DirichletBC>(V, u0, boundary);
+    auto bc = std::make_shared<dolfin::fem::DirichletBC>(V, u0, boundary);
 
     // Define variational forms
     auto a = std::make_shared<Poisson::BilinearForm>(V, V);
@@ -79,20 +77,20 @@ namespace poisson
     L->g = g;
 
     // Create assembler
-    dolfin::SystemAssembler assembler(a, L, {bc});
+    dolfin::fem::SystemAssembler assembler(a, L, {bc});
 
     // Assemble system
-    auto A = std::make_shared<dolfin::PETScMatrix>();
-    auto b = std::make_shared<dolfin::PETScVector>();
+    auto A = std::make_shared<dolfin::la::PETScMatrix>();
+    auto b = std::make_shared<dolfin::la::PETScVector>();
     assembler.assemble(*A, *b);
 
     t1.stop();
 
     // Create Function to hold solution
-    auto u = std::make_shared<dolfin::Function>(V);
+    auto u = std::make_shared<dolfin::function::Function>(V);
 
-    return std::tuple<std::shared_ptr<dolfin::PETScMatrix>,
-      std::shared_ptr<dolfin::PETScVector>,
-      std::shared_ptr<dolfin::Function>>(A, b, u);
+    return std::tuple<std::shared_ptr<dolfin::la::PETScMatrix>,
+      std::shared_ptr<dolfin::la::PETScVector>,
+      std::shared_ptr<dolfin::function::Function>>(A, b, u);
   }
 }
