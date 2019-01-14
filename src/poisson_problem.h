@@ -97,7 +97,7 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   u0->vector()->set(0.0);
 
   auto boundary = std::make_shared<DirichletBoundary>();
-  auto bc = std::make_shared<dolfin::fem::DirichletBC>(V, u0, boundary);
+  auto bc = std::make_shared<dolfin::fem::DirichletBC>(V, u0, *boundary);
 
   // Define variational forms
   //    auto a = std::make_shared<Poisson::BilinearForm>(V, V);
