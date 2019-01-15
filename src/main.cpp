@@ -31,13 +31,13 @@ int main(int argc, char* argv[])
 
   po::options_description desc("Allowed options");
   desc.add_options()("help,h", "print usage message")(
-      "problem_type,p", po::value<std::string>()->default_value("poisson"),
+      "problem_type", po::value<std::string>()->default_value("poisson"),
       "problem (poisson or elasticity)")(
-      "scaling_type,s", po::value<std::string>()->default_value("weak"),
+      "scaling_type", po::value<std::string>()->default_value("weak"),
       "scaling (weak or strong)")(
-      "output,o", po::value<std::string>()->default_value(""),
+      "output", po::value<std::string>()->default_value(""),
       "output directory (no output unless this is set)")(
-      "ndofs,n", po::value<std::size_t>()->default_value(50000),
+      "ndofs", po::value<std::size_t>()->default_value(50000),
       "number of degrees of freedom");
 
   po::variables_map vm;
