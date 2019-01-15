@@ -22,7 +22,7 @@ jobs:
           name: Run Poisson test (BoomerAMG, weak)
           command: |
             cd src/
-            mpirun -np 3 ./dolfin-scaling-test \
+            mpirun --allow-run-as-root -np 3 ./dolfin-scaling-test \
             --problem_type poisson \
             --scaling_type weak \
             --ndofs 50000 \
@@ -38,7 +38,7 @@ jobs:
           name: Run Poisson test (BoomerAMG, strong)
           command: |
             cd src/
-            mpirun -np 3 ./dolfin-scaling-test \
+            mpirun --allow-run-as-root -np 3 ./dolfin-scaling-test \
             --problem_type poisson \
             --scaling_type strong \
             --ndofs 1000000 \
@@ -54,7 +54,7 @@ jobs:
           name: Run elasticity test (GAMG, weak)
           command: |
             cd src/
-            mpirun -np 3 ./dolfin-scaling-test \
+            mpirun --allow-run-as-root -np 3 ./dolfin-scaling-test \
             --problem_type elasticity \
             --scaling_type weak \
             --ndofs 100000 \
@@ -73,7 +73,7 @@ jobs:
           name: Run elasticity test (GAMG, strong)
           command: |
             cd src/
-            mpirun -np 3 ./dolfin-scaling-test \
+            mpirun --allow-run-as-root -np 3 ./dolfin-scaling-test \
             --problem_type elasticity \
             --scaling_type strong \
             --ndofs 1000000 \
