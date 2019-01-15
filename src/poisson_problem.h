@@ -26,12 +26,11 @@ namespace poisson
 class Source : public dolfin::function::Expression
 {
 public:
-  Source() : dolfin::function::Expression({1}) {}
+  Source() : dolfin::function::Expression({}) {}
 
   void eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
-                                    Eigen::RowMajor>>
-                values,
-            const Eigen::Ref<const dolfin::EigenRowArrayXXd> x) const
+                                    Eigen::RowMajor>> values,
+            const Eigen::Ref<const dolfin::EigenRowArrayXXd> x, const dolfin::mesh::Cell& cell) const
   {
     for (Eigen::Index i = 0; i < x.rows(); ++i)
     {
@@ -42,16 +41,17 @@ public:
   }
 };
 
+
 // Normal derivative (Neumann boundary condition)
 class dUdN : public dolfin::function::Expression
 {
 public:
-  dUdN() : dolfin::function::Expression({1}) {}
+  dUdN() : dolfin::function::Expression({}) {}
 
   void eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
                                     Eigen::RowMajor>>
                 values,
-            const Eigen::Ref<const dolfin::EigenRowArrayXXd> x) const
+            const Eigen::Ref<const dolfin::EigenRowArrayXXd> x, const dolfin::mesh::Cell& cell) const
   {
     for (Eigen::Index i = 0; i < x.rows(); ++i)
       values(i, 0) = sin(5.0 * x(i, 0));

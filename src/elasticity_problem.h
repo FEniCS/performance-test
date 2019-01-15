@@ -77,7 +77,7 @@ public:
   void eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
                                     Eigen::RowMajor>>
                 values,
-            const Eigen::Ref<const dolfin::EigenRowArrayXXd> x) const
+            const Eigen::Ref<const dolfin::EigenRowArrayXXd> x, const dolfin::mesh::Cell& cell) const
   {
     for (Eigen::Index i = 0; i < x.rows(); ++i)
     {
@@ -108,7 +108,7 @@ class DirichletBoundary : public dolfin::mesh::SubDomain
 std::tuple<std::shared_ptr<dolfin::la::PETScMatrix>,
            std::shared_ptr<dolfin::la::PETScVector>,
            std::shared_ptr<dolfin::function::Function>>
-problem(std::shared_ptr<const dolfin::mesh::Mesh> mesh)
+problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
 {
   dolfin::common::Timer t0("ZZZ FunctionSpace");
 
@@ -151,6 +151,11 @@ problem(std::shared_ptr<const dolfin::mesh::Mesh> mesh)
 
   auto f_expr = Source();
   auto f = std::make_shared<dolfin::function::Function>(V);
+
+  // Attach 'coordinate mapping' to mesh
+  auto cmap = a->coordinate_mapping();
+  mesh->geometry().coord_mapping = cmap;
+
   f->interpolate(f_expr);
 
   //  L->f = f;

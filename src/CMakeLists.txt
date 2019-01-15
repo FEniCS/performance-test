@@ -10,6 +10,8 @@ include(${DOLFIN_USE_FILE})
 
 set(CMAKE_BUILD_TYPE "Release")
 
+# set(CMAKE_CXX_FLAGS "-g")
+
 # Executable
 add_executable(${PROJECT_NAME} main.cpp Elasticity.c Poisson.c)
 
