@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: fenicsproject/performance-tests:latest
+      - image: quay.io/fenicsproject/dolfinx:latest
     working_directory: ~/working
     steps:
       - checkout

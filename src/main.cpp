@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See LICENSE file in the project
 // root for full license information.
 
+#include <boost/program_options.hpp>
 #include <set>
 #include <string>
 #include <utility>
@@ -21,6 +22,8 @@
 #include "mesh.h"
 #include "poisson_problem.h"
 
+namespace po = boost::program_options;
+
 int main(int argc, char* argv[])
 {
   dolfin::common::SubSystemsManager::init_mpi();
@@ -29,27 +32,31 @@ int main(int argc, char* argv[])
   // parameters)
   dolfin::common::SubSystemsManager::init_petsc();
 
-  // Default parameters
-  // dolfin::Parameters application_parameters("application_parameters");
-  // application_parameters.add("problem_type", "poisson",
-  //                            {"poisson", "elasticity"});
-  // application_parameters.add("scaling_type", "weak", {"weak", "strong"});
-  // application_parameters.add("ndofs", 640);
-  // application_parameters.add("output", false);
-  // application_parameters.add("output_dir", "./out");
+  po::options_description desc("Allowed options");
+  desc.add_options()("help,h", "print usage message")(
+      "problem_type,p", po::value<std::string>()->default_value("poisson"),
+      "problem (poisson or elasticity)")(
+      "scaling_type,s", po::value<std::string>()->default_value("weak"),
+      "scaling (weak or strong)")(
+      "output,o", po::value<std::string>()->default_value(""),
+      "output directory (no output unless this is set)")(
+      "ndofs,n", po::value<std::size_t>()->default_value(50000),
+      "number of degrees of freedom");
 
-  // Update from command line
-  //  application_parameters.parse(argc, argv);
+  po::variables_map vm;
+  po::store(po::parse_command_line(argc, argv, desc), vm);
 
-  // Extract parameters
-  const std::string problem_type
-      = "poisson"; // application_parameters["problem_type"];
-  const std::string scaling_type
-      = "weak";                    // application_parameters["scaling_type"];
-  const std::size_t ndofs = 50000; // application_parameters["ndofs"];
-  const bool output = true;        // application_parameters["output"];
-  const std::string output_dir
-      = "output"; // application_parameters["output_dir"];
+  if (vm.count("help"))
+  {
+    std::cout << desc << "\n";
+    return 0;
+  }
+
+  const std::string problem_type = vm["problem_type"].as<std::string>();
+  const std::string scaling_type = vm["scaling_type"].as<std::string>();
+  const std::size_t ndofs = vm["ndofs"].as<std::size_t>();
+  const std::string output_dir = vm["output"].as<std::string>();
+  const bool output = (output_dir.size() > 0);
 
   bool strong_scaling;
   if (scaling_type == "strong")
