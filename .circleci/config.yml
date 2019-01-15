@@ -11,7 +11,7 @@ jobs:
           command: |
             cd src/
             ffc -l dolfin Elasticity.ufl
-            ffc -l dolfin Poisson.ufl
+            ffc -l dolfin -f form_postfix False Poisson.ufl
       - run:
           name: Build test program
           command: |
