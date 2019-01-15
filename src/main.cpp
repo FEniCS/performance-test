@@ -30,7 +30,7 @@ int main(int argc, char* argv[])
 
   // Intialise PETSc (if not already initialised when parsing
   // parameters)
-  dolfin::common::SubSystemsManager::init_petsc();
+  dolfin::common::SubSystemsManager::init_petsc(argc, argv);
 
   po::options_description desc("Allowed options");
   desc.add_options()("help,h", "print usage message")(
