@@ -4,7 +4,7 @@
 # Authors:
 # Garth N. Wells <gnw20@cam.ac.uk>
 
-FROM ubuntu:17.04
+FROM ubuntu:18.04
 
 WORKDIR /tmp
 
@@ -15,8 +15,6 @@ ENV OPENBLAS_NUM_THREADS=1
 RUN apt-get -qq update && \
     apt-get -y --with-new-pkgs \
         -o Dpkg::Options::="--force-confold" upgrade && \
-    apt-get -y install curl && \
-    curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash && \
     apt-get -y install \
         bison \
         cmake \
@@ -53,7 +51,7 @@ RUN wget https://bootstrap.pypa.io/get-pip.py && \
     pip3 install --no-cache-dir git+https://bitbucket.org/fenics-project/dijitso.git && \
     pip3 install --no-cache-dir git+https://bitbucket.org/fenics-project/fiat.git && \
     pip3 install --no-cache-dir git+https://bitbucket.org/fenics-project/ufl.git && \
-    pip3 install --no-cache-dir git+https://bitbucket.org/fenics-project/ffc.git && \
+    pip3 install --no-cache-dir git+https://github.com/FEniCS/ffcx.git && \
     rm -rf /tmp/*
 
 # Install PETSc from source
@@ -78,10 +76,10 @@ RUN git clone https://bitbucket.org/petsc/petsc.git && \
 ENV PETSC_DIR=/usr/local/petsc-32
 
 # Build DOLFIN
-RUN git clone https://bitbucket.org/fenics-project/dolfin.git && \
-    cd dolfin && \
+RUN git clone https://github.com/dolfinx.git && \
+    cd dolfinx/cpp && \
     mkdir build && \
     cd ./build && \
-    cmake -DDOLFIN_ENABLE_PYTHON=off ../ && \
+    cmake ../ && \
     make install -j6 && \
     rm -rf /tmp/*
