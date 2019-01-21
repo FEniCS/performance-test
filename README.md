@@ -1,11 +1,11 @@
-# Performance test codes for FEniCS/DOLFIN
+# Performance test codes for FEniCS/DOLFIN-X
 
 This repository contains solvers for testing the parallel performance
 of DOLFIN and the underlying linear solvers. It tests elliptic
 equations - Poisson equation and elasticity - in three dimensions.
 
 Representative performance [data](performance.md) is provided for
-reference.
+reference (Work in Progress).
 
 
 ## Building
@@ -16,10 +16,10 @@ The source of the tests is in `src/` directory.
 ### Requirements
 
 - FEniCS/DOLFIN installation, with MPI, PETSc and HDF5 enabled
-  (development version of DOLFIN **required**)
+  (development version of DOLFIN-X **required**)
 - PETSc installation (development version **required**)
 
-The development versions of DOLFIN and PETSc have a number of fixes
+The development versions of DOLFIN-X and PETSc have a number of fixes
 that are necessary to run the tests successfully, and for performance.
 
 ### Compilation
@@ -51,7 +51,7 @@ Options for the test are:
   data to
 
 Linear solver options are configured via PETSc command line options,
-as shown below.
+as shown below. **NB - currently the options are not using the --petsc. prefix**.
 
 
 ## Recommended test configuration
@@ -154,7 +154,7 @@ in assessing performance on a given system.
 ## Test status
 
 The code is tested on CircleCI.
-[![CircleCI](https://circleci.com/bb/fenics-project/performance-tests.svg?style=svg)](https://circleci.com/bb/fenics-project/performance-tests)
+[![CircleCI](https://circleci.com/gh/FEniCS/performance-test.svg?style=svg)](https://circleci.com/gh/FEniCS/performance-test)
 
 ## Authors and license
 
