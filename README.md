@@ -1,4 +1,4 @@
-# Scaling tests for FEniCS/DOLFIN
+# Performance test codes for FEniCS/DOLFIN
 
 This repository contains solvers for testing the parallel performance
 of DOLFIN and the underlying linear solvers. It tests elliptic
