@@ -76,7 +76,7 @@ RUN git clone https://bitbucket.org/petsc/petsc.git && \
 ENV PETSC_DIR=/usr/local/petsc-32
 
 # Build DOLFIN
-RUN git clone https://github.com/dolfinx.git && \
+RUN git clone https://github.com/FEniCS/dolfinx.git && \
     cd dolfinx/cpp && \
     mkdir build && \
     cd ./build && \
