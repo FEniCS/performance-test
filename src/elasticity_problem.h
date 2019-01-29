@@ -4,9 +4,12 @@
 
 #pragma once
 
+#include "Elasticity.h"
+#include <Eigen/Dense>
 #include <dolfin/common/Timer.h>
 #include <dolfin/fem/DirichletBC.h>
 #include <dolfin/fem/DofMap.h>
+#include <dolfin/fem/Form.h>
 #include <dolfin/fem/GenericDofMap.h>
 #include <dolfin/fem/SystemAssembler.h>
 #include <dolfin/function/Expression.h>
@@ -17,17 +20,13 @@
 #include <dolfin/la/VectorSpaceBasis.h>
 #include <dolfin/mesh/Mesh.h>
 #include <dolfin/mesh/SubDomain.h>
-
-#include <Eigen/Dense>
 #include <memory>
 #include <utility>
 
-#include "Elasticity.h"
-
 namespace elastic
 {
-// Function to compute the near nullspace for elasticity - it is
-// made up of the six rigid body modes
+// Function to compute the near nullspace for elasticity - it is made up
+// of the six rigid body modes
 
 dolfin::la::VectorSpaceBasis
 build_near_nullspace(const dolfin::function::FunctionSpace& V,
@@ -39,28 +38,27 @@ build_near_nullspace(const dolfin::function::FunctionSpace& V,
   auto V2 = V.sub({2});
 
   // Create vectors for nullspace basis
-  std::vector<std::shared_ptr<dolfin::la::PETScVector>> basis(6);
+  std::vector<std::shared_ptr<dolfin::la::PETScVector>> basis;
   for (std::size_t i = 0; i < basis.size(); ++i)
-    basis[i] = std::make_shared<dolfin::la::PETScVector>(x);
+  {
+    basis.push_back(
+        std::make_shared<dolfin::la::PETScVector>(*V.dofmap()->index_map()));
+  }
 
   // x0, x1, x2 translations
-  V0->dofmap()->set(*basis[0], 1.0);
-  V1->dofmap()->set(*basis[1], 1.0);
-  V2->dofmap()->set(*basis[2], 1.0);
+  V0->dofmap()->set(basis[0]->vec(), 1.0);
+  V1->dofmap()->set(basis[1]->vec(), 1.0);
+  V2->dofmap()->set(basis[2]->vec(), 1.0);
 
   // Rotations
-  V0->set_x(*basis[3], -1.0, 1);
-  V1->set_x(*basis[3], 1.0, 0);
+  V0->set_x(basis[3]->vec(), -1.0, 1);
+  V1->set_x(basis[3]->vec(), 1.0, 0);
 
-  V0->set_x(*basis[4], 1.0, 2);
-  V2->set_x(*basis[4], -1.0, 0);
+  V0->set_x(basis[4]->vec(), 1.0, 2);
+  V2->set_x(basis[4]->vec(), -1.0, 0);
 
-  V2->set_x(*basis[5], 1.0, 1);
-  V1->set_x(*basis[5], -1.0, 2);
-
-  // Apply
-  for (std::size_t i = 0; i < basis.size(); ++i)
-    basis[i]->apply();
+  V2->set_x(basis[5]->vec(), 1.0, 1);
+  V1->set_x(basis[5]->vec(), -1.0, 2);
 
   // Create vector space and orthonormalize
   dolfin::la::VectorSpaceBasis vector_space(basis);
@@ -77,7 +75,8 @@ public:
   void eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
                                     Eigen::RowMajor>>
                 values,
-            const Eigen::Ref<const dolfin::EigenRowArrayXXd> x, const dolfin::mesh::Cell& cell) const
+            const Eigen::Ref<const dolfin::EigenRowArrayXXd> x,
+            const dolfin::mesh::Cell& cell) const
   {
     for (Eigen::Index i = 0; i < x.rows(); ++i)
     {
@@ -105,8 +104,7 @@ class DirichletBoundary : public dolfin::mesh::SubDomain
   }
 };
 
-std::tuple<std::shared_ptr<dolfin::la::PETScMatrix>,
-           std::shared_ptr<dolfin::la::PETScVector>,
+std::tuple<dolfin::la::PETScMatrix, dolfin::la::PETScVector,
            std::shared_ptr<dolfin::function::Function>>
 problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
 {
@@ -128,7 +126,7 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
 
   // Define boundary condition
   auto u0 = std::make_shared<dolfin::function::Function>(V);
-  u0->vector()->set(0.0);
+  VecSet(u0->vector().vec(), 0.0);
 
   auto boundary = std::make_shared<DirichletBoundary>();
   auto bc = std::make_shared<dolfin::fem::DirichletBC>(V, u0, *boundary);
@@ -167,9 +165,9 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   dolfin::fem::SystemAssembler assembler(a, L, {bc});
 
   // Assemble system
-  auto A = std::make_shared<dolfin::la::PETScMatrix>();
-  auto b = std::make_shared<dolfin::la::PETScVector>();
-  assembler.assemble(*A, *b);
+  dolfin::la::PETScMatrix A(dolfin::fem::create_matrix(*a));
+  dolfin::la::PETScVector b(*L->function_space(0)->dofmap()->index_map());
+  assembler.assemble(A, b);
 
   t1.stop();
 
@@ -179,12 +177,12 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
 
   // Build near-nullspace and attach to matrix
   dolfin::la::VectorSpaceBasis nullspace
-      = build_near_nullspace(*V, *u->vector());
-  A->set_near_nullspace(nullspace);
+      = build_near_nullspace(*V, u->vector());
+  A.set_near_nullspace(nullspace);
   t2.stop();
 
-  return std::tuple<std::shared_ptr<dolfin::la::PETScMatrix>,
-                    std::shared_ptr<dolfin::la::PETScVector>,
-                    std::shared_ptr<dolfin::function::Function>>(A, b, u);
+  return std::tuple<dolfin::la::PETScMatrix, dolfin::la::PETScVector,
+                    std::shared_ptr<dolfin::function::Function>>(
+      std::move(A), std::move(b), u);
 }
 } // namespace elastic

@@ -1,12 +1,11 @@
-// Copyright (C) 2017 Chris N. Richardson and Garth N. Wells
-// Licensed under the MIT License. See LICENSE file in the project
-// root for full license information.
+// Copyright (C) 2017-2019 Chris N. Richardson and Garth N. Wells
+// Licensed under the MIT License. See LICENSE file in the project root
+// for full license information.
 
+#include "elasticity_problem.h"
+#include "mesh.h"
+#include "poisson_problem.h"
 #include <boost/program_options.hpp>
-#include <set>
-#include <string>
-#include <utility>
-
 #include <dolfin/common/SubSystemsManager.h>
 #include <dolfin/common/Timer.h>
 #include <dolfin/common/timing.h>
@@ -17,10 +16,9 @@
 #include <dolfin/la/PETScKrylovSolver.h>
 #include <dolfin/la/PETScMatrix.h>
 #include <dolfin/la/PETScVector.h>
-
-#include "elasticity_problem.h"
-#include "mesh.h"
-#include "poisson_problem.h"
+#include <set>
+#include <string>
+#include <utility>
 
 namespace po = boost::program_options;
 
@@ -87,8 +85,8 @@ int main(int argc, char* argv[])
 
     // Create Poisson problem
     auto data = poisson::problem(mesh);
-    A = std::get<0>(data);
-    b = std::get<1>(data);
+    A = std::make_shared<dolfin::la::PETScMatrix>(std::move(std::get<0>(data)));
+    b = std::make_shared<dolfin::la::PETScVector>(std::move(std::get<1>(data)));
     u = std::get<2>(data);
   }
   else if (problem_type == "elasticity")
@@ -97,11 +95,11 @@ int main(int argc, char* argv[])
     mesh = create_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3);
     t0.stop();
 
-    // Create elasticity problem. Near-nullspace will be attached to
-    // the linear operator (matrix)
+    // Create elasticity problem. Near-nullspace will be attached to the
+    // linear operator (matrix).
     auto data = elastic::problem(mesh);
-    A = std::get<0>(data);
-    b = std::get<1>(data);
+    A = std::make_shared<dolfin::la::PETScMatrix>(std::move(std::get<0>(data)));
+    b = std::make_shared<dolfin::la::PETScVector>(std::move(std::get<1>(data)));
     u = std::get<2>(data);
   }
   else
@@ -131,11 +129,11 @@ int main(int argc, char* argv[])
   // Create solver
   dolfin::la::PETScKrylovSolver solver(mesh->mpi_comm());
   solver.set_from_options();
-  solver.set_operator(*A);
+  solver.set_operator(A->mat());
 
   // Solve
   dolfin::common::Timer t5("ZZZ Solve");
-  std::size_t num_iter = solver.solve(*u->vector(), *b);
+  std::size_t num_iter = solver.solve(u->vector().vec(), b->vec());
   t5.stop();
 
   if (output)

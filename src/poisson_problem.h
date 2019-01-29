@@ -29,8 +29,10 @@ public:
   Source() : dolfin::function::Expression({}) {}
 
   void eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
-                                    Eigen::RowMajor>> values,
-            const Eigen::Ref<const dolfin::EigenRowArrayXXd> x, const dolfin::mesh::Cell& cell) const
+                                    Eigen::RowMajor>>
+                values,
+            const Eigen::Ref<const dolfin::EigenRowArrayXXd> x,
+            const dolfin::mesh::Cell& cell) const
   {
     for (Eigen::Index i = 0; i < x.rows(); ++i)
     {
@@ -41,7 +43,6 @@ public:
   }
 };
 
-
 // Normal derivative (Neumann boundary condition)
 class dUdN : public dolfin::function::Expression
 {
@@ -51,7 +52,8 @@ public:
   void eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
                                     Eigen::RowMajor>>
                 values,
-            const Eigen::Ref<const dolfin::EigenRowArrayXXd> x, const dolfin::mesh::Cell& cell) const
+            const Eigen::Ref<const dolfin::EigenRowArrayXXd> x,
+            const dolfin::mesh::Cell& cell) const
   {
     for (Eigen::Index i = 0; i < x.rows(); ++i)
       values(i, 0) = sin(5.0 * x(i, 0));
@@ -72,8 +74,7 @@ public:
   }
 };
 
-std::tuple<std::shared_ptr<dolfin::la::PETScMatrix>,
-           std::shared_ptr<dolfin::la::PETScVector>,
+std::tuple<dolfin::la::PETScMatrix, dolfin::la::PETScVector,
            std::shared_ptr<dolfin::function::Function>>
 problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
 {
@@ -94,7 +95,7 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   // Define boundary condition
   //    auto u0 = std::make_shared<dolfin::Constant>(0.0);
   auto u0 = std::make_shared<dolfin::function::Function>(V);
-  u0->vector()->set(0.0);
+  VecSet(u0->vector().vec(), 0.0);
 
   auto boundary = std::make_shared<DirichletBoundary>();
   auto bc = std::make_shared<dolfin::fem::DirichletBC>(V, u0, *boundary);
@@ -135,17 +136,17 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   dolfin::fem::SystemAssembler assembler(a, L, {bc});
 
   // Assemble system
-  auto A = std::make_shared<dolfin::la::PETScMatrix>();
-  auto b = std::make_shared<dolfin::la::PETScVector>();
-  assembler.assemble(*A, *b);
+  dolfin::la::PETScMatrix A(dolfin::fem::create_matrix(*a));
+  dolfin::la::PETScVector b(*L->function_space(0)->dofmap()->index_map());
+  assembler.assemble(A, b);
 
   t1.stop();
 
   // Create Function to hold solution
   auto u = std::make_shared<dolfin::function::Function>(V);
 
-  return std::tuple<std::shared_ptr<dolfin::la::PETScMatrix>,
-                    std::shared_ptr<dolfin::la::PETScVector>,
-                    std::shared_ptr<dolfin::function::Function>>(A, b, u);
+  return std::tuple<dolfin::la::PETScMatrix, dolfin::la::PETScVector,
+                    std::shared_ptr<dolfin::function::Function>>(
+      std::move(A), std::move(b), u);
 }
 } // namespace poisson
