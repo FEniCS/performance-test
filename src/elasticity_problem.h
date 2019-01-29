@@ -1,6 +1,8 @@
-// Copyright (C) 2017 Chris N. Richardson and Garth N. Wells
-// Licensed under the MIT License. See LICENSE file in the project
-// root for full license information.
+// Copyright (C) 2017-2019 Chris N. Richardson and Garth N. Wells
+//
+// This file is part of FEniCS-miniapp (https://www.fenicsproject.org)
+//
+// SPDX-License-Identifier:    MIT
 
 #pragma once
 
