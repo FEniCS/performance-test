@@ -93,7 +93,6 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   dolfin::common::Timer t1("ZZZ Assemble");
 
   // Define boundary condition
-  //    auto u0 = std::make_shared<dolfin::Constant>(0.0);
   auto u0 = std::make_shared<dolfin::function::Function>(V);
   VecSet(u0->vector().vec(), 0.0);
 
@@ -101,8 +100,6 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   auto bc = std::make_shared<dolfin::fem::DirichletBC>(V, u0, *boundary);
 
   // Define variational forms
-  //    auto a = std::make_shared<Poisson::BilinearForm>(V, V);
-  //    auto L = std::make_shared<Poisson::LinearForm>(V);
   auto form_L = std::unique_ptr<dolfin_form>(PoissonLinearForm());
   auto form_a = std::unique_ptr<dolfin_form>(PoissonBilinearForm());
 
@@ -115,16 +112,15 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
       std::shared_ptr<ufc_form>(form_L->form()),
       std::initializer_list<
           std::shared_ptr<const dolfin::function::FunctionSpace>>{V});
-  auto f_expr = Source();
-  auto g_expr = dUdN();
-
-  auto f = std::make_shared<dolfin::function::Function>(V);
-  auto g = std::make_shared<dolfin::function::Function>(V);
 
   // Attach 'coordinate mapping' to mesh
   auto cmap = a->coordinate_mapping();
   mesh->geometry().coord_mapping = cmap;
 
+  Source f_expr;
+  dUdN g_expr;
+  auto f = std::make_shared<dolfin::function::Function>(V);
+  auto g = std::make_shared<dolfin::function::Function>(V);
   f->interpolate(f_expr);
   g->interpolate(g_expr);
 

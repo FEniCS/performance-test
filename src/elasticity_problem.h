@@ -29,8 +29,7 @@ namespace elastic
 // of the six rigid body modes
 
 dolfin::la::VectorSpaceBasis
-build_near_nullspace(const dolfin::function::FunctionSpace& V,
-                     const dolfin::la::PETScVector& x)
+build_near_nullspace(const dolfin::function::FunctionSpace& V)
 {
   // Get subspaces
   auto V0 = V.sub({0});
@@ -109,7 +108,6 @@ std::tuple<dolfin::la::PETScMatrix, dolfin::la::PETScVector,
 problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
 {
   dolfin::common::Timer t0("ZZZ FunctionSpace");
-
   auto space
       = std::unique_ptr<dolfin_function_space>(ElasticityFunctionSpace());
   auto V = std::make_shared<dolfin::function::FunctionSpace>(
@@ -118,8 +116,6 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
           std::shared_ptr<ufc_finite_element>(space->element())),
       std::make_shared<dolfin::fem::DofMap>(
           std::shared_ptr<ufc_dofmap>(space->dofmap()), *mesh));
-
-  //  auto V = std::make_shared<Elasticity::FunctionSpace>(mesh);
   t0.stop();
 
   dolfin::common::Timer t1("ZZZ Assemble");
@@ -144,16 +140,12 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
       std::initializer_list<
           std::shared_ptr<const dolfin::function::FunctionSpace>>{V, V});
 
-  // auto a = std::make_shared<Elasticity::BilinearForm>(V, V);
-  // auto L = std::make_shared<Elasticity::LinearForm>(V);
-
-  auto f_expr = Source();
-  auto f = std::make_shared<dolfin::function::Function>(V);
-
   // Attach 'coordinate mapping' to mesh
   auto cmap = a->coordinate_mapping();
   mesh->geometry().coord_mapping = cmap;
 
+  Source f_expr;
+  auto f = std::make_shared<dolfin::function::Function>(V);
   f->interpolate(f_expr);
 
   //  L->f = f;
@@ -164,7 +156,7 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   // Create assembler
   dolfin::fem::SystemAssembler assembler(a, L, {bc});
 
-  // Assemble system
+  // Create matrices and vector, and assemble system
   dolfin::la::PETScMatrix A(dolfin::fem::create_matrix(*a));
   dolfin::la::PETScVector b(*L->function_space(0)->dofmap()->index_map());
   assembler.assemble(A, b);
@@ -172,12 +164,12 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   t1.stop();
 
   dolfin::common::Timer t2("ZZZ Create near-nullspace");
+
   // Create Function to hold solution
   auto u = std::make_shared<dolfin::function::Function>(V);
 
   // Build near-nullspace and attach to matrix
-  dolfin::la::VectorSpaceBasis nullspace
-      = build_near_nullspace(*V, u->vector());
+  dolfin::la::VectorSpaceBasis nullspace = build_near_nullspace(*V);
   A.set_near_nullspace(nullspace);
   t2.stop();
 
