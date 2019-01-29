@@ -11,7 +11,7 @@
 #include <dolfin/fem/DofMap.h>
 #include <dolfin/fem/Form.h>
 #include <dolfin/fem/GenericDofMap.h>
-#include <dolfin/fem/SystemAssembler.h>
+#include <dolfin/fem/assembler.h>
 #include <dolfin/function/Expression.h>
 #include <dolfin/function/Function.h>
 #include <dolfin/function/FunctionSpace.h>
@@ -82,7 +82,6 @@ public:
       double dx = x(i, 0) - 0.5;
       double dz = x(i, 2) - 0.5;
       double r = dx * dx + dz * dz;
-
       values(i, 0) = -dz * std::sqrt(r) * x(i, 1);
       values(i, 1) = 1.0;
       values(i, 2) = dx * std::sqrt(r) * x(i, 1);
@@ -129,37 +128,34 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
 
   // Define variational forms
   auto form_L = std::unique_ptr<dolfin_form>(ElasticityLinearForm());
-  auto L = std::make_shared<dolfin::fem::Form>(
+  dolfin::fem::Form L(
       std::shared_ptr<ufc_form>(form_L->form()),
       std::initializer_list<
           std::shared_ptr<const dolfin::function::FunctionSpace>>{V});
 
   auto form_a = std::unique_ptr<dolfin_form>(ElasticityBilinearForm());
-  auto a = std::make_shared<dolfin::fem::Form>(
+  dolfin::fem::Form a(
       std::shared_ptr<ufc_form>(form_a->form()),
       std::initializer_list<
           std::shared_ptr<const dolfin::function::FunctionSpace>>{V, V});
 
   // Attach 'coordinate mapping' to mesh
-  auto cmap = a->coordinate_mapping();
+  auto cmap = a.coordinate_mapping();
   mesh->geometry().coord_mapping = cmap;
 
   Source f_expr;
   auto f = std::make_shared<dolfin::function::Function>(V);
   f->interpolate(f_expr);
 
-  //  L->f = f;
-  L->set_coefficient_index_to_name_map(form_L->coefficient_number_map);
-  L->set_coefficient_name_to_index_map(form_L->coefficient_name_map);
-  L->set_coefficients({{"f", f}});
-
-  // Create assembler
-  dolfin::fem::SystemAssembler assembler(a, L, {bc});
+  L.set_coefficient_index_to_name_map(form_L->coefficient_number_map);
+  L.set_coefficient_name_to_index_map(form_L->coefficient_name_map);
+  L.set_coefficients({{"f", f}});
 
   // Create matrices and vector, and assemble system
-  dolfin::la::PETScMatrix A(dolfin::fem::create_matrix(*a));
-  dolfin::la::PETScVector b(*L->function_space(0)->dofmap()->index_map());
-  assembler.assemble(A, b);
+  dolfin::la::PETScMatrix A(dolfin::fem::create_matrix(a));
+  dolfin::fem::assemble(A.mat(), a, {});
+  dolfin::la::PETScVector b(*L.function_space(0)->dofmap()->index_map());
+  dolfin::fem::assemble_vector(b.vec(), L);
 
   t1.stop();
 
