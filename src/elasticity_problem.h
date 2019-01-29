@@ -40,7 +40,7 @@ build_near_nullspace(const dolfin::function::FunctionSpace& V)
 
   // Create vectors for nullspace basis
   std::vector<std::shared_ptr<dolfin::la::PETScVector>> basis;
-  for (std::size_t i = 0; i < basis.size(); ++i)
+  for (std::size_t i = 0; i < 6; ++i)
   {
     basis.push_back(
         std::make_shared<dolfin::la::PETScVector>(*V.dofmap()->index_map()));
@@ -64,6 +64,7 @@ build_near_nullspace(const dolfin::function::FunctionSpace& V)
   // Create vector space and orthonormalize
   dolfin::la::VectorSpaceBasis vector_space(basis);
   vector_space.orthonormalize();
+
   return vector_space;
 }
 
@@ -155,9 +156,15 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
 
   // Create matrices and vector, and assemble system
   dolfin::la::PETScMatrix A(dolfin::fem::create_matrix(a));
-  dolfin::fem::assemble(A.mat(), a, {});
+  dolfin::fem::assemble(A.mat(), a, {bc});
+  MatAssemblyBegin(A.mat(), MAT_FINAL_ASSEMBLY);
+  MatAssemblyEnd(A.mat(), MAT_FINAL_ASSEMBLY);
+
   dolfin::la::PETScVector b(*L.function_space(0)->dofmap()->index_map());
   dolfin::fem::assemble_vector(b.vec(), L);
+  VecGhostUpdateBegin(b.vec(), ADD_VALUES, SCATTER_REVERSE);
+  VecGhostUpdateEnd(b.vec(), ADD_VALUES, SCATTER_REVERSE);
+  dolfin::fem::set_bc(b.vec(), {bc}, nullptr);
 
   t1.stop();
 
@@ -167,8 +174,8 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   auto u = std::make_shared<dolfin::function::Function>(V);
 
   // Build near-nullspace and attach to matrix
-  dolfin::la::VectorSpaceBasis nullspace = build_near_nullspace(*V);
-  A.set_near_nullspace(nullspace);
+  // dolfin::la::VectorSpaceBasis nullspace = build_near_nullspace(*V);
+  // A.set_near_nullspace(nullspace);
   t2.stop();
 
   return std::tuple<dolfin::la::PETScMatrix, dolfin::la::PETScVector,
