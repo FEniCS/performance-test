@@ -13,6 +13,7 @@
 #include <dolfin/fem/DofMap.h>
 #include <dolfin/fem/Form.h>
 #include <dolfin/fem/GenericDofMap.h>
+#include <dolfin/fem/SystemAssembler.h>
 #include <dolfin/fem/assembler.h>
 #include <dolfin/function/Expression.h>
 #include <dolfin/function/Function.h>
@@ -48,6 +49,8 @@ build_near_nullspace(const dolfin::function::FunctionSpace& V)
 
   // x0, x1, x2 translations
   V0->dofmap()->set(basis[0]->vec(), 1.0);
+  // VecView(basis[0]->vec(), PETSC_VIEWER_STDOUT_WORLD);
+
   V1->dofmap()->set(basis[1]->vec(), 1.0);
   V2->dofmap()->set(basis[2]->vec(), 1.0);
 
@@ -64,7 +67,6 @@ build_near_nullspace(const dolfin::function::FunctionSpace& V)
   // Create vector space and orthonormalize
   dolfin::la::VectorSpaceBasis vector_space(basis);
   vector_space.orthonormalize();
-
   return vector_space;
 }
 
@@ -120,7 +122,7 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
           std::shared_ptr<ufc_dofmap>(space->dofmap()), *mesh));
   t0.stop();
 
-  dolfin::common::Timer t1("ZZZ Assemble");
+  dolfin::common::Timer t1("ZZZ Assemble prep");
 
   // Define boundary condition
   auto u0 = std::make_shared<dolfin::function::Function>(V);
@@ -154,29 +156,56 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   L.set_coefficient_name_to_index_map(form_L->coefficient_name_map);
   L.set_coefficients({{"f", f}});
 
+  t1.stop();
+
+  std::shared_ptr<dolfin::fem::Form> _a(&a, [](dolfin::fem::Form* ptr) {});
+
   // Create matrices and vector, and assemble system
   dolfin::la::PETScMatrix A(dolfin::fem::create_matrix(a));
+  MatZeroEntries(A.mat());
+
+  dolfin::common::Timer t2("ZZZ Assemble matrix");
   dolfin::fem::assemble(A.mat(), a, {bc});
   MatAssemblyBegin(A.mat(), MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(A.mat(), MAT_FINAL_ASSEMBLY);
+  t2.stop();
 
   dolfin::la::PETScVector b(*L.function_space(0)->dofmap()->index_map());
+  VecSet(b.vec(), 0.0);
+  VecGhostUpdateBegin(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
+  VecGhostUpdateEnd(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
+
+  dolfin::common::Timer t3("ZZZ Assemble vector");
   dolfin::fem::assemble_vector(b.vec(), L);
+  dolfin::fem::apply_lifting(b.vec(), {_a}, {{bc}}, {}, 1.0);
   VecGhostUpdateBegin(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   VecGhostUpdateEnd(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   dolfin::fem::set_bc(b.vec(), {bc}, nullptr);
+  t3.stop();
 
-  t1.stop();
+  // OLD ASSEMBLER
+  std::shared_ptr<dolfin::fem::Form> _L(&L, [](dolfin::fem::Form* ptr) {});
+  dolfin::fem::SystemAssembler assembler(_a, _L, {bc});
+  dolfin::common::Timer t3_b("ZZZ Old systems assemble (vector)");
+  assembler.assemble(b);
+  t3_b.stop();
+  dolfin::common::Timer t3_c("ZZZ Old systems assemble (matrix)");
+  assembler.assemble(A);
+  t3_c.stop();
 
-  dolfin::common::Timer t2("ZZZ Create near-nullspace");
+  dolfin::common::Timer t4("ZZZ Create near-nullspace");
 
   // Create Function to hold solution
   auto u = std::make_shared<dolfin::function::Function>(V);
 
   // Build near-nullspace and attach to matrix
-  // dolfin::la::VectorSpaceBasis nullspace = build_near_nullspace(*V);
-  // A.set_near_nullspace(nullspace);
-  t2.stop();
+  dolfin::la::VectorSpaceBasis nullspace = build_near_nullspace(*V);
+  // if (nullspace.in_nullspace(A, 1.0e-6))
+  //   std::cout << "Null space" << std::endl;
+  // else
+  //   std::cout << "Not null space" << std::endl;
+  A.set_near_nullspace(nullspace);
+  t4.stop();
 
   return std::tuple<dolfin::la::PETScMatrix, dolfin::la::PETScVector,
                     std::shared_ptr<dolfin::function::Function>>(

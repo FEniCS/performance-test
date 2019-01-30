@@ -4,7 +4,6 @@
 //
 // SPDX-License-Identifier:    MIT
 
-
 #include "elasticity_problem.h"
 #include "mesh.h"
 #include "poisson_problem.h"
@@ -124,6 +123,9 @@ int main(int argc, char* argv[])
         << "----------------------------------------------------------------"
         << std::endl;
   }
+
+  dolfin::list_timings({dolfin::TimingType::wall});
+  return 1;
 
   // Create solver
   dolfin::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
