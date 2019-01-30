@@ -20,7 +20,7 @@ jobs:
             mkdir build
             cd build
             cmake -G Ninja ../dolfinx/cpp
-            ninja install
+            ninja -j3 install
       - run:
           name: Install DOLFIN (Python interface)
           command: |
@@ -36,8 +36,8 @@ jobs:
           name: Build test program
           command: |
             cd src/
-            cmake .
-            make
+            cmake -G Ninja .
+            ninja
       - run:
           name: Run Poisson test (BoomerAMG, weak)
           command: |
