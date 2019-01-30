@@ -21,11 +21,11 @@ jobs:
             cd build
             cmake -G Ninja ../dolfinx/cpp
             ninja -j3 install
-      - run:
-          name: Install DOLFIN (Python interface)
-          command: |
-            cd dolfinx/python
-            pip3 install .
+      # - run:
+      #     name: Install DOLFIN (Python interface)
+      #     command: |
+      #       cd dolfinx/python
+      #       pip3 install .
       - run:
           name: Compile UFL files
           command: |
