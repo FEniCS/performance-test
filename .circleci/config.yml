@@ -2,10 +2,30 @@ version: 2
 jobs:
   build:
     docker:
-      - image: quay.io/fenicsproject/dolfinx:latest
+      - image: quay.io/fenicsproject/dolfinx:dev-env-real
     working_directory: ~/working
     steps:
       - checkout
+      - run:
+          name: Install FEniCS Python components
+          command: |
+            pip3 install git+https://bitbucket.org/fenics-project/fiat.git --upgrade
+            pip3 install git+https://bitbucket.org/fenics-project/ufl.git --upgrade
+            pip3 install git+https://bitbucket.org/fenics-project/dijitso.git --upgrade
+            pip3 install git+https://github.com/FEniCS/ffcx --upgrade
+      - run:
+          name: Install DOLFIN (C++)
+          command: |
+            git clone --depth=1 https://github.com/FEniCS/dolfinx.git
+            mkdir build
+            cd build
+            cmake -G Ninja ../dolfinx/cpp .
+            ninja install
+      - run:
+          name: Install DOLFIN (Python interface)
+          command: |
+            cd dolfinx/python
+            pip3 install .
       - run:
           name: Compile UFL files
           command: |
