@@ -185,10 +185,10 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   // OLD ASSEMBLER
   std::shared_ptr<dolfin::fem::Form> _L(&L, [](dolfin::fem::Form* ptr) {});
   dolfin::fem::SystemAssembler assembler(_a, _L, {bc});
-  dolfin::common::Timer t3_b("ZZZ Old systems assemble (vector)");
+  dolfin::common::Timer t3_b("ZZZ Assemble vector (old)");
   assembler.assemble(b);
   t3_b.stop();
-  dolfin::common::Timer t3_c("ZZZ Old systems assemble (matrix)");
+  dolfin::common::Timer t3_c("ZZZ Assemble matrix (old)");
   assembler.assemble(A);
   t3_c.stop();
 

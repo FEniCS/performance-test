@@ -130,14 +130,11 @@ int main(int argc, char* argv[])
   solver.set_operator(A->mat());
 
   // Solve
-  std::cout << "RHS norm: " << b->norm(dolfin::la::Norm::l2) << std::endl;
   dolfin::common::Timer t5("ZZZ Solve");
   std::size_t num_iter = solver.solve(u->vector().vec(), b->vec());
-  t5.stop();
-  std::cout << "Solution norm: " << u->vector().norm(dolfin::la::Norm::l2)
+  std::cout << "soln norm:  " << u->vector().norm(dolfin::la::Norm::l2)
             << std::endl;
-
-  return 0;
+  t5.stop();
 
   if (output)
   {

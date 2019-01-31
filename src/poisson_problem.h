@@ -158,7 +158,12 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
 
   // Create assembler
   // dolfin::fem::SystemAssembler assembler(_a, _L, {bc});
-  // assembler.assemble(A, b);
+  // dolfin::common::Timer t4("ZZZ Assemble vector (old)");
+  // assembler.assemble(b);
+  // t4.stop();
+  // dolfin::common::Timer t5("ZZZ Assemble matrix (old)");
+  // assembler.assemble(A);
+  // t5.stop();
 
   t1.stop();
 
