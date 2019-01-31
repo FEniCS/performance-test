@@ -130,14 +130,18 @@ int main(int argc, char* argv[])
   solver.set_operator(A->mat());
 
   // Solve
+  std::cout << "RHS norm: " << b->norm(dolfin::la::Norm::l2) << std::endl;
   dolfin::common::Timer t5("ZZZ Solve");
   std::size_t num_iter = solver.solve(u->vector().vec(), b->vec());
   t5.stop();
+  std::cout << "Solution norm: " << u->vector().norm(dolfin::la::Norm::l2)
+            << std::endl;
+
+  return 0;
 
   if (output)
   {
     dolfin::common::Timer t6("ZZZ Output");
-    //  Save solution in XDMF format
     std::string filename
         = output_dir + "/solution-" + std::to_string(num_processes) + ".xdmf";
     dolfin::io::XDMFFile file(MPI_COMM_WORLD, filename);

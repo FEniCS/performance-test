@@ -158,12 +158,11 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
 
   t1.stop();
 
-  std::shared_ptr<dolfin::fem::Form> _a(&a, [](dolfin::fem::Form* ptr) {});
-
   // Create matrices and vector, and assemble system
   dolfin::la::PETScMatrix A(dolfin::fem::create_matrix(a));
   MatZeroEntries(A.mat());
 
+  std::shared_ptr<dolfin::fem::Form> _a(&a, [](dolfin::fem::Form* ptr) {});
   dolfin::common::Timer t2("ZZZ Assemble matrix");
   dolfin::fem::assemble_matrix(A.mat(), a, {bc});
   MatAssemblyBegin(A.mat(), MAT_FINAL_ASSEMBLY);
