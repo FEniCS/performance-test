@@ -12,7 +12,7 @@ jobs:
             pip3 install git+https://bitbucket.org/fenics-project/fiat.git --upgrade
             pip3 install git+https://bitbucket.org/fenics-project/ufl.git --upgrade
             pip3 install git+https://bitbucket.org/fenics-project/dijitso.git --upgrade
-            pip3 install git+https://github.com/FEniCS/ffcx  --upgrade
+            pip3 install git+https://github.com/FEniCS/ffcx --upgrade
       - run:
           name: Install DOLFIN (C++)
           command: |
@@ -30,8 +30,8 @@ jobs:
           name: Compile UFL files
           command: |
             cd src/
-            ffc -l dolfin Elasticity.ufl
-            ffc -l dolfin -f form_postfix False Poisson.ufl
+            ffc Elasticity.ufl
+            ffc -f form_postfix False Poisson.ufl
       - run:
           name: Build test program
           command: |
