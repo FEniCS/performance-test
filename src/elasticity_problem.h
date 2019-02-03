@@ -13,7 +13,6 @@
 #include <dolfin/fem/DofMap.h>
 #include <dolfin/fem/Form.h>
 #include <dolfin/fem/GenericDofMap.h>
-#include <dolfin/fem/SystemAssembler.h>
 #include <dolfin/fem/assembler.h>
 #include <dolfin/function/Expression.h>
 #include <dolfin/function/Function.h>
@@ -182,15 +181,6 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   dolfin::fem::set_bc(b.vec(), {bc}, nullptr);
   t3.stop();
 
-  // OLD ASSEMBLER
-  std::shared_ptr<dolfin::fem::Form> _L(&L, [](dolfin::fem::Form* ptr) {});
-  dolfin::fem::SystemAssembler assembler(_a, _L, {bc});
-  dolfin::common::Timer t3_b("ZZZ Assemble vector (old)");
-  assembler.assemble(b);
-  t3_b.stop();
-  dolfin::common::Timer t3_c("ZZZ Assemble matrix (old)");
-  assembler.assemble(A);
-  t3_c.stop();
 
   dolfin::common::Timer t4("ZZZ Create near-nullspace");
 
@@ -199,10 +189,6 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
 
   // Build near-nullspace and attach to matrix
   dolfin::la::VectorSpaceBasis nullspace = build_near_nullspace(*V);
-  // if (nullspace.in_nullspace(A, 1.0e-6))
-  //   std::cout << "Null space" << std::endl;
-  // else
-  //   std::cout << "Not null space" << std::endl;
   A.set_near_nullspace(nullspace);
   t4.stop();
 

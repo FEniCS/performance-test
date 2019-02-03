@@ -6,12 +6,10 @@
 
 #pragma once
 
+#include "Poisson.h"
 #include <Eigen/Dense>
-#include <memory>
-#include <utility>
-
+#include <cfloat>
 #include <dolfin/common/Timer.h>
-#include <dolfin/fem/SystemAssembler.h>
 #include <dolfin/function/Expression.h>
 #include <dolfin/function/Function.h>
 #include <dolfin/function/FunctionSpace.h>
@@ -19,8 +17,8 @@
 #include <dolfin/la/PETScVector.h>
 #include <dolfin/mesh/Mesh.h>
 #include <dolfin/mesh/SubDomain.h>
-
-#include "Poisson.h"
+#include <memory>
+#include <utility>
 
 namespace poisson
 {
@@ -71,7 +69,7 @@ public:
   {
     dolfin::EigenArrayXb b(x.rows());
     for (Eigen::Index i = 0; i < x.rows(); ++i)
-      b(i, 0) = x(i, 0) < DOLFIN_EPS or x(i, 0) > (1.0 - DOLFIN_EPS);
+      b(i, 0) = x(i, 0) < DBL_EPSILON or x(i, 0) > (1.0 - DBL_EPSILON);
     return b;
   }
 };
@@ -155,15 +153,6 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   VecGhostUpdateEnd(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   dolfin::fem::set_bc(b.vec(), {bc}, nullptr);
   t3.stop();
-
-  // Create assembler
-  // dolfin::fem::SystemAssembler assembler(_a, _L, {bc});
-  // dolfin::common::Timer t4("ZZZ Assemble vector (old)");
-  // assembler.assemble(b);
-  // t4.stop();
-  // dolfin::common::Timer t5("ZZZ Assemble matrix (old)");
-  // assembler.assemble(A);
-  // t5.stop();
 
   t1.stop();
 
