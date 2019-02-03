@@ -158,12 +158,11 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
 
   t1.stop();
 
-  std::shared_ptr<dolfin::fem::Form> _a(&a, [](dolfin::fem::Form* ptr) {});
-
   // Create matrices and vector, and assemble system
   dolfin::la::PETScMatrix A(dolfin::fem::create_matrix(a));
   MatZeroEntries(A.mat());
 
+  std::shared_ptr<dolfin::fem::Form> _a(&a, [](dolfin::fem::Form* ptr) {});
   dolfin::common::Timer t2("ZZZ Assemble matrix");
   dolfin::fem::assemble_matrix(A.mat(), a, {bc});
   MatAssemblyBegin(A.mat(), MAT_FINAL_ASSEMBLY);
@@ -186,10 +185,10 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   // OLD ASSEMBLER
   std::shared_ptr<dolfin::fem::Form> _L(&L, [](dolfin::fem::Form* ptr) {});
   dolfin::fem::SystemAssembler assembler(_a, _L, {bc});
-  dolfin::common::Timer t3_b("ZZZ Old systems assemble (vector)");
+  dolfin::common::Timer t3_b("ZZZ Assemble vector (old)");
   assembler.assemble(b);
   t3_b.stop();
-  dolfin::common::Timer t3_c("ZZZ Old systems assemble (matrix)");
+  dolfin::common::Timer t3_c("ZZZ Assemble matrix (old)");
   assembler.assemble(A);
   t3_c.stop();
 

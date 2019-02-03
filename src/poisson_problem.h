@@ -106,17 +106,17 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   auto form_a = std::unique_ptr<dolfin_form>(PoissonBilinearForm());
 
   // Define variational forms
-  auto a = std::make_shared<dolfin::fem::Form>(
+  dolfin::fem::Form a(
       std::shared_ptr<ufc_form>(form_a->form()),
       std::initializer_list<
           std::shared_ptr<const dolfin::function::FunctionSpace>>{V, V});
-  auto L = std::make_shared<dolfin::fem::Form>(
+  dolfin::fem::Form L(
       std::shared_ptr<ufc_form>(form_L->form()),
       std::initializer_list<
           std::shared_ptr<const dolfin::function::FunctionSpace>>{V});
 
   // Attach 'coordinate mapping' to mesh
-  auto cmap = a->coordinate_mapping();
+  auto cmap = a.coordinate_mapping();
   mesh->geometry().coord_mapping = cmap;
 
   Source f_expr;
@@ -126,17 +126,44 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   f->interpolate(f_expr);
   g->interpolate(g_expr);
 
-  L->set_coefficient_index_to_name_map(form_L->coefficient_number_map);
-  L->set_coefficient_name_to_index_map(form_L->coefficient_name_map);
-  L->set_coefficients({{"f", f}, {"g", g}});
+  L.set_coefficient_index_to_name_map(form_L->coefficient_number_map);
+  L.set_coefficient_name_to_index_map(form_L->coefficient_name_map);
+  L.set_coefficients({{"f", f}, {"g", g}});
+
+  std::shared_ptr<dolfin::fem::Form> _a(&a, [](dolfin::fem::Form* ptr) {});
+  std::shared_ptr<dolfin::fem::Form> _L(&L, [](dolfin::fem::Form* ptr) {});
+
+  // Create matrices and vector, and assemble system
+  dolfin::la::PETScMatrix A(dolfin::fem::create_matrix(a));
+  MatZeroEntries(A.mat());
+
+  dolfin::common::Timer t2("ZZZ Assemble matrix");
+  dolfin::fem::assemble_matrix(A.mat(), a, {bc});
+  MatAssemblyBegin(A.mat(), MAT_FINAL_ASSEMBLY);
+  MatAssemblyEnd(A.mat(), MAT_FINAL_ASSEMBLY);
+  t2.stop();
+
+  dolfin::la::PETScVector b(*L.function_space(0)->dofmap()->index_map());
+  VecSet(b.vec(), 0.0);
+  VecGhostUpdateBegin(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
+  VecGhostUpdateEnd(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
+
+  dolfin::common::Timer t3("ZZZ Assemble vector");
+  dolfin::fem::assemble_vector(b.vec(), L);
+  dolfin::fem::apply_lifting(b.vec(), {_a}, {{bc}}, {}, 1.0);
+  VecGhostUpdateBegin(b.vec(), ADD_VALUES, SCATTER_REVERSE);
+  VecGhostUpdateEnd(b.vec(), ADD_VALUES, SCATTER_REVERSE);
+  dolfin::fem::set_bc(b.vec(), {bc}, nullptr);
+  t3.stop();
 
   // Create assembler
-  dolfin::fem::SystemAssembler assembler(a, L, {bc});
-
-  // Assemble system
-  dolfin::la::PETScMatrix A(dolfin::fem::create_matrix(*a));
-  dolfin::la::PETScVector b(*L->function_space(0)->dofmap()->index_map());
-  assembler.assemble(A, b);
+  // dolfin::fem::SystemAssembler assembler(_a, _L, {bc});
+  // dolfin::common::Timer t4("ZZZ Assemble vector (old)");
+  // assembler.assemble(b);
+  // t4.stop();
+  // dolfin::common::Timer t5("ZZZ Assemble matrix (old)");
+  // assembler.assemble(A);
+  // t5.stop();
 
   t1.stop();
 
