@@ -36,6 +36,7 @@ RUN apt-get -qq update && \
         libopenblas-dev \
         libhdf5-mpich-dev \
         mpich \
+        ninja-build \
         python \
         python3-dev \
         pkg-config \
