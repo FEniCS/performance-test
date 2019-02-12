@@ -31,7 +31,7 @@ jobs:
           command: |
             cd src/
             ffc Elasticity.ufl
-            ffc -f form_postfix False Poisson.ufl
+            ffc Poisson.ufl
       - run:
           name: Build test program
           command: |
