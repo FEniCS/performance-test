@@ -137,18 +137,23 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   dolfin::la::PETScVector b(*L->function_space(0)->dofmap()->index_map());
 
   MatZeroEntries(A.mat());
+  dolfin::common::Timer t2("ZZZ Assemble matrix");
   dolfin::fem::assemble_matrix(A.mat(), *a, {bc});
   MatAssemblyBegin(A.mat(), MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(A.mat(), MAT_FINAL_ASSEMBLY);
+  t2.stop();
 
   VecSet(b.vec(), 0.0);
   VecGhostUpdateBegin(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
   VecGhostUpdateEnd(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
+
+  dolfin::common::Timer t3("ZZZ Assemble vector");
   dolfin::fem::assemble_vector(b.vec(), *L);
   dolfin::fem::apply_lifting(b.vec(), {a}, {{bc}}, {}, 1.0);
   VecGhostUpdateBegin(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   VecGhostUpdateEnd(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   dolfin::fem::set_bc(b.vec(), {bc}, nullptr);
+  t3.stop();
 
   t1.stop();
 
