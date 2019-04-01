@@ -81,13 +81,14 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   dolfin::common::Timer t0("ZZZ FunctionSpace");
 
   // auto V = std::make_shared<Poisson::FunctionSpace>(mesh);
-  auto space = std::unique_ptr<dolfin_function_space>(PoissonFunctionSpace());
+  auto space = std::unique_ptr<ufc_function_space, decltype(free)*>(
+      Poisson_functionspace_create(), free);
+  auto ufc_map = std::shared_ptr<ufc_dofmap>(space->dofmap());
   auto V = std::make_shared<dolfin::function::FunctionSpace>(
       mesh,
       std::make_shared<dolfin::fem::FiniteElement>(
           std::shared_ptr<ufc_finite_element>(space->element())),
-      std::make_shared<dolfin::fem::DofMap>(
-          std::shared_ptr<ufc_dofmap>(space->dofmap()), *mesh));
+      std::make_shared<dolfin::fem::DofMap>(*ufc_map, *mesh));
   t0.stop();
 
   dolfin::common::Timer t1("ZZZ Assemble");
@@ -100,21 +101,24 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   auto bc = std::make_shared<dolfin::fem::DirichletBC>(V, u0, *boundary);
 
   // Define variational forms
-  auto form_L = std::unique_ptr<dolfin_form>(PoissonLinearForm());
-  auto form_a = std::unique_ptr<dolfin_form>(PoissonBilinearForm());
+  auto form_L = std::unique_ptr<ufc_form, decltype(free)*>(
+      Poisson_linearform_create(), free);
+  auto form_a = std::unique_ptr<ufc_form, decltype(free)*>(
+      Poisson_bilinearform_create(), free);
 
   // Define variational forms
-  dolfin::fem::Form a(
-      std::shared_ptr<ufc_form>(form_a->form()),
-      std::initializer_list<
-          std::shared_ptr<const dolfin::function::FunctionSpace>>{V, V});
-  dolfin::fem::Form L(
-      std::shared_ptr<ufc_form>(form_L->form()),
+  auto L = std::make_shared<dolfin::fem::Form>(
+      std::shared_ptr<ufc_form>(Poisson_linearform_create(), free),
       std::initializer_list<
           std::shared_ptr<const dolfin::function::FunctionSpace>>{V});
 
+  auto a = std::make_shared<dolfin::fem::Form>(
+      std::shared_ptr<ufc_form>(Poisson_bilinearform_create(), free),
+      std::initializer_list<
+          std::shared_ptr<const dolfin::function::FunctionSpace>>{V, V});
+
   // Attach 'coordinate mapping' to mesh
-  auto cmap = a.coordinate_mapping();
+  auto cmap = a->coordinate_mapping();
   mesh->geometry().coord_mapping = cmap;
 
   Source f_expr;
@@ -124,35 +128,27 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   f->interpolate(f_expr);
   g->interpolate(g_expr);
 
-  L.set_coefficient_index_to_name_map(form_L->coefficient_number_map);
-  L.set_coefficient_name_to_index_map(form_L->coefficient_name_map);
-  L.set_coefficients({{"f", f}, {"g", g}});
-
-  std::shared_ptr<dolfin::fem::Form> _a(&a, [](dolfin::fem::Form* ptr) {});
-  std::shared_ptr<dolfin::fem::Form> _L(&L, [](dolfin::fem::Form* ptr) {});
+  //  L.set_coefficient_index_to_name_map(form_L->coefficient_number_map);
+  //  L.set_coefficient_name_to_index_map(form_L->coefficient_name_map);
+  L->set_coefficients({{"f", f}, {"g", g}});
 
   // Create matrices and vector, and assemble system
-  dolfin::la::PETScMatrix A(dolfin::fem::create_matrix(a));
-  MatZeroEntries(A.mat());
+  dolfin::la::PETScMatrix A = dolfin::fem::create_matrix(*a);
+  dolfin::la::PETScVector b(*L->function_space(0)->dofmap()->index_map());
 
-  dolfin::common::Timer t2("ZZZ Assemble matrix");
-  dolfin::fem::assemble_matrix(A.mat(), a, {bc});
+  MatZeroEntries(A.mat());
+  dolfin::fem::assemble_matrix(A.mat(), *a, {bc});
   MatAssemblyBegin(A.mat(), MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(A.mat(), MAT_FINAL_ASSEMBLY);
-  t2.stop();
 
-  dolfin::la::PETScVector b(*L.function_space(0)->dofmap()->index_map());
   VecSet(b.vec(), 0.0);
   VecGhostUpdateBegin(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
   VecGhostUpdateEnd(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
-
-  dolfin::common::Timer t3("ZZZ Assemble vector");
-  dolfin::fem::assemble_vector(b.vec(), L);
-  dolfin::fem::apply_lifting(b.vec(), {_a}, {{bc}}, {}, 1.0);
+  dolfin::fem::assemble_vector(b.vec(), *L);
+  dolfin::fem::apply_lifting(b.vec(), {a}, {{bc}}, {}, 1.0);
   VecGhostUpdateBegin(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   VecGhostUpdateEnd(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   dolfin::fem::set_bc(b.vec(), {bc}, nullptr);
-  t3.stop();
 
   t1.stop();
 
