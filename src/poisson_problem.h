@@ -81,14 +81,16 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   dolfin::common::Timer t0("ZZZ FunctionSpace");
 
   // auto V = std::make_shared<Poisson::FunctionSpace>(mesh);
-  auto space = std::unique_ptr<ufc_function_space, decltype(free)*>(
-      Poisson_functionspace_create(), free);
-  auto ufc_map = std::shared_ptr<ufc_dofmap>(space->dofmap());
+  ufc_function_space* space = Poisson_functionspace_create();
+  ufc_dofmap* ufc_map = space->create_dofmap();
   auto V = std::make_shared<dolfin::function::FunctionSpace>(
       mesh,
       std::make_shared<dolfin::fem::FiniteElement>(
-          std::shared_ptr<ufc_finite_element>(space->element())),
+          std::shared_ptr<ufc_finite_element>(space->create_element())),
       std::make_shared<dolfin::fem::DofMap>(*ufc_map, *mesh));
+  std::free(ufc_map);
+  std::free(space);
+
   t0.stop();
 
   dolfin::common::Timer t1("ZZZ Assemble");
@@ -107,15 +109,19 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
       Poisson_bilinearform_create(), free);
 
   // Define variational forms
+  ufc_form* linear_form = Poisson_linearform_create();
   auto L = std::make_shared<dolfin::fem::Form>(
-      std::shared_ptr<ufc_form>(Poisson_linearform_create(), free),
+      *linear_form,
       std::initializer_list<
           std::shared_ptr<const dolfin::function::FunctionSpace>>{V});
+  std::free(linear_form);
 
+  ufc_form* bilinear_form = Poisson_bilinearform_create();
   auto a = std::make_shared<dolfin::fem::Form>(
-      std::shared_ptr<ufc_form>(Poisson_bilinearform_create(), free),
+      *bilinear_form,
       std::initializer_list<
           std::shared_ptr<const dolfin::function::FunctionSpace>>{V, V});
+  std::free(bilinear_form);
 
   // Attach 'coordinate mapping' to mesh
   auto cmap = a->coordinate_mapping();
