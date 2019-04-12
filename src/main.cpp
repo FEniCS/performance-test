@@ -132,8 +132,13 @@ int main(int argc, char* argv[])
   // Solve
   dolfin::common::Timer t5("ZZZ Solve");
   std::size_t num_iter = solver.solve(u->vector().vec(), b->vec());
-  std::cout << "soln norm:  " << u->vector().norm(dolfin::la::Norm::l2)
-            << std::endl;
+
+  if (dolfin::MPI::rank(MPI_COMM_WORLD) == 0)
+  {
+    std::cout << "soln norm:  " << u->vector().norm(dolfin::la::Norm::l2)
+              << std::endl;
+  }
+
   t5.stop();
 
   if (output)

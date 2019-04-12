@@ -113,13 +113,15 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   dolfin::common::Timer t0("ZZZ FunctionSpace");
   ufc_function_space* space = Elasticity_functionspace_create();
   ufc_dofmap* ufc_map = space->create_dofmap();
+  ufc_finite_element* ufc_element = space->create_element();
 
   auto V = std::make_shared<dolfin::function::FunctionSpace>(
       mesh,
-      std::make_shared<dolfin::fem::FiniteElement>(
-          std::shared_ptr<ufc_finite_element>(space->create_element())),
+      std::make_shared<dolfin::fem::FiniteElement>(*ufc_element),
       std::make_shared<dolfin::fem::DofMap>(*ufc_map, *mesh));
   t0.stop();
+
+  std::free(ufc_element);
   std::free(ufc_map);
   std::free(space);
 
