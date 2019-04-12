@@ -133,12 +133,6 @@ int main(int argc, char* argv[])
   dolfin::common::Timer t5("ZZZ Solve");
   std::size_t num_iter = solver.solve(u->vector().vec(), b->vec());
 
-  if (dolfin::MPI::rank(MPI_COMM_WORLD) == 0)
-  {
-    std::cout << "soln norm:  " << u->vector().norm(dolfin::la::Norm::l2)
-              << std::endl;
-  }
-
   t5.stop();
 
   if (output)
@@ -154,9 +148,13 @@ int main(int argc, char* argv[])
   // Display timings
   dolfin::list_timings({dolfin::TimingType::wall});
 
+  double norm = u->vector().norm(dolfin::la::Norm::l2);
   // Report number of Krylov iterations
   if (dolfin::MPI::rank(MPI_COMM_WORLD) == 0)
+  {
     std::cout << "*** Number of Krylov iterations: " << num_iter << std::endl;
+    std::cout << "*** Solution norm:  " << norm << std::endl;
+  }
 
   return 0;
 }

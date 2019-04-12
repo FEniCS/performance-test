@@ -51,7 +51,7 @@ Options for the test are:
   data to
 
 Linear solver options are configured via PETSc command line options,
-as shown below. **NB - currently the options are not using the --petsc. prefix**.
+(single hyphen) as shown below.
 
 
 ## Recommended test configuration
@@ -72,17 +72,17 @@ mpirun -np 8 ./dolfin-scaling-test \
 --problem_type elasticity \
 --scaling_type weak \
 --ndofs 500000 \
---petsc.log_view \
---petsc.ksp_view \
---petsc.ksp_type cg \
---petsc.ksp_rtol 1.0e-8 \
---petsc.pc_type gamg \
---petsc.pc_gamg_coarse_eq_limit 1000 \
---petsc.mg_levels_ksp_type chebyshev \
---petsc.mg_levels_pc_type jacobi \
---petsc.mg_levels_esteig_ksp_type cg \
---petsc.matptap_via scalable \
---petsc.options_left
+-log_view \
+-ksp_view \
+-ksp_type cg \
+-ksp_rtol 1.0e-8 \
+-pc_type gamg \
+-pc_gamg_coarse_eq_limit 1000 \
+-mg_levels_ksp_type chebyshev \
+-mg_levels_pc_type jacobi \
+-mg_levels_esteig_ksp_type cg \
+-matptap_via scalable \
+-options_left
 ```
 
 For a strong scaling test, with 8 MPI processes and 10M
@@ -94,17 +94,17 @@ mpirun -np 8 ./dolfin-scaling-test \
 --problem_type elasticity \
 --scaling_type strong \
 --ndofs 10000000 \
---petsc.log_view \
---petsc.ksp_view \
---petsc.ksp_type cg \
---petsc.ksp_rtol 1.0e-8 \
---petsc.pc_type gamg \
---petsc.pc_gamg_coarse_eq_limit 1000 \
---petsc.mg_levels_ksp_type chebyshev \
---petsc.mg_levels_pc_type jacobi \
---petsc.mg_levels_esteig_ksp_type cg \
---petsc.matptap_via scalable \
---petsc.options_left
+-log_view \
+-ksp_view \
+-ksp_type cg \
+-ksp_rtol 1.0e-8 \
+-pc_type gamg \
+-pc_gamg_coarse_eq_limit 1000 \
+-mg_levels_ksp_type chebyshev \
+-mg_levels_pc_type jacobi \
+-mg_levels_esteig_ksp_type cg \
+-matptap_via scalable \
+-options_left
 ```
 
 ### Poisson
@@ -119,14 +119,14 @@ mpirun -np 8 ./dolfin-scaling-test \
 --problem_type poisson \
 --scaling_type weak \
 --ndofs 500000 \
---petsc.log_view \
---petsc.ksp_view \
---petsc.ksp_type cg \
---petsc.ksp_rtol 1.0e-8 \
---petsc.pc_type hypre \
---petsc.pc_hypre_type boomeramg \
---petsc.pc_hypre_boomeramg_strong_threshold 0.5 \
---petsc.options_left
+-log_view \
+-ksp_view \
+-ksp_type cg \
+-ksp_rtol 1.0e-8 \
+-pc_type hypre \
+-pc_hypre_type boomeramg \
+-pc_hypre_boomeramg_strong_threshold 0.5 \
+-options_left
 ```
 For a strong scaling test, with 8 MPI processes and 10M
 degrees-of-freedom in total:
@@ -135,14 +135,14 @@ mpirun -np 8 ./dolfin-scaling-test \
 --problem_type poisson \
 --scaling_type strong \
 --ndofs 10000000 \
---petsc.log_view \
---petsc.ksp_view \
---petsc.ksp_type cg \
---petsc.ksp_rtol 1.0e-8 \
---petsc.pc_type hypre \
---petsc.pc_hypre_type boomeramg \
---petsc.pc_hypre_boomeramg_strong_threshold 0.5 \
---petsc.options_left
+-log_view \
+-ksp_view \
+-ksp_type cg \
+-ksp_rtol 1.0e-8 \
+-pc_type hypre \
+-pc_hypre_type boomeramg \
+-pc_hypre_boomeramg_strong_threshold 0.5 \
+-options_left
 ```
 
 ## Reference performance data
