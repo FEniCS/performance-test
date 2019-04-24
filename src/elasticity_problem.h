@@ -14,12 +14,14 @@
 #include <dolfin/fem/Form.h>
 #include <dolfin/fem/GenericDofMap.h>
 #include <dolfin/fem/assembler.h>
+#include <dolfin/fem/utils.h>
 #include <dolfin/function/Expression.h>
 #include <dolfin/function/Function.h>
 #include <dolfin/function/FunctionSpace.h>
 #include <dolfin/la/PETScMatrix.h>
 #include <dolfin/la/PETScVector.h>
 #include <dolfin/la/VectorSpaceBasis.h>
+#include <dolfin/la/utils.h>
 #include <dolfin/mesh/Mesh.h>
 #include <dolfin/mesh/SubDomain.h>
 #include <memory>
@@ -39,32 +41,37 @@ build_near_nullspace(const dolfin::function::FunctionSpace& V)
   auto V2 = V.sub({2});
 
   // Create vectors for nullspace basis
-  std::vector<std::shared_ptr<dolfin::la::PETScVector>> basis;
+  std::vector<std::shared_ptr<dolfin::la::PETScVector>> basis_vec;
   for (std::size_t i = 0; i < 6; ++i)
   {
-    basis.push_back(
+    basis_vec.push_back(
         std::make_shared<dolfin::la::PETScVector>(*V.dofmap()->index_map()));
   }
 
-  // x0, x1, x2 translations
-  V0->dofmap()->set(basis[0]->vec(), 1.0);
-  // VecView(basis[0]->vec(), PETSC_VIEWER_STDOUT_WORLD);
+  {
+    // Unwrap the PETSc Vec objects to allow array (Eigen) access
+    std::vector<dolfin::la::VecWrapper> basis;
+    for (auto vec : basis_vec)
+      basis.push_back(dolfin::la::VecWrapper(vec->vec()));
 
-  V1->dofmap()->set(basis[1]->vec(), 1.0);
-  V2->dofmap()->set(basis[2]->vec(), 1.0);
+    // x0, x1, x2 translations
+    V0->dofmap()->set(basis[0].x, 1.0);
+    V1->dofmap()->set(basis[1].x, 1.0);
+    V2->dofmap()->set(basis[2].x, 1.0);
 
-  // Rotations
-  V0->set_x(basis[3]->vec(), -1.0, 1);
-  V1->set_x(basis[3]->vec(), 1.0, 0);
+    // Rotations
+    V0->set_x(basis[3].x, -1.0, 1);
+    V1->set_x(basis[3].x, 1.0, 0);
 
-  V0->set_x(basis[4]->vec(), 1.0, 2);
-  V2->set_x(basis[4]->vec(), -1.0, 0);
+    V0->set_x(basis[4].x, 1.0, 2);
+    V2->set_x(basis[4].x, -1.0, 0);
 
-  V2->set_x(basis[5]->vec(), 1.0, 1);
-  V1->set_x(basis[5]->vec(), -1.0, 2);
+    V2->set_x(basis[5].x, 1.0, 1);
+    V1->set_x(basis[5].x, -1.0, 2);
+  }
 
   // Create vector space and orthonormalize
-  dolfin::la::VectorSpaceBasis vector_space(basis);
+  dolfin::la::VectorSpaceBasis vector_space(basis_vec);
   vector_space.orthonormalize();
   return vector_space;
 }
@@ -116,8 +123,7 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   ufc_finite_element* ufc_element = space->create_element();
 
   auto V = std::make_shared<dolfin::function::FunctionSpace>(
-      mesh,
-      std::make_shared<dolfin::fem::FiniteElement>(*ufc_element),
+      mesh, std::make_shared<dolfin::fem::FiniteElement>(*ufc_element),
       std::make_shared<dolfin::fem::DofMap>(*ufc_map, *mesh));
   t0.stop();
 
@@ -156,8 +162,6 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   auto f = std::make_shared<dolfin::function::Function>(V);
   f->interpolate(f_expr);
 
-  //  L->set_coefficient_index_to_name_map(form_L->coefficient_number_map);
-  //  L->set_coefficient_name_to_index_map(form_L->coefficient_name_map);
   L->set_coefficients({{"f", f}});
 
   t1.stop();

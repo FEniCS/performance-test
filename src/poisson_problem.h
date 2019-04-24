@@ -85,8 +85,7 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   ufc_dofmap* ufc_map = space->create_dofmap();
   ufc_finite_element* ufc_element = space->create_element();
   auto V = std::make_shared<dolfin::function::FunctionSpace>(
-      mesh,
-      std::make_shared<dolfin::fem::FiniteElement>(*ufc_element),
+      mesh, std::make_shared<dolfin::fem::FiniteElement>(*ufc_element),
       std::make_shared<dolfin::fem::DofMap>(*ufc_map, *mesh));
   std::free(ufc_element);
   std::free(ufc_map);
@@ -135,8 +134,6 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   f->interpolate(f_expr);
   g->interpolate(g_expr);
 
-  //  L.set_coefficient_index_to_name_map(form_L->coefficient_number_map);
-  //  L.set_coefficient_name_to_index_map(form_L->coefficient_name_map);
   L->set_coefficients({{"f", f}, {"g", g}});
 
   // Create matrices and vector, and assemble system
