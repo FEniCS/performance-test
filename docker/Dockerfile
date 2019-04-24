@@ -22,7 +22,6 @@ RUN apt-get -qq update && \
         g++ \
         gfortran \
         git \
-        git-lfs \
         libboost-filesystem-dev \
         libboost-iostreams-dev \
         libboost-math-dev \
