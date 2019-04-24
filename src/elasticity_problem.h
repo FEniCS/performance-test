@@ -49,9 +49,10 @@ build_near_nullspace(const dolfin::function::FunctionSpace& V)
   }
 
   {
+    // Unwrap the PETSc Vec objects to allow array (Eigen) access
     std::vector<dolfin::la::VecWrapper> basis;
-    for (std::size_t i = 0; i < 6; ++i)
-      basis.push_back(dolfin::la::VecWrapper(basis_vec[i]->vec()));
+    for (auto vec : basis_vec)
+      basis.push_back(dolfin::la::VecWrapper(vec->vec()));
 
     // x0, x1, x2 translations
     V0->dofmap()->set(basis[0].x, 1.0);
@@ -161,8 +162,6 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   auto f = std::make_shared<dolfin::function::Function>(V);
   f->interpolate(f_expr);
 
-  //  L->set_coefficient_index_to_name_map(form_L->coefficient_number_map);
-  //  L->set_coefficient_name_to_index_map(form_L->coefficient_name_map);
   L->set_coefficients({{"f", f}});
 
   t1.stop();
