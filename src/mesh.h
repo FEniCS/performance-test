@@ -7,7 +7,7 @@
 #include <dolfin/common/MPI.h>
 #include <dolfin/generation/BoxMesh.h>
 #include <dolfin/mesh/Mesh.h>
-#include <dolfin/mesh/MeshPartitioning.h>
+#include <dolfin/mesh/Partitioning.h>
 #include <dolfin/refinement/refine.h>
 #include <memory>
 
