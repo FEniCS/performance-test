@@ -1,4 +1,4 @@
-version: 2
+version: 2.1
 jobs:
   build:
     docker:
@@ -105,10 +105,15 @@ jobs:
             -mg_levels_esteig_ksp_type cg \
             -matptap_via scalable
 
-biweekly:
+workflows:
+  version: 2
+  build:
+    jobs:
+      - build
+  hourly:
     triggers:
       - schedule:
-          cron: "0 0 * * 0,3"
+          cron: "0 * * * *"
           filters:
             branches:
               only:
