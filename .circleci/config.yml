@@ -110,10 +110,10 @@ workflows:
   build:
     jobs:
       - build
-  hourly:
+  overnight:
     triggers:
       - schedule:
-          cron: "0 * * * *"
+          cron: "0 3 * * 0,3"
           filters:
             branches:
               only:
