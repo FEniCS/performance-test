@@ -78,7 +78,7 @@ int main(int argc, char* argv[])
   {
     dolfin::common::Timer t0("ZZZ Create Mesh");
     std::shared_ptr<dolfin::mesh::Mesh> mesh
-        = create_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1);
+        = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1);
     t0.stop();
 
     // Create Poisson problem
@@ -91,7 +91,7 @@ int main(int argc, char* argv[])
   {
     dolfin::common::Timer t0("ZZZ Create Mesh");
     std::shared_ptr<dolfin::mesh::Mesh> mesh
-        = create_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3);
+        = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3);
     t0.stop();
 
     // Create elasticity problem. Near-nullspace will be attached to the
