@@ -122,124 +122,130 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
   if (!target_dofs_total)
     target *= mpi_size;
 
-  std::vector<double> geom;
-  std::vector<std::int64_t> topo;
-
   // Parameters controlling shape
-  int n = 16;
-  double r0 = 0.25;
-  double r1 = 0.5;
+  int n = 17;       // number of spokes
+  double r0 = 0.25; // inner radius of ring
+  double r1 = 0.5;  // outer radius of ring
 
-  double h0 = 1.2;
-  double h1 = 1.0;
+  double h0 = 1.2; // height (inner)
+  double h1 = 1.0; // height (outer)
 
-  int lspur = 3;
-  double l0 = 1.0;
-  double dth = 0.25;
-  double tap = 0.5;
+  int lspur = 8;     // number of elements in each spoke
+  double l0 = 1.0;   // length of each element in spoke
+  double dth = 0.25; // curl (angle increment) as spoke goes out
+  double tap = 1.05; // taper (fractional height decrease on each element)
 
+  // Subdivision of a cube into 6 tetrahedra
   int cube[6][4] = {{0, 1, 2, 4}, {1, 2, 4, 5}, {2, 4, 5, 6},
                     {0, 2, 3, 4}, {6, 7, 4, 2}, {2, 3, 4, 7}};
 
+  // Calculate number of points and cells (only on process 0)
   int npoints = 0;
   int ncells = 0;
+  if (dolfin::MPI::rank(comm) == 0)
+  {
+    npoints = n * 4 + n * lspur * 4;
+    ncells = n * 6 + n * lspur * 6;
+  }
+
+  dolfin::EigenRowArrayXXd geom(npoints, 3);
+  dolfin::EigenRowArrayXXi64 topo(ncells, 4);
 
   if (dolfin::MPI::rank(comm) == 0)
   {
+    int p = 0;
+    int c = 0;
 
-    npoints = n * 4 + n * lspur * 4;
-    ncells = n * 6 + n * lspur * 6;
-
+    // Add n 'cubes' to make a joined up ring.
     for (int i = 0; i < n; ++i)
     {
-      std::vector<int> pts;
-      for (int j = i * 4; j < i * 4 + 8; ++j)
-        pts.push_back(j % (n * 4));
+      // Get the points for current cube
+      Eigen::Array<int, 8, 1> pts;
+      for (int j = 0; j < 8; ++j)
+        pts[j] = ((i * 4 + j) % (n * 4));
 
+      // Add to topology
       for (int k = 0; k < 6; ++k)
-        for (int j = 0; j < 4; ++j)
-          topo.push_back(pts[cube[k][j]]);
-
-      double th = 2 * M_PI * i / n;
-
-      geom.push_back(r0 * cos(th));
-      geom.push_back(r0 * sin(th));
-      geom.push_back(h0);
-      geom.push_back(r0 * cos(th));
-      geom.push_back(r0 * sin(th));
-      geom.push_back(-h0);
-      geom.push_back(r1 * cos(th));
-      geom.push_back(r1 * sin(th));
-      geom.push_back(-h1);
-      geom.push_back(r1 * cos(th));
-      geom.push_back(r1 * sin(th));
-      geom.push_back(h1);
-    }
-
-    int c = n * 4;
-
-    for (int i = 0; i < n; ++i)
-    {
-      double th0 = 2 * M_PI * (i + .5) / n;
-
-      std::vector<int> pts = {(i * 4 + 2) % (n * 4),
-                              (i * 4 + 3) % (n * 4),
-                              (i * 4 + 7) % (n * 4),
-                              (i * 4 + 6) % (n * 4),
-                              0,
-                              0,
-                              0,
-                              0};
-
-      for (int k = 0; k < lspur; ++k)
       {
         for (int j = 0; j < 4; ++j)
-          pts[j + 4] = (c + j);
-        for (int m = 0; m < 6; ++m)
-          for (int j = 0; j < 4; ++j)
-            topo.push_back(pts[cube[m][j]]);
+          topo(c, j) = pts[cube[k][j]];
+        ++c;
+      }
 
+      // Calculate the position of points
+      double th = 2 * M_PI * i / n;
+      geom.row(p) << r0 * cos(th), r0 * sin(th), h0;
+      ++p;
+      geom.row(p) << r0 * cos(th), r0 * sin(th), -h0;
+      ++p;
+      geom.row(p) << r1 * cos(th), r1 * sin(th), -h1;
+      ++p;
+      geom.row(p) << r1 * cos(th), r1 * sin(th), h1;
+      ++p;
+    }
+
+    // Add spurs to ring
+    for (int i = 0; i < n; ++i)
+    {
+      // Intermediate angle between two faces
+      double th0 = 2 * M_PI * (i + .5) / n;
+
+      // Starting points on outer edge of ring
+      Eigen::Array<int, 8, 1> pts;
+      pts << (i * 4 + 2) % (n * 4), (i * 4 + 3) % (n * 4),
+          (i * 4 + 7) % (n * 4), (i * 4 + 6) % (n * 4), 0, 0, 0, 0;
+
+      // Build each spur outwards
+      for (int k = 0; k < lspur; ++k)
+      {
+        // Add new points
         for (int j = 0; j < 4; ++j)
         {
-          double g0 = geom[3 * pts[j]];
-          double g1 = geom[3 * pts[j] + 1];
-          double g2 = geom[3 * pts[j] + 2];
-          geom.push_back(g0 + l0 * cos(th0 + k * dth));
-          geom.push_back(g1 + l0 * sin(th0 + k * dth));
-          geom.push_back(g2 * pow(tap, k));
+          pts[j + 4] = p;
+          geom.row(p) = geom.row(pts[j]);
+          geom(p, 0) += l0 * cos(th0 + k * dth);
+          geom(p, 1) += l0 * sin(th0 + k * dth);
+          geom(p, 2) *= pow(tap, k);
+          ++p;
         }
-        c += 4;
-        for (int j = 0; j < 4; ++j)
-          pts[j] = pts[j + 4];
+
+        // Add new cells
+        for (int m = 0; m < 6; ++m)
+        {
+          for (int j = 0; j < 4; ++j)
+            topo(c, j) = pts[cube[m][j]];
+          ++c;
+        }
+
+        // Outer face becomes inner face of next cube
+        pts.head(4) = pts.tail(4);
       }
     }
 
-    Eigen::Map<dolfin::EigenRowArrayXXd> _geom(geom.data(), npoints, 3);
-    std::cout << "x = " << _geom.col(0).minCoeff() << " - "
-              << _geom.col(0).maxCoeff() << "\n";
-    std::cout << "y = " << _geom.col(1).minCoeff() << " - "
-              << _geom.col(1).maxCoeff() << "\n";
-    std::cout << "z = " << _geom.col(2).minCoeff() << " - "
-              << _geom.col(2).maxCoeff() << "\n";
+    // Check geometric sizes and rescale
+    std::cout << "x = " << geom.col(0).minCoeff() << " - "
+              << geom.col(0).maxCoeff() << "\n";
+    std::cout << "y = " << geom.col(1).minCoeff() << " - "
+              << geom.col(1).maxCoeff() << "\n";
+    std::cout << "z = " << geom.col(2).minCoeff() << " - "
+              << geom.col(2).maxCoeff() << "\n";
 
-    _geom.col(0) -= 0.9 * _geom.col(0).minCoeff();
-    double scaling = 0.9 * _geom.col(0).maxCoeff();
-    _geom /= scaling;
+    geom.col(0) -= 0.9 * geom.col(0).minCoeff();
+    double scaling = 0.9 * geom.col(0).maxCoeff();
+    geom /= scaling;
 
-    std::cout << "NEW x = " << _geom.col(0).minCoeff() << " - "
-              << _geom.col(0).maxCoeff() << "\n";
-    std::cout << "NEW y = " << _geom.col(1).minCoeff() << " - "
-              << _geom.col(1).maxCoeff() << "\n";
-    std::cout << "NEW z = " << _geom.col(2).minCoeff() << " - "
-              << _geom.col(2).maxCoeff() << "\n";
+    std::cout << "NEW x = " << geom.col(0).minCoeff() << " - "
+              << geom.col(0).maxCoeff() << "\n";
+    std::cout << "NEW y = " << geom.col(1).minCoeff() << " - "
+              << geom.col(1).maxCoeff() << "\n";
+    std::cout << "NEW z = " << geom.col(2).minCoeff() << " - "
+              << geom.col(2).maxCoeff() << "\n";
   }
 
   auto mesh = std::make_shared<dolfin::mesh::Mesh>(
       dolfin::mesh::Partitioning::build_distributed_mesh(
-          comm, dolfin::mesh::CellType::Type::tetrahedron,
-          Eigen::Map<const dolfin::EigenRowArrayXXd>(geom.data(), npoints, 3),
-          Eigen::Map<const dolfin::EigenRowArrayXXi64>(topo.data(), ncells, 4),
-          {}, dolfin::mesh::GhostMode::none));
+          comm, dolfin::mesh::CellType::Type::tetrahedron, geom, topo, {},
+          dolfin::mesh::GhostMode::none));
 
   mesh->create_entities(1);
   dolfin::mesh::DistributedMeshTools::number_entities(*mesh, 1);
@@ -269,7 +275,7 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
   std::cout << "step/2000 = " << (double)step / 2000.0 << "\n";
 
   int lstep = step / 2;
-  int ustep = step * 2;
+  int ustep = step * 3;
   if (ustep > 2000)
     ustep = 2000;
 
