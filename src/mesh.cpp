@@ -142,7 +142,9 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
   // Calculate number of points and cells (only on process 0)
   int npoints = 0;
   int ncells = 0;
-  if (dolfin::MPI::rank(comm) == 0)
+  const int mpi_rank = dolfin::MPI::rank(comm);
+
+  if (mpi_rank == 0)
   {
     npoints = n * 4 + n * lspur * 4;
     ncells = n * 6 + n * lspur * 6;
@@ -151,7 +153,7 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
   dolfin::EigenRowArrayXXd geom(npoints, 3);
   dolfin::EigenRowArrayXXi64 topo(ncells, 4);
 
-  if (dolfin::MPI::rank(comm) == 0)
+  if (mpi_rank == 0)
   {
     int p = 0;
     int c = 0;
@@ -223,22 +225,15 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
     }
 
     // Check geometric sizes and rescale
-    std::cout << "x = " << geom.col(0).minCoeff() << " - "
-              << geom.col(0).maxCoeff() << "\n";
-    std::cout << "y = " << geom.col(1).minCoeff() << " - "
-              << geom.col(1).maxCoeff() << "\n";
-    std::cout << "z = " << geom.col(2).minCoeff() << " - "
-              << geom.col(2).maxCoeff() << "\n";
-
     geom.col(0) -= 0.9 * geom.col(0).minCoeff();
     double scaling = 0.9 * geom.col(0).maxCoeff();
     geom /= scaling;
 
-    std::cout << "NEW x = " << geom.col(0).minCoeff() << " - "
+    std::cout << "x range = " << geom.col(0).minCoeff() << " - "
               << geom.col(0).maxCoeff() << "\n";
-    std::cout << "NEW y = " << geom.col(1).minCoeff() << " - "
+    std::cout << "y range = " << geom.col(1).minCoeff() << " - "
               << geom.col(1).maxCoeff() << "\n";
-    std::cout << "NEW z = " << geom.col(2).minCoeff() << " - "
+    std::cout << "z range = " << geom.col(2).minCoeff() << " - "
               << geom.col(2).maxCoeff() << "\n";
   }
 
@@ -267,17 +262,18 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
 
   double fraction = (double)(target - mesh->num_entities_global(0))
                     / mesh->num_entities_global(1);
-  std::cout << "Desired fraction=" << fraction << std::endl;
+
+  if (mpi_rank == 0)
+    std::cout << "Desired fraction=" << fraction << std::endl;
 
   // Estimate step needed to get desired refinement fraction
   // using some heuristics and bisection method
-  int step = pow(fraction, 1.6) * 2000;
-  std::cout << "step/2000 = " << (double)step / 2000.0 << "\n";
+  int nmarked = pow(fraction, 1.6) * 2000;
 
-  int lstep = step / 2;
-  int ustep = step * 3;
-  if (ustep > 2000)
-    ustep = 2000;
+  int lmark = nmarked / 2;
+  int umark = nmarked * 3;
+  if (umark > 2000)
+    umark = 2000;
 
   std::shared_ptr<dolfin::mesh::Mesh> meshi;
 
@@ -285,11 +281,9 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
   {
     // Trial step
 
-    std::cout << "step = " << step << "/2000\n";
-
     dolfin::mesh::MeshFunction<bool> marker(mesh, 1, false);
     for (int i = 0; i < mesh->num_entities(1); ++i)
-      marker[i] = (i % 2000 < step);
+      marker[i] = (i % 2000 < nmarked);
 
     meshi = std::make_shared<dolfin::mesh::Mesh>(
         dolfin::refinement::refine(*mesh, marker, false));
@@ -298,26 +292,24 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
         = (double)(meshi->num_entities_global(0) - mesh->num_entities_global(0))
           / mesh->num_entities_global(1);
 
-    std::cout << k << " actual = " << actual_fraction << "\n";
+    if (mpi_rank == 0)
+    {
+      std::cout << "Edges marked = " << nmarked << "/2000\n";
+      std::cout << "Step " << k
+                << " achieved actual fraction = " << actual_fraction << "\n";
+    }
 
     if (actual_fraction > fraction)
     {
-      ustep = step;
-      step = (step + lstep) / 2;
+      umark = nmarked;
+      nmarked = (nmarked + lmark) / 2;
     }
     else
     {
-      lstep = step;
-      step = (step + ustep) / 2;
+      lmark = nmarked;
+      nmarked = (nmarked + umark) / 2;
     }
   }
 
-  mesh = meshi;
-
-  mesh->create_entities(1);
-  dolfin::mesh::DistributedMeshTools::number_entities(*mesh, 1);
-  std::cout << mesh->num_entities_global(0) << std::endl;
-  std::cout << mesh->num_entities_global(1) << std::endl;
-
-  return mesh;
+  return meshi;
 }
