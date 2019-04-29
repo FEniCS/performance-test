@@ -130,10 +130,10 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
   double h0 = 1.2; // height (inner)
   double h1 = 1.0; // height (outer)
 
-  int lspur = 8;     // number of elements in each spoke
-  double l0 = 1.0;   // length of each element in spoke
-  double dth = 0.25; // curl (angle increment) as spoke goes out
-  double tap = 1.05; // taper (fractional height decrease on each element)
+  int lspur = 6;     // number of elements in each spoke
+  double l0 = 0.5;   // length of each element in spoke
+  double dth = 0.15; // curl (angle increment) as spoke goes out
+  double tap = 0.9;  // taper (fractional height decrease on each element)
 
   // Subdivision of a cube into 6 tetrahedra
   int cube[6][4] = {{0, 1, 2, 4}, {1, 2, 4, 5}, {2, 4, 5, 6},
