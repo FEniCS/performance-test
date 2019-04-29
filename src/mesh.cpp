@@ -7,7 +7,9 @@
 #include <dolfin/common/types.h>
 #include <dolfin/generation/BoxMesh.h>
 #include <dolfin/geometry/Point.h>
+#include <dolfin/mesh/DistributedMeshTools.h>
 #include <dolfin/mesh/Mesh.h>
+#include <dolfin/mesh/MeshFunction.h>
 #include <dolfin/mesh/Partitioning.h>
 #include <dolfin/refinement/refine.h>
 
@@ -106,25 +108,35 @@ std::shared_ptr<dolfin::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
 
   return mesh;
 }
-
+//-----------------------------------------------------------------------------
 std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
                                                       std::size_t target_dofs,
                                                       bool target_dofs_total,
                                                       std::size_t dofs_per_node)
 {
+
+  int target = target_dofs / dofs_per_node;
+
+  int mpi_size = dolfin::MPI::size(comm);
+
+  if (!target_dofs_total)
+    target *= mpi_size;
+
   std::vector<double> geom;
   std::vector<std::int64_t> topo;
 
-  // Parameters
-  int n = 8;
-  double r0 = 1.0;
-  double r1 = 2.0;
+  // Parameters controlling shape
+  int n = 16;
+  double r0 = 0.5;
+  double r1 = 1.0;
 
-  double h0 = 0.25;
-  double h1 = 0.2;
+  double h0 = 1.5;
+  double h1 = 1.0;
 
   int lspur = 3;
   double l0 = 1.0;
+  double dth = 0.25;
+  double tap = 0.5;
 
   int cube[6][4] = {{0, 1, 2, 4}, {1, 2, 4, 5}, {2, 4, 5, 6},
                     {0, 2, 3, 4}, {6, 7, 4, 2}, {2, 3, 4, 7}};
@@ -172,8 +184,8 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
 
       std::vector<int> pts = {(i * 4 + 2) % (n * 4),
                               (i * 4 + 3) % (n * 4),
-                              (i * 4 + 6) % (n * 4),
                               (i * 4 + 7) % (n * 4),
+                              (i * 4 + 6) % (n * 4),
                               0,
                               0,
                               0,
@@ -192,9 +204,9 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
           double g0 = geom[3 * pts[j]];
           double g1 = geom[3 * pts[j] + 1];
           double g2 = geom[3 * pts[j] + 2];
-          geom.push_back(g0 + l0 * cos(th0));
-          geom.push_back(g1 + l0 * sin(th0));
-          geom.push_back(g2);
+          geom.push_back(g0 + l0 * cos(th0 + k * dth));
+          geom.push_back(g1 + l0 * sin(th0 + k * dth));
+          geom.push_back(g2 * pow(tap, k));
         }
         c += 4;
         for (int j = 0; j < 4; ++j)
@@ -210,16 +222,77 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
           Eigen::Map<const dolfin::EigenRowArrayXXi64>(topo.data(), ncells, 4),
           {}, dolfin::mesh::GhostMode::none));
 
-  for (unsigned int i = 0; i < 4; ++i)
-  {
-    mesh->create_entities(1);
+  mesh->create_entities(1);
+  dolfin::mesh::DistributedMeshTools::number_entities(*mesh, 1);
 
-    std::cout << mesh->num_entities_global(0) << std::endl;
-    std::cout << mesh->num_entities_global(1) << std::endl;
+  std::cout << "target:" << target << "\n";
+
+  while (mesh->num_entities_global(0) + mesh->num_entities_global(1) < target)
+  {
 
     mesh = std::make_shared<dolfin::mesh::Mesh>(
         dolfin::refinement::refine(*mesh, false));
+
+    mesh->create_entities(1);
+    dolfin::mesh::DistributedMeshTools::number_entities(*mesh, 1);
+
+    std::cout << mesh->num_entities_global(0) << std::endl;
+    std::cout << mesh->num_entities_global(1) << std::endl;
   }
+
+  double fraction = (double)(target - mesh->num_entities_global(0))
+                    / mesh->num_entities_global(1);
+  std::cout << "Desired fraction=" << fraction << std::endl;
+
+  // Estimate step needed to get desired refinement fraction
+  // using some heuristics and bisection method
+  int step = pow(fraction, 1.6) * 2000;
+  std::cout << "step/2000 = " << (double)step / 2000.0 << "\n";
+
+  int lstep = step / 2;
+  int ustep = step * 2;
+  if (ustep > 2000)
+    ustep = 2000;
+
+  std::shared_ptr<dolfin::mesh::Mesh> meshi;
+
+  for (int k = 0; k < 5; ++k)
+  {
+    // Trial step
+
+    std::cout << "step = " << step << "/2000\n";
+
+    dolfin::mesh::MeshFunction<bool> marker(mesh, 1, false);
+    for (int i = 0; i < mesh->num_entities(1); ++i)
+      marker[i] = (i % 2000 < step);
+
+    meshi = std::make_shared<dolfin::mesh::Mesh>(
+        dolfin::refinement::refine(*mesh, marker, false));
+
+    double actual_fraction
+        = (double)(meshi->num_entities_global(0) - mesh->num_entities_global(0))
+          / mesh->num_entities_global(1);
+
+    std::cout << k << " actual = " << actual_fraction << "\n";
+
+    if (actual_fraction > fraction)
+    {
+      ustep = step;
+      step = (step + lstep) / 2;
+    }
+    else
+    {
+      lstep = step;
+      step = (step + ustep) / 2;
+    }
+  }
+
+  mesh = meshi;
+
+  mesh->create_entities(1);
+  dolfin::mesh::DistributedMeshTools::number_entities(*mesh, 1);
+  std::cout << mesh->num_entities_global(0) << std::endl;
+  std::cout << mesh->num_entities_global(1) << std::endl;
 
   return mesh;
 }
