@@ -85,8 +85,7 @@ public:
   void eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
                                     Eigen::RowMajor>>
                 values,
-            const Eigen::Ref<const dolfin::EigenRowArrayXXd> x,
-            const dolfin::mesh::Cell& cell) const
+            const Eigen::Ref<const dolfin::EigenRowArrayXXd> x) const
   {
     for (Eigen::Index i = 0; i < x.rows(); ++i)
     {
