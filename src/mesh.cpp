@@ -127,10 +127,10 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
 
   // Parameters controlling shape
   int n = 16;
-  double r0 = 0.5;
-  double r1 = 1.0;
+  double r0 = 0.25;
+  double r1 = 0.5;
 
-  double h0 = 1.5;
+  double h0 = 1.2;
   double h1 = 1.0;
 
   int lspur = 3;
@@ -213,6 +213,25 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
           pts[j] = pts[j + 4];
       }
     }
+
+    Eigen::Map<dolfin::EigenRowArrayXXd> _geom(geom.data(), npoints, 3);
+    std::cout << "x = " << _geom.col(0).minCoeff() << " - "
+              << _geom.col(0).maxCoeff() << "\n";
+    std::cout << "y = " << _geom.col(1).minCoeff() << " - "
+              << _geom.col(1).maxCoeff() << "\n";
+    std::cout << "z = " << _geom.col(2).minCoeff() << " - "
+              << _geom.col(2).maxCoeff() << "\n";
+
+    _geom.col(0) -= 0.9 * _geom.col(0).minCoeff();
+    double scaling = 0.9 * _geom.col(0).maxCoeff();
+    _geom /= scaling;
+
+    std::cout << "NEW x = " << _geom.col(0).minCoeff() << " - "
+              << _geom.col(0).maxCoeff() << "\n";
+    std::cout << "NEW y = " << _geom.col(1).minCoeff() << " - "
+              << _geom.col(1).maxCoeff() << "\n";
+    std::cout << "NEW z = " << _geom.col(2).minCoeff() << " - "
+              << _geom.col(2).maxCoeff() << "\n";
   }
 
   auto mesh = std::make_shared<dolfin::mesh::Mesh>(
