@@ -32,6 +32,8 @@ int main(int argc, char* argv[])
   desc.add_options()("help,h", "print usage message")(
       "problem_type", po::value<std::string>()->default_value("poisson"),
       "problem (poisson or elasticity)")(
+      "mesh_type", po::value<std::string>()->default_value("cube"),
+      "mesh (cube or unstructured)")(
       "scaling_type", po::value<std::string>()->default_value("weak"),
       "scaling (weak or strong)")(
       "output", po::value<std::string>()->default_value(""),
@@ -54,6 +56,7 @@ int main(int argc, char* argv[])
   }
 
   const std::string problem_type = vm["problem_type"].as<std::string>();
+  const std::string mesh_type = vm["mesh_type"].as<std::string>();
   const std::string scaling_type = vm["scaling_type"].as<std::string>();
   const std::size_t ndofs = vm["ndofs"].as<std::size_t>();
   const std::string output_dir = vm["output"].as<std::string>();
@@ -77,8 +80,12 @@ int main(int argc, char* argv[])
   if (problem_type == "poisson")
   {
     dolfin::common::Timer t0("ZZZ Create Mesh");
-    std::shared_ptr<dolfin::mesh::Mesh> mesh
-        = create_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1);
+
+    std::shared_ptr<dolfin::mesh::Mesh> mesh;
+    if (mesh_type == "cube")
+      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1);
+    else
+      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1);
     t0.stop();
 
     // Create Poisson problem
@@ -90,8 +97,11 @@ int main(int argc, char* argv[])
   else if (problem_type == "elasticity")
   {
     dolfin::common::Timer t0("ZZZ Create Mesh");
-    std::shared_ptr<dolfin::mesh::Mesh> mesh
-        = create_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3);
+    std::shared_ptr<dolfin::mesh::Mesh> mesh;
+    if (mesh_type == "cube")
+      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3);
+    else
+      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3);
     t0.stop();
 
     // Create elasticity problem. Near-nullspace will be attached to the
