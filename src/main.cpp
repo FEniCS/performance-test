@@ -25,6 +25,7 @@ namespace po = boost::program_options;
 
 int main(int argc, char* argv[])
 {
+  dolfin::common::SubSystemsManager::init_logging(argc, argv);
   dolfin::common::SubSystemsManager::init_mpi();
   dolfin::common::SubSystemsManager::init_petsc(argc, argv);
 
