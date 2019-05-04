@@ -4,6 +4,7 @@
 
 #include "mesh.h"
 #include <dolfin/common/MPI.h>
+#include <dolfin/common/log.h>
 #include <dolfin/common/types.h>
 #include <dolfin/generation/BoxMesh.h>
 #include <dolfin/geometry/Point.h>
@@ -229,11 +230,11 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
     double scaling = 0.9 * geom.col(0).maxCoeff();
     geom /= scaling;
 
-    std::cout << "x range = " << geom.col(0).minCoeff() << " - "
+    LOG(INFO) << "x range = " << geom.col(0).minCoeff() << " - "
               << geom.col(0).maxCoeff() << "\n";
-    std::cout << "y range = " << geom.col(1).minCoeff() << " - "
+    LOG(INFO) << "y range = " << geom.col(1).minCoeff() << " - "
               << geom.col(1).maxCoeff() << "\n";
-    std::cout << "z range = " << geom.col(2).minCoeff() << " - "
+    LOG(INFO) << "z range = " << geom.col(2).minCoeff() << " - "
               << geom.col(2).maxCoeff() << "\n";
   }
 
@@ -245,7 +246,7 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
   mesh->create_entities(1);
   dolfin::mesh::DistributedMeshTools::number_entities(*mesh, 1);
 
-  std::cout << "target:" << target << "\n";
+  LOG(INFO) << "target:" << target << "\n";
 
   while (mesh->num_entities_global(0) + mesh->num_entities_global(1) < target)
   {
@@ -255,25 +256,23 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
 
     mesh->create_entities(1);
     dolfin::mesh::DistributedMeshTools::number_entities(*mesh, 1);
-
-    std::cout << mesh->num_entities_global(0) << std::endl;
-    std::cout << mesh->num_entities_global(1) << std::endl;
   }
 
   double fraction = (double)(target - mesh->num_entities_global(0))
                     / mesh->num_entities_global(1);
 
   if (mpi_rank == 0)
-    std::cout << "Desired fraction=" << fraction << std::endl;
+    LOG(INFO) << "Create unstructured mesh: desired fraction=" << fraction
+              << std::endl;
 
   // Estimate step needed to get desired refinement fraction
   // using some heuristics and bisection method
   int nmarked = pow(fraction, 1.6) * 2000;
 
-  int lmark = nmarked / 2;
-  int umark = nmarked * 3;
-  if (umark > 2000)
-    umark = 2000;
+  double f_lower = 0.0;
+  double f_upper = 1.0;
+  int lmark = 0;
+  int umark = 2000;
 
   std::shared_ptr<dolfin::mesh::Mesh> meshi;
 
@@ -294,21 +293,28 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
 
     if (mpi_rank == 0)
     {
-      std::cout << "Edges marked = " << nmarked << "/2000\n";
-      std::cout << "Step " << k
+      LOG(INFO) << "Edges marked = " << nmarked << "/2000\n";
+      LOG(INFO) << "Step " << k
                 << " achieved actual fraction = " << actual_fraction << "\n";
     }
 
     if (actual_fraction > fraction)
     {
       umark = nmarked;
-      nmarked = (nmarked + lmark) / 2;
+      f_upper = actual_fraction;
     }
     else
     {
       lmark = nmarked;
-      nmarked = (nmarked + umark) / 2;
+      f_lower = actual_fraction;
     }
+    int new_mark = (lmark * (f_upper - fraction) + umark * (fraction - f_lower))
+                   / (f_upper - f_lower);
+
+    if (nmarked == new_mark)
+      break;
+    else
+      nmarked = new_mark;
   }
 
   return meshi;
