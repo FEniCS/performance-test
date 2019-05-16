@@ -7,7 +7,6 @@
 #include <dolfin/common/log.h>
 #include <dolfin/common/types.h>
 #include <dolfin/generation/BoxMesh.h>
-#include <dolfin/geometry/Point.h>
 #include <dolfin/mesh/DistributedMeshTools.h>
 #include <dolfin/mesh/Mesh.h>
 #include <dolfin/mesh/MeshFunction.h>
@@ -92,8 +91,7 @@ std::shared_ptr<dolfin::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
   auto mesh = std::make_shared<dolfin::mesh::Mesh>(
       dolfin::generation::BoxMesh::create(
           comm,
-          {dolfin::geometry::Point(0.0, 0.0, 0.0),
-           dolfin::geometry::Point(1.0, 1.0, 1.0)},
+          {Eigen::Vector3d(0.0, 0.0, 0.0), Eigen::Vector3d(1.0, 1.0, 1.0)},
           {Nx, Ny, Nz}, dolfin::mesh::CellType::Type::tetrahedron,
           dolfin::mesh::GhostMode::none));
 
