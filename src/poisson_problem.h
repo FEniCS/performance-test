@@ -10,7 +10,6 @@
 #include <Eigen/Dense>
 #include <cfloat>
 #include <dolfin/common/Timer.h>
-#include <dolfin/function/Expression.h>
 #include <dolfin/function/Function.h>
 #include <dolfin/function/FunctionSpace.h>
 #include <dolfin/la/PETScMatrix.h>
@@ -22,41 +21,6 @@
 
 namespace poisson
 {
-// Source term (right-hand side)
-class Source : public dolfin::function::Expression
-{
-public:
-  Source() : dolfin::function::Expression({}) {}
-
-  void eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
-                                    Eigen::RowMajor>>
-                values,
-            const Eigen::Ref<const dolfin::EigenRowArrayXXd> x) const
-  {
-    for (Eigen::Index i = 0; i < x.rows(); ++i)
-    {
-      double dx = x(i, 0) - 0.5;
-      double dy = x(i, 1) - 0.5;
-      values(i, 0) = 10 * exp(-(dx * dx + dy * dy) / 0.02);
-    }
-  }
-};
-
-// Normal derivative (Neumann boundary condition)
-class dUdN : public dolfin::function::Expression
-{
-public:
-  dUdN() : dolfin::function::Expression({}) {}
-
-  void eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
-                                    Eigen::RowMajor>>
-                values,
-            const Eigen::Ref<const dolfin::EigenRowArrayXXd> x) const
-  {
-    for (Eigen::Index i = 0; i < x.rows(); ++i)
-      values(i, 0) = sin(5.0 * x(i, 0));
-  }
-};
 
 // Sub domain for Dirichlet boundary condition
 class DirichletBoundary : public dolfin::mesh::SubDomain
@@ -125,12 +89,22 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   auto cmap = a->coordinate_mapping();
   mesh->geometry().coord_mapping = cmap;
 
-  Source f_expr;
-  dUdN g_expr;
   auto f = std::make_shared<dolfin::function::Function>(V);
   auto g = std::make_shared<dolfin::function::Function>(V);
-  f->interpolate(f_expr);
-  g->interpolate(g_expr);
+  f->interpolate([](auto values, auto x) {
+    for (Eigen::Index i = 0; i < x.rows(); ++i)
+    {
+      double dx = x(i, 0) - 0.5;
+      double dy = x(i, 1) - 0.5;
+      values(i, 0) = 10 * exp(-(dx * dx + dy * dy) / 0.02);
+    }
+  });
+  g->interpolate([](auto values, auto x) {
+    {
+      for (Eigen::Index i = 0; i < x.rows(); ++i)
+        values(i, 0) = sin(5.0 * x(i, 0));
+    }
+  });
 
   L->set_coefficients({{"f", f}, {"g", g}});
 

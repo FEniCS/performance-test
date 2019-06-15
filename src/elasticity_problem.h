@@ -15,7 +15,6 @@
 #include <dolfin/fem/GenericDofMap.h>
 #include <dolfin/fem/assembler.h>
 #include <dolfin/fem/utils.h>
-#include <dolfin/function/Expression.h>
 #include <dolfin/function/Function.h>
 #include <dolfin/function/FunctionSpace.h>
 #include <dolfin/la/PETScMatrix.h>
@@ -76,29 +75,6 @@ build_near_nullspace(const dolfin::function::FunctionSpace& V)
   return vector_space;
 }
 
-// Source term (right-hand side)
-class Source : public dolfin::function::Expression
-{
-public:
-  Source() : Expression({3}) {}
-
-  void eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
-                                    Eigen::RowMajor>>
-                values,
-            const Eigen::Ref<const dolfin::EigenRowArrayXXd> x) const
-  {
-    for (Eigen::Index i = 0; i < x.rows(); ++i)
-    {
-      double dx = x(i, 0) - 0.5;
-      double dz = x(i, 2) - 0.5;
-      double r = dx * dx + dz * dz;
-      values(i, 0) = -dz * std::sqrt(r) * x(i, 1);
-      values(i, 1) = 1.0;
-      values(i, 2) = dx * std::sqrt(r) * x(i, 1);
-    }
-  }
-};
-
 // Bottom (x[1] = 0) surface
 class DirichletBoundary : public dolfin::mesh::SubDomain
 {
@@ -157,9 +133,18 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   auto cmap = a->coordinate_mapping();
   mesh->geometry().coord_mapping = cmap;
 
-  Source f_expr;
   auto f = std::make_shared<dolfin::function::Function>(V);
-  f->interpolate(f_expr);
+  f->interpolate([](auto values, auto x) {
+    for (Eigen::Index i = 0; i < x.rows(); ++i)
+    {
+      double dx = x(i, 0) - 0.5;
+      double dz = x(i, 2) - 0.5;
+      double r = dx * dx + dz * dz;
+      values(i, 0) = -dz * std::sqrt(r) * x(i, 1);
+      values(i, 1) = 1.0;
+      values(i, 2) = dx * std::sqrt(r) * x(i, 1);
+    }
+  });
 
   L->set_coefficients({{"f", f}});
 
