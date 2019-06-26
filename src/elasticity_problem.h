@@ -22,7 +22,6 @@
 #include <dolfin/la/VectorSpaceBasis.h>
 #include <dolfin/la/utils.h>
 #include <dolfin/mesh/Mesh.h>
-#include <dolfin/mesh/SubDomain.h>
 #include <memory>
 #include <utility>
 
@@ -75,19 +74,6 @@ build_near_nullspace(const dolfin::function::FunctionSpace& V)
   return vector_space;
 }
 
-// Bottom (x[1] = 0) surface
-class DirichletBoundary : public dolfin::mesh::SubDomain
-{
-  dolfin::EigenArrayXb inside(Eigen::Ref<const dolfin::EigenRowArrayXXd> x,
-                              bool on_boundary) const
-  {
-    dolfin::EigenArrayXb b(x.rows());
-    for (Eigen::Index i = 0; i < x.rows(); ++i)
-      b(i, 0) = (x(i, 1) < 1.0e-8);
-    return b;
-  }
-};
-
 std::tuple<dolfin::la::PETScMatrix, dolfin::la::PETScVector,
            std::shared_ptr<dolfin::function::Function>>
 problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
@@ -112,8 +98,9 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   auto u0 = std::make_shared<dolfin::function::Function>(V);
   VecSet(u0->vector().vec(), 0.0);
 
-  auto boundary = std::make_shared<DirichletBoundary>();
-  auto bc = std::make_shared<dolfin::fem::DirichletBC>(V, u0, *boundary);
+  // Bottom (x[1] = 0) surface
+  auto bc = std::make_shared<dolfin::fem::DirichletBC>(
+      V, u0, [](auto x, bool only_boundary) { return x.col(1) < 1.0e-8; });
 
   // Define variational forms
   ufc_form* linear_form = Elasticity_linearform_create();
