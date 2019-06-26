@@ -15,26 +15,11 @@
 #include <dolfin/la/PETScMatrix.h>
 #include <dolfin/la/PETScVector.h>
 #include <dolfin/mesh/Mesh.h>
-#include <dolfin/mesh/SubDomain.h>
 #include <memory>
 #include <utility>
 
 namespace poisson
 {
-
-// Sub domain for Dirichlet boundary condition
-class DirichletBoundary : public dolfin::mesh::SubDomain
-{
-public:
-  dolfin::EigenArrayXb inside(Eigen::Ref<const dolfin::EigenRowArrayXXd> x,
-                              bool on_boundary) const
-  {
-    dolfin::EigenArrayXb b(x.rows());
-    for (Eigen::Index i = 0; i < x.rows(); ++i)
-      b(i, 0) = x(i, 0) < DBL_EPSILON or x(i, 0) > (1.0 - DBL_EPSILON);
-    return b;
-  }
-};
 
 std::tuple<dolfin::la::PETScMatrix, dolfin::la::PETScVector,
            std::shared_ptr<dolfin::function::Function>>
@@ -61,8 +46,10 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   auto u0 = std::make_shared<dolfin::function::Function>(V);
   VecSet(u0->vector().vec(), 0.0);
 
-  auto boundary = std::make_shared<DirichletBoundary>();
-  auto bc = std::make_shared<dolfin::fem::DirichletBC>(V, u0, *boundary);
+  auto bc = std::make_shared<dolfin::fem::DirichletBC>(
+      V, u0, [](auto x, bool only_boundary) {
+        return (x.col(0) < DBL_EPSILON or x.col(0) > 1.0 - DBL_EPSILON);
+      });
 
   // Define variational forms
   auto form_L = std::unique_ptr<ufc_form, decltype(free)*>(
