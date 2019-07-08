@@ -12,7 +12,7 @@
 #include <dolfin/fem/DirichletBC.h>
 #include <dolfin/fem/DofMap.h>
 #include <dolfin/fem/Form.h>
-#include <dolfin/fem/GenericDofMap.h>
+#include <dolfin/fem/DofMap.h>
 #include <dolfin/fem/assembler.h>
 #include <dolfin/fem/utils.h>
 #include <dolfin/function/Function.h>
@@ -43,7 +43,7 @@ build_near_nullspace(const dolfin::function::FunctionSpace& V)
   for (std::size_t i = 0; i < 6; ++i)
   {
     basis_vec.push_back(
-        std::make_shared<dolfin::la::PETScVector>(*V.dofmap()->index_map()));
+        std::make_shared<dolfin::la::PETScVector>(*V.dofmap->index_map));
   }
 
   {
@@ -53,9 +53,9 @@ build_near_nullspace(const dolfin::function::FunctionSpace& V)
       basis.push_back(dolfin::la::VecWrapper(vec->vec()));
 
     // x0, x1, x2 translations
-    V0->dofmap()->set(basis[0].x, 1.0);
-    V1->dofmap()->set(basis[1].x, 1.0);
-    V2->dofmap()->set(basis[2].x, 1.0);
+    V0->dofmap->set(basis[0].x, 1.0);
+    V1->dofmap->set(basis[1].x, 1.0);
+    V2->dofmap->set(basis[2].x, 1.0);
 
     // Rotations
     V0->set_x(basis[3].x, -1.0, 1);
@@ -137,7 +137,7 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
 
   // Create matrices and vector, and assemble system
   dolfin::la::PETScMatrix A = dolfin::fem::create_matrix(*a);
-  dolfin::la::PETScVector b(*L->function_space(0)->dofmap()->index_map());
+  dolfin::la::PETScVector b(*L->function_space(0)->dofmap->index_map);
 
   MatZeroEntries(A.mat());
 
