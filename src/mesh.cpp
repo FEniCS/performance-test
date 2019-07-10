@@ -260,8 +260,10 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
                     / mesh->num_entities_global(1);
 
   if (mpi_rank == 0)
+  {
     LOG(INFO) << "Create unstructured mesh: desired fraction=" << fraction
               << std::endl;
+  }
 
   // Estimate step needed to get desired refinement fraction
   // using some heuristics and bisection method
@@ -278,9 +280,10 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
   {
     // Trial step
 
-    dolfin::mesh::MeshFunction<bool> marker(mesh, 1, false);
+    dolfin::mesh::MeshFunction<int> marker(mesh, 1, false);
+    auto marker_array = marker.values();
     for (int i = 0; i < mesh->num_entities(1); ++i)
-      marker[i] = (i % 2000 < nmarked);
+      marker_array[i] = (i % 2000 < nmarked);
 
     meshi = std::make_shared<dolfin::mesh::Mesh>(
         dolfin::refinement::refine(*mesh, marker, false));
