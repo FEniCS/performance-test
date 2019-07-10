@@ -28,7 +28,7 @@ In the `src/` directory:
 
 1. Compile the UFL files using FFC:
 
-        ffc -l dolfin *.ufl
+        ffc *.ufl
 
 2. Build the program:
 
