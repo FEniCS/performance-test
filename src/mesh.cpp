@@ -92,7 +92,7 @@ std::shared_ptr<dolfin::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
       dolfin::generation::BoxMesh::create(
           comm,
           {Eigen::Vector3d(0.0, 0.0, 0.0), Eigen::Vector3d(1.0, 1.0, 1.0)},
-          {Nx, Ny, Nz}, dolfin::mesh::CellType::Type::tetrahedron,
+          {Nx, Ny, Nz}, dolfin::mesh::CellType::tetrahedron,
           dolfin::mesh::GhostMode::none));
 
   if (dolfin::MPI::rank(mesh->mpi_comm()) == 0)
@@ -238,7 +238,7 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
 
   auto mesh = std::make_shared<dolfin::mesh::Mesh>(
       dolfin::mesh::Partitioning::build_distributed_mesh(
-          comm, dolfin::mesh::CellType::Type::tetrahedron, geom, topo, {},
+          comm, dolfin::mesh::CellType::tetrahedron, geom, topo, {},
           dolfin::mesh::GhostMode::none));
 
   mesh->create_entities(1);
