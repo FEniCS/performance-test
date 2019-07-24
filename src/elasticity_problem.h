@@ -22,6 +22,7 @@
 #include <dolfin/la/VectorSpaceBasis.h>
 #include <dolfin/la/utils.h>
 #include <dolfin/mesh/Mesh.h>
+#include <dolfin/mesh/Geometry.h>
 #include <memory>
 #include <utility>
 
