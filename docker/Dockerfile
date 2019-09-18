@@ -40,7 +40,6 @@ RUN apt-get -qq update && \
         python3-dev \
         pkg-config \
         wget && \
-    git lfs install && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
@@ -79,6 +78,6 @@ RUN git clone https://github.com/FEniCS/dolfinx.git && \
     cd dolfinx/cpp && \
     mkdir build && \
     cd ./build && \
-    cmake ../ && \
-    make install -j6 && \
+    cmake -G Ninja ../ && \
+    ninja install && \
     rm -rf /tmp/*
