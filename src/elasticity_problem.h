@@ -12,7 +12,6 @@
 #include <dolfin/fem/DirichletBC.h>
 #include <dolfin/fem/DofMap.h>
 #include <dolfin/fem/Form.h>
-#include <dolfin/fem/DofMap.h>
 #include <dolfin/fem/assembler.h>
 #include <dolfin/fem/utils.h>
 #include <dolfin/function/Function.h>
@@ -21,8 +20,8 @@
 #include <dolfin/la/PETScVector.h>
 #include <dolfin/la/VectorSpaceBasis.h>
 #include <dolfin/la/utils.h>
-#include <dolfin/mesh/Mesh.h>
 #include <dolfin/mesh/Geometry.h>
+#include <dolfin/mesh/Mesh.h>
 #include <memory>
 #include <utility>
 
@@ -102,7 +101,7 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
 
   // Bottom (x[1] = 0) surface
   auto bc = std::make_shared<dolfin::fem::DirichletBC>(
-      V, u0, [](auto x, bool only_boundary) { return x.col(1) < 1.0e-8; });
+      V, u0, [](auto x) { return x.col(1) < 1.0e-8; });
 
   // Define variational forms
   ufc_form* linear_form = Elasticity_linearform_create();
