@@ -47,10 +47,9 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   auto u0 = std::make_shared<dolfin::function::Function>(V);
   VecSet(u0->vector().vec(), 0.0);
 
-  auto bc = std::make_shared<dolfin::fem::DirichletBC>(
-      V, u0, [](auto x, bool only_boundary) {
-        return (x.col(0) < DBL_EPSILON or x.col(0) > 1.0 - DBL_EPSILON);
-      });
+  auto bc = std::make_shared<dolfin::fem::DirichletBC>(V, u0, [](auto x) {
+    return (x.col(0) < DBL_EPSILON or x.col(0) > 1.0 - DBL_EPSILON);
+  });
 
   // Define variational forms
   auto form_L = std::unique_ptr<ufc_form, decltype(free)*>(

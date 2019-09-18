@@ -40,7 +40,6 @@ RUN apt-get -qq update && \
         python3-dev \
         pkg-config \
         wget && \
-    git lfs install && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
@@ -48,14 +47,13 @@ RUN apt-get -qq update && \
 RUN wget https://bootstrap.pypa.io/get-pip.py && \
     python3 get-pip.py && \
     pip3 install --no-cache-dir setuptools && \
-    pip3 install --no-cache-dir git+https://bitbucket.org/fenics-project/dijitso.git && \
     pip3 install --no-cache-dir git+https://bitbucket.org/fenics-project/fiat.git && \
     pip3 install --no-cache-dir git+https://bitbucket.org/fenics-project/ufl.git && \
     pip3 install --no-cache-dir git+https://github.com/FEniCS/ffcx.git && \
     rm -rf /tmp/*
 
 # Install PETSc from source
-RUN git clone https://bitbucket.org/petsc/petsc.git && \
+RUN git clone --branch v3.11.3 --depth 1 https://gitlab.com/petsc/petsc.git && \
     cd petsc && \
     ./configure --COPTFLAGS="-O2" \
                 --CXXOPTFLAGS="-O2" \
@@ -80,6 +78,6 @@ RUN git clone https://github.com/FEniCS/dolfinx.git && \
     cd dolfinx/cpp && \
     mkdir build && \
     cd ./build && \
-    cmake ../ && \
-    make install -j6 && \
+    cmake -G Ninja ../ && \
+    ninja install && \
     rm -rf /tmp/*
