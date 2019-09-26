@@ -43,7 +43,7 @@ build_near_nullspace(const dolfin::function::FunctionSpace& V)
   for (std::size_t i = 0; i < 6; ++i)
   {
     basis_vec.push_back(
-        std::make_shared<dolfin::la::PETScVector>(*V.dofmap->index_map));
+        std::make_shared<dolfin::la::PETScVector>(*V.dofmap()->index_map));
   }
 
   {
@@ -53,9 +53,9 @@ build_near_nullspace(const dolfin::function::FunctionSpace& V)
       basis.push_back(dolfin::la::VecWrapper(vec->vec()));
 
     // x0, x1, x2 translations
-    V0->dofmap->set(basis[0].x, 1.0);
-    V1->dofmap->set(basis[1].x, 1.0);
-    V2->dofmap->set(basis[2].x, 1.0);
+    V0->dofmap()->set(basis[0].x, 1.0);
+    V1->dofmap()->set(basis[1].x, 1.0);
+    V2->dofmap()->set(basis[2].x, 1.0);
 
     // Rotations
     V0->set_x(basis[3].x, -1.0, 1);
@@ -79,19 +79,12 @@ std::tuple<dolfin::la::PETScMatrix, dolfin::la::PETScVector,
 problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
 {
   dolfin::common::Timer t0("ZZZ FunctionSpace");
-  ufc_function_space* space = Elasticity_functionspace_create();
-  ufc_dofmap* ufc_map = space->create_dofmap();
-  ufc_finite_element* ufc_element = space->create_element();
 
-  auto V = std::make_shared<dolfin::function::FunctionSpace>(
-      mesh, std::make_shared<dolfin::fem::FiniteElement>(*ufc_element),
-      std::make_shared<dolfin::fem::DofMap>(
-          dolfin::fem::create_dofmap(*ufc_map, *mesh)));
+  std::shared_ptr<dolfin::function::FunctionSpace> V
+      = dolfin::fem::create_functionspace(Elasticity_functionspace_create,
+                                          mesh);
+
   t0.stop();
-
-  std::free(ufc_element);
-  std::free(ufc_map);
-  std::free(space);
 
   dolfin::common::Timer t1("ZZZ Assemble prep");
 
@@ -137,7 +130,7 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
 
   // Create matrices and vector, and assemble system
   dolfin::la::PETScMatrix A = dolfin::fem::create_matrix(*a);
-  dolfin::la::PETScVector b(*L->function_space(0)->dofmap->index_map);
+  dolfin::la::PETScVector b(*L->function_space(0)->dofmap()->index_map);
 
   MatZeroEntries(A.mat());
 
