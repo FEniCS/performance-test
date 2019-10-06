@@ -9,8 +9,8 @@ jobs:
       - run:
           name: Install FEniCS Python components
           command: |
-            pip3 install git+https://bitbucket.org/fenics-project/fiat.git --upgrade
-            pip3 install git+https://bitbucket.org/fenics-project/ufl.git --upgrade
+            pip3 install git+https://github.com/FEniCS/fiat.git --upgrade
+            pip3 install git+https://github.com/FEniCS/ufl.git --upgrade
             pip3 install git+https://github.com/FEniCS/ffcx --upgrade
       - run:
           name: Install DOLFIN (C++)
