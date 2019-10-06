@@ -27,17 +27,8 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
 {
   dolfin::common::Timer t0("ZZZ FunctionSpace");
 
-  // auto V = std::make_shared<Poisson::FunctionSpace>(mesh);
-  ufc_function_space* space = Poisson_functionspace_create();
-  ufc_dofmap* ufc_map = space->create_dofmap();
-  ufc_finite_element* ufc_element = space->create_element();
-  auto V = std::make_shared<dolfin::function::FunctionSpace>(
-      mesh, std::make_shared<dolfin::fem::FiniteElement>(*ufc_element),
-      std::make_shared<dolfin::fem::DofMap>(
-          dolfin::fem::create_dofmap(*ufc_map, *mesh)));
-  std::free(ufc_element);
-  std::free(ufc_map);
-  std::free(space);
+  std::shared_ptr<dolfin::function::FunctionSpace> V
+      = dolfin::fem::create_functionspace(Poisson_functionspace_create, mesh);
 
   t0.stop();
 
@@ -93,7 +84,7 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
 
   // Create matrices and vector, and assemble system
   dolfin::la::PETScMatrix A = dolfin::fem::create_matrix(*a);
-  dolfin::la::PETScVector b(*L->function_space(0)->dofmap->index_map);
+  dolfin::la::PETScVector b(*L->function_space(0)->dofmap()->index_map);
 
   MatZeroEntries(A.mat());
   dolfin::common::Timer t2("ZZZ Assemble matrix");

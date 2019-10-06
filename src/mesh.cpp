@@ -113,11 +113,8 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
                                                       bool target_dofs_total,
                                                       std::size_t dofs_per_node)
 {
-
   int target = target_dofs / dofs_per_node;
-
   int mpi_size = dolfin::MPI::size(comm);
-
   if (!target_dofs_total)
     target *= mpi_size;
 
@@ -149,9 +146,9 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
     ncells = n * 6 + n * lspur * 6;
   }
 
-  dolfin::EigenRowArrayXXd geom(npoints, 3);
-  dolfin::EigenRowArrayXXi64 topo(ncells, 4);
-
+  Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor> geom(npoints, 3);
+  Eigen::Array<std::int64_t, Eigen::Dynamic, 4, Eigen::RowMajor> topo(ncells,
+                                                                      4);
   if (mpi_rank == 0)
   {
     int p = 0;
@@ -279,7 +276,6 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
   for (int k = 0; k < 5; ++k)
   {
     // Trial step
-
     dolfin::mesh::MeshFunction<int> marker(mesh, 1, false);
     auto marker_array = marker.values();
     for (int i = 0; i < mesh->num_entities(1); ++i)
