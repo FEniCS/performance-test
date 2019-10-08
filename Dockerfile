@@ -1,8 +1,10 @@
 # Builds a Docker image with the necessary libraries for compiling
-# FEniCS.  The image is at:
+# FEniCS. The image is at
+# https://hub.docker.com/r/fenicsproject/performance-tests
 #
-# Authors:
-# Garth N. Wells <gnw20@cam.ac.uk>
+# Authors: Garth N. Wells <gnw20@cam.ac.uk>
+
+ARG PETSC_VERSION=3.12
 
 FROM ubuntu:18.04
 
@@ -47,13 +49,14 @@ RUN apt-get -qq update && \
 RUN wget https://bootstrap.pypa.io/get-pip.py && \
     python3 get-pip.py && \
     pip3 install --no-cache-dir setuptools && \
-    pip3 install --no-cache-dir git+https://bitbucket.org/fenics-project/fiat.git && \
-    pip3 install --no-cache-dir git+https://bitbucket.org/fenics-project/ufl.git && \
+    pip3 install --no-cache-dir git+https://github.com/FEniCS/fiat.git && \
+    pip3 install --no-cache-dir git+https://github.com/FEniCS/ufl.git && \
     pip3 install --no-cache-dir git+https://github.com/FEniCS/ffcx.git && \
     rm -rf /tmp/*
 
 # Install PETSc from source
-RUN git clone --branch v3.11.3 --depth 1 https://gitlab.com/petsc/petsc.git && \
+ARG PETSC_VERSION
+RUN git clone --branch v${PETSC_VERSION} --depth 1 https://gitlab.com/petsc/petsc.git && \
     cd petsc && \
     ./configure --COPTFLAGS="-O2" \
                 --CXXOPTFLAGS="-O2" \
