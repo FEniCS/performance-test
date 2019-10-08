@@ -65,18 +65,14 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
 
   auto f = std::make_shared<dolfin::function::Function>(V);
   auto g = std::make_shared<dolfin::function::Function>(V);
-  f->interpolate([](auto values, auto x) {
-    for (Eigen::Index i = 0; i < x.rows(); ++i)
-    {
-      double dx = x(i, 0) - 0.5;
-      double dy = x(i, 1) - 0.5;
-      values(i, 0) = 10 * exp(-(dx * dx + dy * dy) / 0.02);
-    }
+  f->interpolate([](auto x) {
+    auto dx = x.col(0) - 0.5;
+    auto dy = x.col(1) - 0.5;
+    return 10 * (-(dx * dx + dy * dy).exp() / 0.02);
   });
-  g->interpolate([](auto values, auto x) {
+  g->interpolate([](auto x) {
     {
-      for (Eigen::Index i = 0; i < x.rows(); ++i)
-        values(i, 0) = sin(5.0 * x(i, 0));
+      return (5.0 * x.col(0)).sin();
     }
   });
 

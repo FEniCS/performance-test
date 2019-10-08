@@ -112,16 +112,16 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   mesh->geometry().coord_mapping = cmap;
 
   auto f = std::make_shared<dolfin::function::Function>(V);
-  f->interpolate([](auto values, auto x) {
-    for (Eigen::Index i = 0; i < x.rows(); ++i)
-    {
-      double dx = x(i, 0) - 0.5;
-      double dz = x(i, 2) - 0.5;
-      double r = dx * dx + dz * dz;
-      values(i, 0) = -dz * std::sqrt(r) * x(i, 1);
-      values(i, 1) = 1.0;
-      values(i, 2) = dx * std::sqrt(r) * x(i, 1);
-    }
+  f->interpolate([](auto x) {
+    auto dx = x.col(0) - 0.5;
+    auto dz = x.col(2) - 0.5;
+    auto r = dx * dx + dz * dz;
+    Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor> values(x.rows(),
+                                                                    3);
+    values.col(0) = -dz * r.sqrt() * x.col(1);
+    values.col(1) = 1.0;
+    values.col(2) = dx * r.sqrt() * x.col(1);
+    return values;
   });
 
   L->set_coefficients({{"f", f}});
