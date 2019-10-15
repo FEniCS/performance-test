@@ -24,13 +24,7 @@ that are necessary to run the tests successfully, and for performance.
 
 ### Compilation
 
-In the `src/` directory:
-
-1. Compile the UFL files using FFC:
-
-        ffc *.ufl
-
-2. Build the program:
+In the `src/` directory, build the program:
 
         cmake .
         make
