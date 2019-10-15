@@ -28,13 +28,14 @@ jobs:
       - run:
           name: Build test program
           command: |
-            cd src/
-            cmake -G Ninja .
+            mkdir build
+            cd build
+            cmake -G Ninja ../src
             ninja
       - run:
           name: Run Poisson test (BoomerAMG, weak)
           command: |
-            cd src/
+            cd build/
             mpirun -np 3 ./dolfin-scaling-test \
             --problem_type poisson \
             --scaling_type weak \
@@ -49,7 +50,7 @@ jobs:
       - run:
           name: Run Poisson test (BoomerAMG, weak, unstructured mesh)
           command: |
-            cd src/
+            cd build/
             mpirun -np 3 ./dolfin-scaling-test \
             --problem_type poisson \
             --mesh_type unstructured \
@@ -65,7 +66,7 @@ jobs:
       - run:
           name: Run Poisson test (BoomerAMG, strong)
           command: |
-            cd src/
+            cd build/
             mpirun -np 3 ./dolfin-scaling-test \
             --problem_type poisson \
             --scaling_type strong \
@@ -80,7 +81,7 @@ jobs:
       - run:
           name: Run elasticity test (GAMG, weak)
           command: |
-            cd src/
+            cd build/
             mpirun -np 3 ./dolfin-scaling-test \
             --problem_type elasticity \
             --scaling_type weak \
@@ -98,7 +99,7 @@ jobs:
       - run:
           name: Run elasticity test (GAMG, strong)
           command: |
-            cd src/
+            cd build/
             mpirun -np 3 ./dolfin-scaling-test \
             --problem_type elasticity \
             --scaling_type strong \
