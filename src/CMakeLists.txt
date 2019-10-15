@@ -14,8 +14,22 @@ set(CMAKE_BUILD_TYPE "Release")
 
 find_package(Boost COMPONENTS program_options REQUIRED)
 
+# Compile UFL files
+add_custom_command(
+  OUTPUT Elasticity.c
+  COMMAND ffc Elasticity.ufl
+  DEPENDS Elasticity.ufl
+)
+add_custom_command(
+  OUTPUT Poisson.c
+  COMMAND ffc Poisson.ufl
+  DEPENDS Poisson.ufl
+)
+
 # Executable
-add_executable(${PROJECT_NAME} main.cpp mesh.cpp Elasticity.c Poisson.c)
+add_executable(${PROJECT_NAME} main.cpp mesh.cpp
+  ${CMAKE_CURRENT_BINARY_DIR}/Elasticity.c
+  ${CMAKE_CURRENT_BINARY_DIR}/Poisson.c)
 
 # Target libraries
 target_link_libraries(${PROJECT_NAME} dolfin ${Boost_PROGRAM_OPTIONS_LIBRARY})
