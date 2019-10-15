@@ -16,9 +16,8 @@ jobs:
           name: Install DOLFIN (C++)
           command: |
             git clone --depth=1 https://github.com/FEniCS/dolfinx.git
-            mkdir build
-            cd build
-            cmake -G Ninja ../dolfinx/cpp
+            cd $(mktemp -d)
+            cmake -G Ninja $OLDPWD/dolfinx/cpp
             ninja -j3 install
       # - run:
       #     name: Install DOLFIN (Python interface)
