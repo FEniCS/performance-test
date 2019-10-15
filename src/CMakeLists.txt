@@ -17,12 +17,12 @@ find_package(Boost COMPONENTS program_options REQUIRED)
 # Compile UFL files
 add_custom_command(
   OUTPUT Elasticity.c
-  COMMAND ffc Elasticity.ufl
+  COMMAND ffc ${CMAKE_CURRENT_SOURCE_DIR}/Elasticity.ufl
   DEPENDS Elasticity.ufl
 )
 add_custom_command(
   OUTPUT Poisson.c
-  COMMAND ffc Poisson.ufl
+  COMMAND ffc ${CMAKE_CURRENT_SOURCE_DIR}/Poisson.ufl
   DEPENDS Poisson.ufl
 )
 
