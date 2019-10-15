@@ -26,12 +26,6 @@ jobs:
       #       cd dolfinx/python
       #       pip3 install .
       - run:
-          name: Compile UFL files
-          command: |
-            cd src/
-            ffc Elasticity.ufl
-            ffc Poisson.ufl
-      - run:
           name: Build test program
           command: |
             cd src/
