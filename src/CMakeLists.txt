@@ -25,6 +25,7 @@ add_custom_command(
   COMMAND ffc ${CMAKE_CURRENT_SOURCE_DIR}/Poisson.ufl
   DEPENDS Poisson.ufl
 )
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 # Executable
 add_executable(${PROJECT_NAME} main.cpp mesh.cpp
