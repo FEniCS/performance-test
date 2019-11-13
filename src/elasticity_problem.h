@@ -116,7 +116,8 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
     auto dx = x.row(0) - 0.5;
     auto dz = x.row(2) - 0.5;
     auto r = dx * dx + dz * dz;
-    Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor> values(3, x.rows());
+    Eigen::Array<double, 3, Eigen::Dynamic, Eigen::RowMajor> values(3,
+                                                                    x.cols());
     values.row(0) = -dz * r.sqrt() * x.row(1);
     values.row(1) = 1.0;
     values.row(2) = dx * r.sqrt() * x.row(1);
