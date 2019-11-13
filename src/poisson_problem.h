@@ -85,6 +85,7 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   MatZeroEntries(A.mat());
   dolfin::common::Timer t2("ZZZ Assemble matrix");
   dolfin::fem::assemble_matrix(A.mat(), *a, {bc});
+  dolfin::fem::add_diagonal(A.mat(), *V, {bc});
   MatAssemblyBegin(A.mat(), MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(A.mat(), MAT_FINAL_ASSEMBLY);
   t2.stop();
