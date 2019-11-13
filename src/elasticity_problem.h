@@ -94,7 +94,7 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
 
   // Bottom (x[1] = 0) surface
   auto bc = std::make_shared<dolfin::fem::DirichletBC>(
-      V, u0, [](auto x) { return x.col(1) < 1.0e-8; });
+      V, u0, [](auto& x) { return x.row(1) < 1.0e-8; });
 
   // Define variational forms
   ufc_form* linear_form = Elasticity_linearform_create();
@@ -112,15 +112,15 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   mesh->geometry().coord_mapping = cmap;
 
   auto f = std::make_shared<dolfin::function::Function>(V);
-  f->interpolate([](auto x) {
-    auto dx = x.col(0) - 0.5;
-    auto dz = x.col(2) - 0.5;
+  f->interpolate([](auto& x) {
+    auto dx = x.row(0) - 0.5;
+    auto dz = x.row(2) - 0.5;
     auto r = dx * dx + dz * dz;
-    Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor> values(x.rows(),
-                                                                    3);
-    values.col(0) = -dz * r.sqrt() * x.col(1);
-    values.col(1) = 1.0;
-    values.col(2) = dx * r.sqrt() * x.col(1);
+    Eigen::Array<double, 3, Eigen::Dynamic, Eigen::RowMajor> values(3,
+                                                                    x.cols());
+    values.row(0) = -dz * r.sqrt() * x.row(1);
+    values.row(1) = 1.0;
+    values.row(2) = dx * r.sqrt() * x.row(1);
     return values;
   });
 

@@ -38,8 +38,8 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   auto u0 = std::make_shared<dolfin::function::Function>(V);
   VecSet(u0->vector().vec(), 0.0);
 
-  auto bc = std::make_shared<dolfin::fem::DirichletBC>(V, u0, [](auto x) {
-    return (x.col(0) < DBL_EPSILON or x.col(0) > 1.0 - DBL_EPSILON);
+  auto bc = std::make_shared<dolfin::fem::DirichletBC>(V, u0, [](auto& x) {
+    return (x.row(0) < DBL_EPSILON or x.row(0) > 1.0 - DBL_EPSILON);
   });
 
   // Define variational forms
@@ -65,14 +65,14 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
 
   auto f = std::make_shared<dolfin::function::Function>(V);
   auto g = std::make_shared<dolfin::function::Function>(V);
-  f->interpolate([](auto x) {
-    auto dx = x.col(0) - 0.5;
-    auto dy = x.col(1) - 0.5;
+  f->interpolate([](auto& x) {
+    auto dx = x.row(0) - 0.5;
+    auto dy = x.row(1) - 0.5;
     return 10 * (-(dx * dx + dy * dy).exp() / 0.02);
   });
-  g->interpolate([](auto x) {
+  g->interpolate([](auto& x) {
     {
-      return (5.0 * x.col(0)).sin();
+      return (5.0 * x.row(0)).sin();
     }
   });
 
