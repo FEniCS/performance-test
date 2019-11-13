@@ -16,9 +16,8 @@ jobs:
           name: Install DOLFIN (C++)
           command: |
             git clone --depth=1 https://github.com/FEniCS/dolfinx.git
-            mkdir build
-            cd build
-            cmake -G Ninja ../dolfinx/cpp
+            cd $(mktemp -d)
+            cmake -G Ninja $OLDPWD/dolfinx/cpp
             ninja -j3 install
       # - run:
       #     name: Install DOLFIN (Python interface)
@@ -26,21 +25,16 @@ jobs:
       #       cd dolfinx/python
       #       pip3 install .
       - run:
-          name: Compile UFL files
-          command: |
-            cd src/
-            ffc Elasticity.ufl
-            ffc Poisson.ufl
-      - run:
           name: Build test program
           command: |
-            cd src/
-            cmake -G Ninja .
+            mkdir build
+            cd build
+            cmake -G Ninja ../src
             ninja
       - run:
           name: Run Poisson test (BoomerAMG, weak)
           command: |
-            cd src/
+            cd build/
             mpirun -np 3 ./dolfin-scaling-test \
             --problem_type poisson \
             --scaling_type weak \
@@ -55,7 +49,7 @@ jobs:
       - run:
           name: Run Poisson test (BoomerAMG, weak, unstructured mesh)
           command: |
-            cd src/
+            cd build/
             mpirun -np 3 ./dolfin-scaling-test \
             --problem_type poisson \
             --mesh_type unstructured \
@@ -71,7 +65,7 @@ jobs:
       - run:
           name: Run Poisson test (BoomerAMG, strong)
           command: |
-            cd src/
+            cd build/
             mpirun -np 3 ./dolfin-scaling-test \
             --problem_type poisson \
             --scaling_type strong \
@@ -86,7 +80,7 @@ jobs:
       - run:
           name: Run elasticity test (GAMG, weak)
           command: |
-            cd src/
+            cd build/
             mpirun -np 3 ./dolfin-scaling-test \
             --problem_type elasticity \
             --scaling_type weak \
@@ -104,7 +98,7 @@ jobs:
       - run:
           name: Run elasticity test (GAMG, strong)
           command: |
-            cd src/
+            cd build/
             mpirun -np 3 ./dolfin-scaling-test \
             --problem_type elasticity \
             --scaling_type strong \
