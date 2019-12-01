@@ -157,7 +157,7 @@ int main(int argc, char* argv[])
   }
 
   // Display timings
-  dolfin::list_timings({dolfin::TimingType::wall});
+  dolfin::list_timings(MPI_COMM_WORLD, {dolfin::TimingType::wall});
 
   double norm = u->vector().norm(dolfin::la::Norm::l2);
   // Report number of Krylov iterations

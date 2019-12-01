@@ -97,15 +97,13 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
       V, u0, [](auto& x) { return x.row(1) < 1.0e-8; });
 
   // Define variational forms
-  ufc_form* linear_form = Elasticity_linearform_create();
-  auto L = std::make_shared<dolfin::fem::Form>(
-      dolfin::fem::create_form(*linear_form, {V}));
-  std::free(linear_form);
 
-  ufc_form* bilinear_form = Elasticity_bilinearform_create();
-  auto a = std::make_shared<dolfin::fem::Form>(
-      dolfin::fem::create_form(*bilinear_form, {V, V}));
-  std::free(bilinear_form);
+  std::shared_ptr <dolfin::fem::Form> L =
+      dolfin::fem::create_form(Elasticity_linearform_create, {V});
+
+  std::shared_ptr<dolfin::fem::Form> a =
+    dolfin::fem::create_form(Elasticity_bilinearform_create,{V, V});
+
 
   // Attach 'coordinate mapping' to mesh
   auto cmap = a->coordinate_mapping();
