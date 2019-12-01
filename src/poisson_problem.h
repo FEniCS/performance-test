@@ -43,10 +43,12 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   });
 
   // Define variational forms
-  auto form_L = std::unique_ptr<ufc_form, decltype(free)*>(
-      Poisson_linearform_create(), free);
-  auto form_a = std::unique_ptr<ufc_form, decltype(free)*>(
-      Poisson_bilinearform_create(), free);
+  std::shared_ptr <dolfin::fem::Form> form_L =
+      dolfin::fem::create_form(Poisson_linearform_create, {V});
+
+  std::shared_ptr<dolfin::fem::Form> form_a =
+    dolfin::fem::create_form(Poisson_bilinearform_create,{V, V});
+
 
   // Define variational forms
   ufc_form* linear_form = Poisson_linearform_create();
