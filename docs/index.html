@@ -8,29 +8,48 @@
   <H1> Performance Test </H1>
   <div id='myDiv'><!-- Plotly chart will be drawn inside this DIV --></div>
 
-<script>
-fetch('https://fenics.github.io/performance-test/data.txt')
-  .then((response) => {
-    return response.json();
-  })
-  .then((myJson) => {
-    console.log(myJson);
-  });
+    <script>
 
-  var trace1 = {
-  x: [1, 2, 3, 4],
-  y: [10, 15, 13, 17],
-  type: 'scatter'
+var trace1 = {
+    x: [],
+    y: [],
+    type: 'bar',
+    name: 'Elastic'
 };
-
 var trace2 = {
-  x: [1, 2, 3, 4],
-  y: [16, 5, 11, 19],
-  type: 'scatter'
+    x: [],
+    y: [],
+    type: 'bar',
+    name: 'Poisson'
 };
 
-var data = [trace1, trace2];
+fetch('https://fenics.github.io/performance-test/data.txt')
+    .then((response) => {
+	return response.json();
+    })
+    .then((myJson) => {
+	for (var key in myJson){
+	    console.log(key);
+	    if (key.includes("Elastic")){
+		var cores = key.split("_")[1].split(".")[0];
+		trace1.x.push(parseInt(cores));
+		trace1.y.push(parseInt(myJson[key].Solve));
+	    }
+	    if (key.includes("Poisson")){
+		var cores = key.split("_")[1].split(".")[0];
+		trace2.x.push(parseInt(cores));
+		trace2.y.push(parseInt(myJson[key].Solve));
+	    }
+	}
+	var data = [trace1, trace2];
+	Plotly.newPlot('myDiv', data);
+    });
 
-Plotly.newPlot('myDiv', data);
+
+console.log(trace1);
+console.log(trace2);
+
+
+
 </script>
 </body>
