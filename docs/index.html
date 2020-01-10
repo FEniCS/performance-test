@@ -1,6 +1,6 @@
 <head>
-	<!-- Load plotly.js into the DOM -->
-	<script src='https://cdn.plot.ly/plotly-latest.min.js'></script>
+<!-- Load plotly.js into the DOM -->
+<script src='https://cdn.plot.ly/plotly-latest.min.js'></script>
 </head>
 
 <body>
@@ -9,6 +9,14 @@
   <div id='myDiv'><!-- Plotly chart will be drawn inside this DIV --></div>
 
 <script>
+fetch('https://fenics.github.io/performance-test/data.txt')
+  .then((response) => {
+    return response.json();
+  })
+  .then((myJson) => {
+    console.log(myJson);
+  });
+
   var trace1 = {
   x: [1, 2, 3, 4],
   y: [10, 15, 13, 17],
