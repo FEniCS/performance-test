@@ -16,6 +16,7 @@ var trace1 = {
     type: 'bar',
     name: 'Elastic'
 };
+
 var trace2 = {
     x: [],
     y: [],
@@ -23,33 +24,43 @@ var trace2 = {
     name: 'Poisson'
 };
 
-fetch('https://fenics.github.io/performance-test/data.txt')
+var layout = {
+title: {text: 'Solve time'},
+xaxis: {title: {text: 'Nodes'}},
+yaxis: {title: {text: 'time (s)'}}
+};
+
+fetch('https://raw.githubusercontent.com/js947/fenics-performance-results/master/results.json')
     .then((response) => {
 	return response.json();
     })
     .then((myJson) => {
 	for (var key in myJson){
-	    console.log(key);
-	    if (key.includes("Elastic")){
-		var cores = key.split("_")[1].split(".")[0];
-		trace1.x.push(parseInt(cores));
-		trace1.y.push(parseInt(myJson[key].Solve));
-	    }
-	    if (key.includes("Poisson")){
-		var cores = key.split("_")[1].split(".")[0];
-		trace2.x.push(parseInt(cores));
-		trace2.y.push(parseInt(myJson[key].Solve));
+	    var record = myJson[key];
+	    // console.log(record.data);
+	    for (var r in record.data){
+		w = record.data[r];
+		if (w.problem == "Poisson"){
+		    // console.log(w.Solve);
+		    trace2.y.push(w.Solve);
+		    // console.log(w.nodes);
+		    trace2.x.push(w.nodes);
+		}
+		if (w.problem == "Elastic"){
+		    // console.log(w.Solve);
+		    trace1.y.push(w.Solve);
+		    // console.log(w.nodes);
+		    trace1.x.push(w.nodes);
+		}
 	    }
 	}
 	var data = [trace1, trace2];
-	Plotly.newPlot('myDiv', data);
+	Plotly.newPlot('myDiv', data, layout);
     });
 
 
 console.log(trace1);
 console.log(trace2);
-
-
 
 </script>
 </body>
