@@ -41,16 +41,22 @@ fetch('https://raw.githubusercontent.com/js947/fenics-performance-results/master
 	    for (var r in record.data){
 		w = record.data[r];
 		if (w.problem == "Poisson"){
-		    // console.log(w.Solve);
-		    trace2.y.push(w.Solve);
-		    // console.log(w.nodes);
-		    trace2.x.push(w.nodes);
+		    // Ignore repeated values (only uses first)
+		    if (!trace2.x.includes(w.nodes)){
+			// console.log(w.Solve);
+			trace2.y.push(w.Solve);
+			// console.log(w.nodes);
+			trace2.x.push(w.nodes);
+		    }
 		}
 		if (w.problem == "Elastic"){
-		    // console.log(w.Solve);
-		    trace1.y.push(w.Solve);
-		    // console.log(w.nodes);
-		    trace1.x.push(w.nodes);
+		    // Ignore repeated values (only uses first)
+		    if (!trace1.x.includes(w.nodes)){
+			// console.log(w.Solve);
+			trace1.y.push(w.Solve);
+			// console.log(w.nodes);
+			trace1.x.push(w.nodes);
+		    }
 		}
 	    }
 	}
