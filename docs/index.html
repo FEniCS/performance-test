@@ -6,29 +6,27 @@
 <body>
 
   <H1> Performance Test </H1>
-  <div id='myDiv'><!-- Plotly chart will be drawn inside this DIV --></div>
+    <div id='PoissonDiv'></div>
+    <div id='ElasticDiv'></div>
 
     <script>
 
-var trace1 = {
-    x: [],
-    y: [],
-    type: 'bar',
-    name: 'Elastic'
+var layout_e = {
+    barmode: 'group',
+    title: {text: 'Solve time (Elastic)'},
+    xaxis: {title: {text: 'Nodes'}},
+    yaxis: {title: {text: 'time (s)'}}
+};
+var layout_p = {
+    barmode: 'group',
+    title: {text: 'Solve time (Poisson)'},
+    xaxis: {title: {text: 'Nodes'}},
+    yaxis: {title: {text: 'time (s)'}}
 };
 
-var trace2 = {
-    x: [],
-    y: [],
-    type: 'bar',
-    name: 'Poisson'
-};
+var traces = {poisson:[],
+	      elastic:[]};
 
-var layout = {
-title: {text: 'Solve time'},
-xaxis: {title: {text: 'Nodes'}},
-yaxis: {title: {text: 'time (s)'}}
-};
 
 fetch('https://raw.githubusercontent.com/js947/fenics-performance-results/master/results.json')
     .then((response) => {
@@ -37,36 +35,41 @@ fetch('https://raw.githubusercontent.com/js947/fenics-performance-results/master
     .then((myJson) => {
 	for (var key in myJson){
 	    var record = myJson[key];
-	    // console.log(record.data);
+	    console.log(record.data);
+	    console.log(record.time);
+	    var ptrace = {x: [],
+			  y: [],
+			  type: 'bar',
+			  name: record.time};
+	    var etrace = {x: [],
+			  y: [],
+			  type: 'bar',
+			  name: record.time};
 	    for (var r in record.data){
 		w = record.data[r];
 		if (w.problem == "Poisson"){
-		    // Ignore repeated values (only uses first)
-		    if (!trace2.x.includes(w.nodes)){
-			// console.log(w.Solve);
-			trace2.y.push(w.Solve);
-			// console.log(w.nodes);
-			trace2.x.push(w.nodes);
-		    }
+		    // console.log(w.Solve);
+		    ptrace.y.push(w.Solve);
+		    // console.log(w.nodes);
+		    ptrace.x.push(w.nodes);
 		}
 		if (w.problem == "Elastic"){
-		    // Ignore repeated values (only uses first)
-		    if (!trace1.x.includes(w.nodes)){
-			// console.log(w.Solve);
-			trace1.y.push(w.Solve);
-			// console.log(w.nodes);
-			trace1.x.push(w.nodes);
-		    }
+		    console.log(w.Solve);
+		    etrace.y.push(w.Solve);
+		    console.log(w.nodes);
+		    etrace.x.push(w.nodes);
 		}
 	    }
+	    traces.poisson.push(ptrace);
+	    traces.elastic.push(etrace);
 	}
-	var data = [trace1, trace2];
-	Plotly.newPlot('myDiv', data, layout);
+	Plotly.newPlot('PoissonDiv', traces.poisson, layout_p);
+	Plotly.newPlot('ElasticDiv', traces.elastic, layout_e);
     });
 
 
-console.log(trace1);
-console.log(trace2);
+console.log(traces);
+
 
 </script>
 </body>
