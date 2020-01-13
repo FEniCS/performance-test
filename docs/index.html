@@ -6,69 +6,79 @@
 <body>
 
   <H1> Performance Test </H1>
-    <div id='PoissonDiv'></div>
-    <div id='ElasticDiv'></div>
+  <select name="metric" id="metric">
+    <option value="Solve">Solve</option>
+    <option value="Assemble matrix">Assemble matrix</option>
+    <option value="Assemble vector">Assemble vector</option>
+    <option value="Create Mesh">Create mesh</option>
+  </select>
+  <div id='PoissonDiv'></div>
+  <div id='ElasticDiv'></div>
 
-    <script>
+<script>
 
-var layout_e = {
-    barmode: 'group',
-    title: {text: 'Solve time (Elastic)'},
-    xaxis: {title: {text: 'Nodes'}},
-    yaxis: {title: {text: 'time (s)'}}
-};
-var layout_p = {
-    barmode: 'group',
-    title: {text: 'Solve time (Poisson)'},
-    xaxis: {title: {text: 'Nodes'}},
-    yaxis: {title: {text: 'time (s)'}}
-};
+function replot()
+{
+    var metric_selector = document.getElementById("metric");
+    var metric = metric_selector.value
 
-var traces = {poisson:[],
-	      elastic:[]};
+    var layout_e = {
+	barmode: 'group',
+	title: {text: 'Run time: '+metric+' (Elastic)'},
+	xaxis: {title: {text: 'Nodes'}},
+	yaxis: {title: {text: 'time (s)'}}
+    };
+    var layout_p = {
+	barmode: 'group',
+	title: {text: 'Run time: '+metric+' (Poisson)'},
+	xaxis: {title: {text: 'Nodes'}},
+	yaxis: {title: {text: 'time (s)'}}
+    };
 
+    var traces = {Poisson:[],
+		  Elastic:[]};
 
-fetch('https://raw.githubusercontent.com/js947/fenics-performance-results/master/results.json')
-    .then((response) => {
-	return response.json();
-    })
-    .then((myJson) => {
-	for (var key in myJson){
-	    var record = myJson[key];
-	    console.log(record.data);
-	    console.log(record.time);
-	    var ptrace = {x: [],
-			  y: [],
-			  type: 'bar',
-			  name: record.time};
-	    var etrace = {x: [],
-			  y: [],
-			  type: 'bar',
-			  name: record.time};
-	    for (var r in record.data){
-		w = record.data[r];
-		if (w.problem == "Poisson"){
-		    // console.log(w.Solve);
-		    ptrace.y.push(w.Solve);
-		    // console.log(w.nodes);
-		    ptrace.x.push(w.nodes);
+    fetch('https://raw.githubusercontent.com/js947/fenics-performance-results/master/results.json')
+	.then((response) => {
+	    return response.json();
+	})
+	.then((myJson) => {
+	    for (var key in myJson){
+		var record = myJson[key];
+		console.log(record.data);
+		console.log(record.time);
+
+		var p = {'Poisson': [], 'Elastic': []};
+		for (var r in record.data){
+		    w = record.data[r];
+			p[w.problem].push([w.nodes, w[metric]]);
 		}
-		if (w.problem == "Elastic"){
-		    console.log(w.Solve);
-		    etrace.y.push(w.Solve);
-		    console.log(w.nodes);
-		    etrace.x.push(w.nodes);
+		for (var k in p){
+
+		    p[k] = p[k].sort(function(a, b){
+			return a[0] - b[0];
+		    });
+
+		    var trace = {x: [],
+				 y: [],
+				 type: 'bar',
+				 name: record.time};
+
+		    for (var a in p[k]){
+			trace.x.push(String(p[k][a][0])+"x");
+			trace.y.push(p[k][a][1]);
+		    }
+		    traces[k].push(trace);
 		}
 	    }
-	    traces.poisson.push(ptrace);
-	    traces.elastic.push(etrace);
-	}
-	Plotly.newPlot('PoissonDiv', traces.poisson, layout_p);
-	Plotly.newPlot('ElasticDiv', traces.elastic, layout_e);
-    });
+	    Plotly.newPlot('PoissonDiv', traces.Poisson, layout_p);
+	    Plotly.newPlot('ElasticDiv', traces.Elastic, layout_e);
+	});
+}
 
-
-console.log(traces);
+var metric_selector = document.getElementById("metric");
+window.onload = replot;
+metric_selector.onchange = replot;
 
 
 </script>
