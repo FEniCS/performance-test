@@ -34,3 +34,5 @@ add_executable(${PROJECT_NAME} main.cpp mesh.cpp
 
 # Target libraries
 target_link_libraries(${PROJECT_NAME} dolfin ${Boost_PROGRAM_OPTIONS_LIBRARY})
+
+install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
