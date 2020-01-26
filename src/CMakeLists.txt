@@ -1,16 +1,13 @@
 cmake_minimum_required(VERSION 3.10)
 
-set(PROJECT_NAME dolfin-scaling-test)
+set(PROJECT_NAME dolfinx-scaling-test)
 project(${PROJECT_NAME})
 
 # Get DOLFIN configuration data (DOLFINConfig.cmake must be in
 # DOLFIN_CMAKE_CONFIG_PATH)
-find_package(DOLFIN REQUIRED)
+find_package(DOLFINX REQUIRED)
 
 set(CMAKE_BUILD_TYPE "Release")
-
-
-#  find_package(Boost COMPONENTS program_options REQUIRED)
 
 # Compile UFL files
 add_custom_command(
@@ -31,7 +28,7 @@ add_executable(${PROJECT_NAME} main.cpp mesh.cpp
   ${CMAKE_CURRENT_BINARY_DIR}/Poisson.c)
 
 # Target libraries
-target_link_libraries(${PROJECT_NAME} dolfin ${Boost_PROGRAM_OPTIONS_LIBRARY})
+target_link_libraries(${PROJECT_NAME} dolfinx ${Boost_PROGRAM_OPTIONS_LIBRARY})
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)

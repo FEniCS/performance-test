@@ -3,15 +3,15 @@
 // root for full license information.
 
 #include "mesh.h"
-#include <dolfin/common/MPI.h>
-#include <dolfin/common/log.h>
-#include <dolfin/common/types.h>
-#include <dolfin/generation/BoxMesh.h>
-#include <dolfin/mesh/DistributedMeshTools.h>
-#include <dolfin/mesh/Mesh.h>
-#include <dolfin/mesh/MeshFunction.h>
-#include <dolfin/mesh/Partitioning.h>
-#include <dolfin/refinement/refine.h>
+#include <dolfinx/common/MPI.h>
+#include <dolfinx/common/log.h>
+#include <dolfinx/common/types.h>
+#include <dolfinx/generation/BoxMesh.h>
+#include <dolfinx/mesh/DistributedMeshTools.h>
+#include <dolfinx/mesh/Mesh.h>
+#include <dolfinx/mesh/MeshFunction.h>
+#include <dolfinx/mesh/Partitioning.h>
+#include <dolfinx/refinement/refine.h>
 
 namespace
 {
@@ -33,13 +33,13 @@ std::int64_t nvertices(int i, int j, int k, int nrefine)
 }
 } // namespace
 
-std::shared_ptr<dolfin::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
+std::shared_ptr<dolfinx::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
                                                      std::size_t target_dofs,
                                                      bool target_dofs_total,
                                                      std::size_t dofs_per_node)
 {
   // Get number of processes
-  const std::size_t num_processes = dolfin::MPI::size(comm);
+  const std::size_t num_processes = dolfinx::MPI::size(comm);
 
   // Target total dofs
   std::int64_t N = 0;
@@ -88,33 +88,33 @@ std::shared_ptr<dolfin::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
     }
   }
 
-  auto mesh = std::make_shared<dolfin::mesh::Mesh>(
-      dolfin::generation::BoxMesh::create(
+  auto mesh = std::make_shared<dolfinx::mesh::Mesh>(
+      dolfinx::generation::BoxMesh::create(
           comm,
           {Eigen::Vector3d(0.0, 0.0, 0.0), Eigen::Vector3d(1.0, 1.0, 1.0)},
-          {Nx, Ny, Nz}, dolfin::mesh::CellType::tetrahedron,
-          dolfin::mesh::GhostMode::none));
+          {Nx, Ny, Nz}, dolfinx::mesh::CellType::tetrahedron,
+          dolfinx::mesh::GhostMode::none));
 
-  if (dolfin::MPI::rank(mesh->mpi_comm()) == 0)
+  if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
   {
     std::cout << "UnitCube (" << Nx << "x" << Ny << "x" << Nz
               << ") to be refined " << r << " times\n";
   }
 
   for (unsigned int i = 0; i != r; ++i)
-    mesh = std::make_shared<dolfin::mesh::Mesh>(
-        dolfin::refinement::refine(*mesh, false));
+    mesh = std::make_shared<dolfinx::mesh::Mesh>(
+        dolfinx::refinement::refine(*mesh, false));
 
   return mesh;
 }
 //-----------------------------------------------------------------------------
-std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
+std::shared_ptr<dolfinx::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
                                                       std::size_t target_dofs,
                                                       bool target_dofs_total,
                                                       std::size_t dofs_per_node)
 {
   int target = target_dofs / dofs_per_node;
-  int mpi_size = dolfin::MPI::size(comm);
+  int mpi_size = dolfinx::MPI::size(comm);
   if (!target_dofs_total)
     target *= mpi_size;
 
@@ -138,7 +138,7 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
   // Calculate number of points and cells (only on process 0)
   int npoints = 0;
   int ncells = 0;
-  const int mpi_rank = dolfin::MPI::rank(comm);
+  const int mpi_rank = dolfinx::MPI::rank(comm);
 
   if (mpi_rank == 0)
   {
@@ -233,24 +233,24 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
               << geom.col(2).maxCoeff() << "\n";
   }
 
-  auto mesh = std::make_shared<dolfin::mesh::Mesh>(
-      dolfin::mesh::Partitioning::build_distributed_mesh(
-          comm, dolfin::mesh::CellType::tetrahedron, geom, topo, {},
-          dolfin::mesh::GhostMode::none));
+  auto mesh = std::make_shared<dolfinx::mesh::Mesh>(
+      dolfinx::mesh::Partitioning::build_distributed_mesh(
+          comm, dolfinx::mesh::CellType::tetrahedron, geom, topo, {},
+          dolfinx::mesh::GhostMode::none));
 
   mesh->create_entities(1);
-  dolfin::mesh::DistributedMeshTools::number_entities(*mesh, 1);
+  dolfinx::mesh::DistributedMeshTools::number_entities(*mesh, 1);
 
   LOG(INFO) << "target:" << target << "\n";
 
   while (mesh->num_entities_global(0) + mesh->num_entities_global(1) < target)
   {
 
-    mesh = std::make_shared<dolfin::mesh::Mesh>(
-        dolfin::refinement::refine(*mesh, false));
+    mesh = std::make_shared<dolfinx::mesh::Mesh>(
+        dolfinx::refinement::refine(*mesh, false));
 
     mesh->create_entities(1);
-    dolfin::mesh::DistributedMeshTools::number_entities(*mesh, 1);
+    dolfinx::mesh::DistributedMeshTools::number_entities(*mesh, 1);
   }
 
   double fraction = (double)(target - mesh->num_entities_global(0))
@@ -271,18 +271,18 @@ std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
   int lmark = 0;
   int umark = 2000;
 
-  std::shared_ptr<dolfin::mesh::Mesh> meshi;
+  std::shared_ptr<dolfinx::mesh::Mesh> meshi;
 
   for (int k = 0; k < 5; ++k)
   {
     // Trial step
-    dolfin::mesh::MeshFunction<int> marker(mesh, 1, false);
+    dolfinx::mesh::MeshFunction<int> marker(mesh, 1, false);
     auto marker_array = marker.values();
     for (int i = 0; i < mesh->num_entities(1); ++i)
       marker_array[i] = (i % 2000 < nmarked);
 
-    meshi = std::make_shared<dolfin::mesh::Mesh>(
-        dolfin::refinement::refine(*mesh, marker, false));
+    meshi = std::make_shared<dolfinx::mesh::Mesh>(
+        dolfinx::refinement::refine(*mesh, marker, false));
 
     double actual_fraction
         = (double)(meshi->num_entities_global(0) - mesh->num_entities_global(0))

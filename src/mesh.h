@@ -4,25 +4,18 @@
 
 #pragma once
 
-#include <mpi.h>
 #include <memory>
+#include <mpi.h>
 
-namespace dolfin
+namespace dolfinx::mesh
 {
-  namespace mesh
-  {
-    class Mesh;
-  }
+class Mesh;
 }
 
+std::shared_ptr<dolfinx::mesh::Mesh>
+create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
+                 std::size_t dofs_per_node);
 
-std::shared_ptr<dolfin::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
-                                                std::size_t target_dofs,
-                                                bool target_dofs_total,
-                                                std::size_t dofs_per_node);
-
-
-std::shared_ptr<dolfin::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
-                                                std::size_t target_dofs,
-                                                bool target_dofs_total,
-                                                std::size_t dofs_per_node);
+std::shared_ptr<dolfinx::mesh::Mesh>
+create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
+                  bool target_dofs_total, std::size_t dofs_per_node);

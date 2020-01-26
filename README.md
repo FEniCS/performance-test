@@ -1,4 +1,4 @@
-# Performance test codes for FEniCS/DOLFIN-X
+# Performance test codes for FEniCS/dolfinx-X
 
 This repository contains solvers for testing the parallel performance
 of DOLFIN and the underlying linear solvers. It tests elliptic
@@ -16,10 +16,10 @@ The source of the tests is in `src/` directory.
 ### Requirements
 
 - FEniCS/DOLFIN installation, with MPI, PETSc and HDF5 enabled
-  (development version of DOLFIN-X **required**)
+  (development version of dolfinx-X **required**)
 - PETSc installation (development version **required**)
 
-The development versions of DOLFIN-X and PETSc have a number of fixes
+The development versions of dolfinx-X and PETSc have a number of fixes
 that are necessary to run the tests successfully, and for performance.
 
 ### Compilation
@@ -62,7 +62,7 @@ For a weak scaling test with 8 MPI processes and 500k
 degrees-of-freedom per process:
 
 ```
-mpirun -np 8 ./dolfin-scaling-test \
+mpirun -np 8 ./dolfinx-scaling-test \
 --problem_type elasticity \
 --scaling_type weak \
 --ndofs 500000 \
@@ -84,7 +84,7 @@ degrees-of-freedom in total:
 
 
 ```
-mpirun -np 8 ./dolfin-scaling-test \
+mpirun -np 8 ./dolfinx-scaling-test \
 --problem_type elasticity \
 --scaling_type strong \
 --ndofs 10000000 \
@@ -109,7 +109,7 @@ recommended.  For a weak scaling test with 8 MPI processes and 500k
 degrees-of-freedom per process:
 
 ```
-mpirun -np 8 ./dolfin-scaling-test \
+mpirun -np 8 ./dolfinx-scaling-test \
 --problem_type poisson \
 --scaling_type weak \
 --ndofs 500000 \
@@ -125,7 +125,7 @@ mpirun -np 8 ./dolfin-scaling-test \
 For a strong scaling test, with 8 MPI processes and 10M
 degrees-of-freedom in total:
 ```
-mpirun -np 8 ./dolfin-scaling-test \
+mpirun -np 8 ./dolfinx-scaling-test \
 --problem_type poisson \
 --scaling_type strong \
 --ndofs 10000000 \
