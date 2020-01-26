@@ -9,64 +9,64 @@
 #include "Poisson.h"
 #include <Eigen/Dense>
 #include <cfloat>
-#include <dolfin/common/Timer.h>
-#include <dolfin/function/Function.h>
-#include <dolfin/function/FunctionSpace.h>
-#include <dolfin/la/PETScMatrix.h>
-#include <dolfin/la/PETScVector.h>
-#include <dolfin/mesh/Mesh.h>
+#include <dolfinx/common/Timer.h>
+#include <dolfinx/function/Function.h>
+#include <dolfinx/function/FunctionSpace.h>
+#include <dolfinx/la/PETScMatrix.h>
+#include <dolfinx/la/PETScVector.h>
+#include <dolfinx/mesh/Mesh.h>
 #include <memory>
 #include <utility>
 
 namespace poisson
 {
 
-std::tuple<dolfin::la::PETScMatrix, dolfin::la::PETScVector,
-           std::shared_ptr<dolfin::function::Function>>
-problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
+std::tuple<dolfinx::la::PETScMatrix, dolfinx::la::PETScVector,
+           std::shared_ptr<dolfinx::function::Function>>
+problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 {
-  dolfin::common::Timer t0("ZZZ FunctionSpace");
+  dolfinx::common::Timer t0("ZZZ FunctionSpace");
 
-  std::shared_ptr<dolfin::function::FunctionSpace> V
-      = dolfin::fem::create_functionspace(Poisson_functionspace_create, mesh);
+  std::shared_ptr<dolfinx::function::FunctionSpace> V
+      = dolfinx::fem::create_functionspace(Poisson_functionspace_create, mesh);
 
   t0.stop();
 
-  dolfin::common::Timer t1("ZZZ Assemble");
+  dolfinx::common::Timer t1("ZZZ Assemble");
 
   // Define boundary condition
-  auto u0 = std::make_shared<dolfin::function::Function>(V);
+  auto u0 = std::make_shared<dolfinx::function::Function>(V);
   VecSet(u0->vector().vec(), 0.0);
 
-  auto bc = std::make_shared<dolfin::fem::DirichletBC>(V, u0, [](auto& x) {
+  auto bc = std::make_shared<dolfinx::fem::DirichletBC>(V, u0, [](auto& x) {
     return (x.row(0) < DBL_EPSILON or x.row(0) > 1.0 - DBL_EPSILON);
   });
 
   // Define variational forms
-  std::shared_ptr <dolfin::fem::Form> form_L =
-      dolfin::fem::create_form(Poisson_linearform_create, {V});
+  std::shared_ptr <dolfinx::fem::Form> form_L =
+      dolfinx::fem::create_form(Poisson_linearform_create, {V});
 
-  std::shared_ptr<dolfin::fem::Form> form_a =
-    dolfin::fem::create_form(Poisson_bilinearform_create,{V, V});
+  std::shared_ptr<dolfinx::fem::Form> form_a =
+    dolfinx::fem::create_form(Poisson_bilinearform_create,{V, V});
 
 
   // Define variational forms
   ufc_form* linear_form = Poisson_linearform_create();
-  auto L = std::make_shared<dolfin::fem::Form>(
-      dolfin::fem::create_form(*linear_form, {V}));
+  auto L = std::make_shared<dolfinx::fem::Form>(
+      dolfinx::fem::create_form(*linear_form, {V}));
   std::free(linear_form);
 
   ufc_form* bilinear_form = Poisson_bilinearform_create();
-  auto a = std::make_shared<dolfin::fem::Form>(
-      dolfin::fem::create_form(*bilinear_form, {V, V}));
+  auto a = std::make_shared<dolfinx::fem::Form>(
+      dolfinx::fem::create_form(*bilinear_form, {V, V}));
   std::free(bilinear_form);
 
   // Attach 'coordinate mapping' to mesh
   auto cmap = a->coordinate_mapping();
   mesh->geometry().coord_mapping = cmap;
 
-  auto f = std::make_shared<dolfin::function::Function>(V);
-  auto g = std::make_shared<dolfin::function::Function>(V);
+  auto f = std::make_shared<dolfinx::function::Function>(V);
+  auto g = std::make_shared<dolfinx::function::Function>(V);
   f->interpolate([](auto& x) {
     auto dx = x.row(0) - 0.5;
     auto dy = x.row(1) - 0.5;
@@ -81,13 +81,13 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   L->set_coefficients({{"f", f}, {"g", g}});
 
   // Create matrices and vector, and assemble system
-  dolfin::la::PETScMatrix A = dolfin::fem::create_matrix(*a);
-  dolfin::la::PETScVector b(*L->function_space(0)->dofmap()->index_map);
+  dolfinx::la::PETScMatrix A = dolfinx::fem::create_matrix(*a);
+  dolfinx::la::PETScVector b(*L->function_space(0)->dofmap()->index_map);
 
   MatZeroEntries(A.mat());
-  dolfin::common::Timer t2("ZZZ Assemble matrix");
-  dolfin::fem::assemble_matrix(A.mat(), *a, {bc});
-  dolfin::fem::add_diagonal(A.mat(), *V, {bc});
+  dolfinx::common::Timer t2("ZZZ Assemble matrix");
+  dolfinx::fem::assemble_matrix(A.mat(), *a, {bc});
+  dolfinx::fem::add_diagonal(A.mat(), *V, {bc});
   MatAssemblyBegin(A.mat(), MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(A.mat(), MAT_FINAL_ASSEMBLY);
   t2.stop();
@@ -96,21 +96,21 @@ problem(std::shared_ptr<dolfin::mesh::Mesh> mesh)
   VecGhostUpdateBegin(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
   VecGhostUpdateEnd(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
 
-  dolfin::common::Timer t3("ZZZ Assemble vector");
-  dolfin::fem::assemble_vector(b.vec(), *L);
-  dolfin::fem::apply_lifting(b.vec(), {a}, {{bc}}, {}, 1.0);
+  dolfinx::common::Timer t3("ZZZ Assemble vector");
+  dolfinx::fem::assemble_vector(b.vec(), *L);
+  dolfinx::fem::apply_lifting(b.vec(), {a}, {{bc}}, {}, 1.0);
   VecGhostUpdateBegin(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   VecGhostUpdateEnd(b.vec(), ADD_VALUES, SCATTER_REVERSE);
-  dolfin::fem::set_bc(b.vec(), {bc}, nullptr);
+  dolfinx::fem::set_bc(b.vec(), {bc}, nullptr);
   t3.stop();
 
   t1.stop();
 
   // Create Function to hold solution
-  auto u = std::make_shared<dolfin::function::Function>(V);
+  auto u = std::make_shared<dolfinx::function::Function>(V);
 
-  return std::tuple<dolfin::la::PETScMatrix, dolfin::la::PETScVector,
-                    std::shared_ptr<dolfin::function::Function>>(
+  return std::tuple<dolfinx::la::PETScMatrix, dolfinx::la::PETScVector,
+                    std::shared_ptr<dolfinx::function::Function>>(
       std::move(A), std::move(b), u);
 }
 } // namespace poisson
