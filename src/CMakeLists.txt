@@ -12,12 +12,12 @@ set(CMAKE_BUILD_TYPE "Release")
 # Compile UFL files
 add_custom_command(
   OUTPUT Elasticity.c
-  COMMAND ffc ${CMAKE_CURRENT_SOURCE_DIR}/Elasticity.ufl
+  COMMAND ffcx ${CMAKE_CURRENT_SOURCE_DIR}/Elasticity.ufl
   DEPENDS Elasticity.ufl
 )
 add_custom_command(
   OUTPUT Poisson.c
-  COMMAND ffc ${CMAKE_CURRENT_SOURCE_DIR}/Poisson.ufl
+  COMMAND ffcx ${CMAKE_CURRENT_SOURCE_DIR}/Poisson.ufl
   DEPENDS Poisson.ufl
 )
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
