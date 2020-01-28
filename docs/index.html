@@ -38,7 +38,7 @@ function replot()
     var traces = {Poisson:[],
 		  Elastic:[]};
 
-    fetch('https://raw.githubusercontent.com/js947/fenics-performance-results/master/results.json')
+    fetch('https://raw.githubusercontent.com/wiki/FEniCS/performance-test/results.json')
 	.then((response) => {
 	    return response.json();
 	})
