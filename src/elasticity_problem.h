@@ -82,33 +82,36 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   std::shared_ptr<dolfinx::function::FunctionSpace> V
       = dolfinx::fem::create_functionspace(Elasticity_functionspace_create,
-                                          mesh);
+                                           mesh);
 
   t0.stop();
 
   dolfinx::common::Timer t1("ZZZ Assemble prep");
 
-  // Define boundary condition
-  auto u0 = std::make_shared<dolfinx::function::Function>(V);
-  VecSet(u0->vector().vec(), 0.0);
-
-  // Bottom (x[1] = 0) surface
-  auto bc = std::make_shared<dolfinx::fem::DirichletBC>(
-      V, u0, [](auto& x) { return x.row(1) < 1.0e-8; });
-
   // Define variational forms
 
-  std::shared_ptr <dolfinx::fem::Form> L =
-      dolfinx::fem::create_form(Elasticity_linearform_create, {V});
+  std::shared_ptr<dolfinx::fem::Form> L
+      = dolfinx::fem::create_form(Elasticity_linearform_create, {V});
 
-  std::shared_ptr<dolfinx::fem::Form> a =
-    dolfinx::fem::create_form(Elasticity_bilinearform_create,{V, V});
-
+  std::shared_ptr<dolfinx::fem::Form> a
+      = dolfinx::fem::create_form(Elasticity_bilinearform_create, {V, V});
 
   // Attach 'coordinate mapping' to mesh
   auto cmap = a->coordinate_mapping();
   mesh->geometry().coord_mapping = cmap;
 
+  // Define boundary condition
+  auto u0 = std::make_shared<dolfinx::function::Function>(V);
+  VecSet(u0->vector().vec(), 0.0);
+
+  const Eigen::Array<PetscInt, Eigen::Dynamic, 1> bdofs
+      = dolfinx::fem::locate_dofs_geometrical(
+          *V, [](auto& x) { return x.row(1) < 1.0e-8; });
+
+  // Bottom (x[1] = 0) surface
+  auto bc = std::make_shared<dolfinx::fem::DirichletBC>(u0, bdofs);
+
+  // Define coefficients
   auto f = std::make_shared<dolfinx::function::Function>(V);
   f->interpolate([](auto& x) {
     auto dx = x.row(0) - 0.5;

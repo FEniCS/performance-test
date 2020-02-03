@@ -34,21 +34,12 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   dolfinx::common::Timer t1("ZZZ Assemble");
 
-  // Define boundary condition
-  auto u0 = std::make_shared<dolfinx::function::Function>(V);
-  VecSet(u0->vector().vec(), 0.0);
-
-  auto bc = std::make_shared<dolfinx::fem::DirichletBC>(V, u0, [](auto& x) {
-    return (x.row(0) < DBL_EPSILON or x.row(0) > 1.0 - DBL_EPSILON);
-  });
-
   // Define variational forms
-  std::shared_ptr <dolfinx::fem::Form> form_L =
-      dolfinx::fem::create_form(Poisson_linearform_create, {V});
+  std::shared_ptr<dolfinx::fem::Form> form_L
+      = dolfinx::fem::create_form(Poisson_linearform_create, {V});
 
-  std::shared_ptr<dolfinx::fem::Form> form_a =
-    dolfinx::fem::create_form(Poisson_bilinearform_create,{V, V});
-
+  std::shared_ptr<dolfinx::fem::Form> form_a
+      = dolfinx::fem::create_form(Poisson_bilinearform_create, {V, V});
 
   // Define variational forms
   ufc_form* linear_form = Poisson_linearform_create();
@@ -65,6 +56,18 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   auto cmap = a->coordinate_mapping();
   mesh->geometry().coord_mapping = cmap;
 
+  // Define boundary condition
+  auto u0 = std::make_shared<dolfinx::function::Function>(V);
+  VecSet(u0->vector().vec(), 0.0);
+
+  const Eigen::Array<PetscInt, Eigen::Dynamic, 1> bdofs
+      = dolfinx::fem::locate_dofs_geometrical(*V, [](auto& x) {
+          return (x.row(0) < DBL_EPSILON or x.row(0) > 1.0 - DBL_EPSILON);
+        });
+
+  auto bc = std::make_shared<dolfinx::fem::DirichletBC>(u0, bdofs);
+
+  // Define coefficients
   auto f = std::make_shared<dolfinx::function::Function>(V);
   auto g = std::make_shared<dolfinx::function::Function>(V);
   f->interpolate([](auto& x) {
