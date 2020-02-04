@@ -58,9 +58,9 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   // Define boundary condition
   auto u0 = std::make_shared<dolfinx::function::Function>(V);
-  VecSet(u0->vector().vec(), 0.0);
-  VecGhostUpdateBegin(u0->vector().vec(), INSERT_VALUES, SCATTER_FORWARD);
-  VecGhostUpdateEnd(u0->vector().vec(), INSERT_VALUES, SCATTER_FORWARD);
+  dolfinx::la::VecWrapper _u0(u0->vector().vec());
+  _u0.x.setZero();
+  _u0.restore();
 
   const Eigen::Array<PetscInt, Eigen::Dynamic, 1> bdofs
       = dolfinx::fem::locate_dofs_geometrical(*V, [](auto& x) {
