@@ -30,6 +30,8 @@ jobs:
       #       pip3 install .
       - run:
           name: Build test program
+          environment:
+            PETSC_DIR: /usr/local/petsc-64
           command: |
             mkdir build
             cd build
