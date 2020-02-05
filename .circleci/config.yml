@@ -108,7 +108,7 @@ jobs:
             mpirun -np 3 ./dolfinx-scaling-test \
             --problem_type elasticity \
             --scaling_type strong \
-            --ndofs 1000000 \
+            --ndofs 500000 \
             -log_view \
             -ksp_view \
             -ksp_type cg \
