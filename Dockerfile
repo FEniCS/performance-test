@@ -4,7 +4,7 @@
 #
 # Authors: Garth N. Wells <gnw20@cam.ac.uk>
 
-ARG PETSC_VERSION=3.12
+ARG PETSC_VERSION=3.12.4
 
 FROM ubuntu:18.04
 
@@ -45,42 +45,38 @@ RUN apt-get -qq update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# Install setuptools
-RUN wget https://bootstrap.pypa.io/get-pip.py && \
-    python3 get-pip.py && \
-    pip3 install --no-cache-dir setuptools && \
-    pip3 install --no-cache-dir git+https://github.com/FEniCS/fiat.git && \
-    pip3 install --no-cache-dir git+https://github.com/FEniCS/ufl.git && \
-    pip3 install --no-cache-dir git+https://github.com/FEniCS/ffcx.git && \
-    rm -rf /tmp/*
-
 # Install PETSc from source
 ARG PETSC_VERSION
 RUN git clone --branch v${PETSC_VERSION} --depth 1 https://gitlab.com/petsc/petsc.git && \
     cd petsc && \
-    ./configure --COPTFLAGS="-O2" \
+    ./configure --with-64-bit-indices=0 \
+                --COPTFLAGS="-O2" \
                 --CXXOPTFLAGS="-O2" \
                 --FOPTFLAGS="-O2" \
                 --with-c-support \
+                --with-fortran-bindings=no \
                 --with-debugging=0 \
                 --with-shared-libraries \
                 --download-hypre \
-                --download-metis \
-                --download-parmetis \
                 --download-ptscotch \
                 --prefix=/usr/local/petsc-32 && \
+     make && \
+     make install && \
+     git clean -fdx . && \
+    ./configure --with-64-bit-indices=1 \
+                --COPTFLAGS="-O2" \
+                --CXXOPTFLAGS="-O2" \
+                --FOPTFLAGS="-O2" \
+                --with-c-support \
+                --with-fortran-bindings=no \
+                --with-debugging=0 \
+                --with-shared-libraries \
+                --download-hypre \
+                --download-ptscotch \
+                --prefix=/usr/local/petsc-64 && \
      make && \
      make install && \
      rm -rf /tmp/*
 
 # By default use the 32-bit build of PETSc
 ENV PETSC_DIR=/usr/local/petsc-32
-
-# Build DOLFIN
-RUN git clone https://github.com/FEniCS/dolfinx.git && \
-    cd dolfinx/cpp && \
-    mkdir build && \
-    cd ./build && \
-    cmake -G Ninja ../ && \
-    ninja install && \
-    rm -rf /tmp/*
