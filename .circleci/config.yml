@@ -16,6 +16,8 @@ jobs:
             pip3 install git+https://github.com/FEniCS/ffcx --upgrade
       - run:
           name: Install DOLFIN (C++)
+          environment:
+            PETSC_DIR: /usr/local/petsc-64
           command: |
             git clone --depth=1 https://github.com/FEniCS/dolfinx.git
             cd $(mktemp -d)
