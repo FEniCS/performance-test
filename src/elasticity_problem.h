@@ -106,7 +106,7 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   _u0.x.setZero();
   _u0.restore();
 
-  const Eigen::Array<PetscInt, Eigen::Dynamic, 1> bdofs
+  const Eigen::Array<std::int32_t, Eigen::Dynamic, 1> bdofs
       = dolfinx::fem::locate_dofs_geometrical(
           *V, [](auto& x) { return x.row(1) < 1.0e-8; });
 
