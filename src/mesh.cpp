@@ -101,9 +101,11 @@ std::shared_ptr<dolfinx::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
               << ") to be refined " << r << " times\n";
   }
 
-  for (unsigned int i = 0; i != r; ++i)
+  for (int i = 0; i < r; ++i)
+  {
     mesh = std::make_shared<dolfinx::mesh::Mesh>(
         dolfinx::refinement::refine(*mesh, false));
+  }
 
   return mesh;
 }
@@ -239,18 +241,15 @@ std::shared_ptr<dolfinx::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
           dolfinx::mesh::GhostMode::none));
 
   mesh->create_entities(1);
-  dolfinx::mesh::DistributedMeshTools::number_entities(*mesh, 1);
 
   LOG(INFO) << "target:" << target << "\n";
 
   while (mesh->num_entities_global(0) + mesh->num_entities_global(1) < target)
   {
-
     mesh = std::make_shared<dolfinx::mesh::Mesh>(
         dolfinx::refinement::refine(*mesh, false));
 
     mesh->create_entities(1);
-    dolfinx::mesh::DistributedMeshTools::number_entities(*mesh, 1);
   }
 
   double fraction = (double)(target - mesh->num_entities_global(0))
