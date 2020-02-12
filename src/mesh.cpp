@@ -101,9 +101,11 @@ std::shared_ptr<dolfinx::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
               << ") to be refined " << r << " times\n";
   }
 
-  for (unsigned int i = 0; i != r; ++i)
+  for (int i = 0; i < r; ++i)
+  {
     mesh = std::make_shared<dolfinx::mesh::Mesh>(
         dolfinx::refinement::refine(*mesh, false));
+  }
 
   return mesh;
 }
