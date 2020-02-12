@@ -30,5 +30,6 @@ add_executable(${PROJECT_NAME} main.cpp mesh.cpp
 # Target libraries
 target_link_libraries(${PROJECT_NAME} dolfinx ${Boost_PROGRAM_OPTIONS_LIBRARY})
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
+target_compile_options(${PROJECT_NAME} PRIVATE -Wall -pedantic -Werror)
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
