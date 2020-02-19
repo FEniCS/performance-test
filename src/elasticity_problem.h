@@ -108,7 +108,7 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   const Eigen::Array<std::int32_t, Eigen::Dynamic, 1> bdofs
       = dolfinx::fem::locate_dofs_geometrical(
-          *V, [](auto& x) { return x.row(1) < 1.0e-8; });
+          {*V}, [](auto& x) { return x.row(1) < 1.0e-8; });
 
   // Bottom (x[1] = 0) surface
   auto bc = std::make_shared<dolfinx::fem::DirichletBC>(u0, bdofs);
