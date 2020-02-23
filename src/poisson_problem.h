@@ -28,29 +28,18 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::common::Timer t0("ZZZ FunctionSpace");
 
   std::shared_ptr<dolfinx::function::FunctionSpace> V
-      = dolfinx::fem::create_functionspace(Poisson_functionspace_create, mesh);
+      = dolfinx::fem::create_functionspace(create_functionspace_form_Poisson_a,
+                                           "u", mesh);
 
   t0.stop();
 
   dolfinx::common::Timer t1("ZZZ Assemble");
 
   // Define variational forms
-  std::shared_ptr<dolfinx::fem::Form> form_L
-      = dolfinx::fem::create_form(Poisson_linearform_create, {V});
-
-  std::shared_ptr<dolfinx::fem::Form> form_a
-      = dolfinx::fem::create_form(Poisson_bilinearform_create, {V, V});
-
-  // Define variational forms
-  ufc_form* linear_form = Poisson_linearform_create();
-  auto L = std::make_shared<dolfinx::fem::Form>(
-      dolfinx::fem::create_form(*linear_form, {V}));
-  std::free(linear_form);
-
-  ufc_form* bilinear_form = Poisson_bilinearform_create();
-  auto a = std::make_shared<dolfinx::fem::Form>(
-      dolfinx::fem::create_form(*bilinear_form, {V, V}));
-  std::free(bilinear_form);
+  std::shared_ptr<dolfinx::fem::Form> L
+      = dolfinx::fem::create_form(create_form_Poisson_L, {V});
+  std::shared_ptr<dolfinx::fem::Form> a
+      = dolfinx::fem::create_form(create_form_Poisson_a, {V, V});
 
   // Attach 'coordinate mapping' to mesh
   auto cmap = a->coordinate_mapping();

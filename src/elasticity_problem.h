@@ -81,8 +81,8 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::common::Timer t0("ZZZ FunctionSpace");
 
   std::shared_ptr<dolfinx::function::FunctionSpace> V
-      = dolfinx::fem::create_functionspace(Elasticity_functionspace_create,
-                                           mesh);
+      = dolfinx::fem::create_functionspace(
+          create_functionspace_form_Elasticity_a, "u", mesh);
 
   t0.stop();
 
@@ -91,10 +91,10 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   // Define variational forms
 
   std::shared_ptr<dolfinx::fem::Form> L
-      = dolfinx::fem::create_form(Elasticity_linearform_create, {V});
+      = dolfinx::fem::create_form(create_form_Elasticity_L, {V});
 
   std::shared_ptr<dolfinx::fem::Form> a
-      = dolfinx::fem::create_form(Elasticity_bilinearform_create, {V, V});
+      = dolfinx::fem::create_form(create_form_Elasticity_a, {V, V});
 
   // Attach 'coordinate mapping' to mesh
   auto cmap = a->coordinate_mapping();
