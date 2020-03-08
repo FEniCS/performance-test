@@ -6,12 +6,16 @@
 #include <dolfinx/common/MPI.h>
 #include <dolfinx/common/log.h>
 #include <dolfinx/common/types.h>
+#include <dolfinx/fem/ElementDofLayout.h>
 #include <dolfinx/generation/BoxMesh.h>
+#include <dolfinx/graph/AdjacencyList.h>
 #include <dolfinx/mesh/DistributedMeshTools.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshFunction.h>
 #include <dolfinx/mesh/Partitioning.h>
+#include <dolfinx/mesh/cell_types.h>
 #include <dolfinx/refinement/refine.h>
+#include <memory>
 
 namespace
 {
@@ -34,9 +38,9 @@ std::int64_t nvertices(int i, int j, int k, int nrefine)
 } // namespace
 
 std::shared_ptr<dolfinx::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
-                                                     std::size_t target_dofs,
-                                                     bool target_dofs_total,
-                                                     std::size_t dofs_per_node)
+                                                      std::size_t target_dofs,
+                                                      bool target_dofs_total,
+                                                      std::size_t dofs_per_node)
 {
   // Get number of processes
   const std::size_t num_processes = dolfinx::MPI::size(comm);
@@ -110,10 +114,9 @@ std::shared_ptr<dolfinx::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
   return mesh;
 }
 //-----------------------------------------------------------------------------
-std::shared_ptr<dolfinx::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
-                                                      std::size_t target_dofs,
-                                                      bool target_dofs_total,
-                                                      std::size_t dofs_per_node)
+std::shared_ptr<dolfinx::mesh::Mesh>
+create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
+                  bool target_dofs_total, std::size_t dofs_per_node)
 {
   int target = target_dofs / dofs_per_node;
   int mpi_size = dolfinx::MPI::size(comm);
@@ -234,6 +237,14 @@ std::shared_ptr<dolfinx::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
     LOG(INFO) << "z range = " << geom.col(2).minCoeff() << " - "
               << geom.col(2).maxCoeff() << "\n";
   }
+
+  // For the new Mesh
+  // const dolfinx::fem::ElementDofLayout layout =
+  // dolfinx::fem::geometry_layout(
+  //     dolfinx::mesh::CellType::tetrahedron, topo.cols());
+  // auto mesh = std::make_shared<dolfinx::mesh::Mesh>(dolfinx::mesh::create(
+  //     comm, dolfinx::graph::AdjacencyList<std::int64_t>(topo), layout,
+  //     geom));
 
   auto mesh = std::make_shared<dolfinx::mesh::Mesh>(
       dolfinx::mesh::Partitioning::build_distributed_mesh(

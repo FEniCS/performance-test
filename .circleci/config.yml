@@ -19,8 +19,10 @@ jobs:
           name: Install DOLFIN (C++)
           environment:
             PETSC_DIR: /usr/local/petsc-64
+            CC: clang
+            CXX: clang++
           command: |
-            git clone --depth=1 https://github.com/FEniCS/dolfinx.git
+            git clone -b master --single-branch https://github.com/FEniCS/dolfinx.git
             cd $(mktemp -d)
             cmake -G Ninja $OLDPWD/dolfinx/cpp
             ninja -j3 install
@@ -33,6 +35,8 @@ jobs:
           name: Build test program
           environment:
             PETSC_DIR: /usr/local/petsc-64
+            CC: clang
+            CXX: clang++
           command: |
             mkdir build
             cd build
