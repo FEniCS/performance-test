@@ -20,7 +20,7 @@ jobs:
           environment:
             PETSC_DIR: /usr/local/petsc-64
           command: |
-            git clone --depth=1  -branch garth/remove-old-mesh-constructor https://github.com/FEniCS/dolfinx.git
+            git clone -branch garth/remove-old-mesh-constructor https://github.com/FEniCS/dolfinx.git
             cd $(mktemp -d)
             cmake -G Ninja $OLDPWD/dolfinx/cpp
             ninja -j3 install
