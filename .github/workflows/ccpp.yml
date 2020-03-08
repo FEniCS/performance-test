@@ -36,8 +36,8 @@ jobs:
         run: |
           git clone --depth=1 --branch master https://github.com/FEniCS/dolfinx.git
           cd $(mktemp -d)
-          cmake -G Ninja -j3 -DCMAKE_BUILD_TYPE=Release $OLDPWD/dolfinx/cpp
-          ninja  install
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Release $OLDPWD/dolfinx/cpp
+          ninja -j3 install
       - name: Build performance test
         env:
           PETSC_DIR: /usr/local/petsc-64
