@@ -41,11 +41,27 @@ jobs:
       - name: Build performance test
         env:
           PETSC_DIR: /usr/local/petsc-64
+          CC: clang
+          CXX: clang++
         run: |
           mkdir build
           cd build
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Release  ../src
           ninja
+      - name: Run Poisson test (BoomerAMG, serial)
+        run: |
+          cd build/
+          ./dolfinx-scaling-test \
+          --problem_type poisson \
+          --scaling_type weak \
+          --ndofs 50000 \
+          -log_view \
+          -ksp_view \
+          -ksp_type cg \
+          -ksp_rtol 1.0e-8 \
+          -pc_type hypre \
+          -pc_hypre_type boomeramg \
+          -pc_hypre_boomeramg_strong_threshold 0.5
       - name: Run Poisson test (BoomerAMG, weak)
         run: |
           cd build/
