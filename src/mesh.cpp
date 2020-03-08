@@ -6,7 +6,9 @@
 #include <dolfinx/common/MPI.h>
 #include <dolfinx/common/log.h>
 #include <dolfinx/common/types.h>
+#include <dolfinx/fem/ElementDofLayout.h>
 #include <dolfinx/generation/BoxMesh.h>
+#include <dolfinx/graph/AdjacencyList.h>
 #include <dolfinx/mesh/DistributedMeshTools.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshFunction.h>
@@ -236,9 +238,10 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
               << geom.col(2).maxCoeff() << "\n";
   }
 
-  auto mesh = std::make_shared<dolfinx::mesh::Mesh>(
-      comm, dolfinx::mesh::CellType::tetrahedron, geom, topo,
-      std::vector<std::int64_t>(), dolfinx::mesh::GhostMode::none);
+  const dolfinx::fem::ElementDofLayout layout = dolfinx::fem::geometry_layout(
+      dolfinx::mesh::CellType::tetrahedron, topo.cols());
+  auto mesh = std::make_shared<dolfinx::mesh::Mesh>(dolfinx::mesh::create(
+      comm, dolfinx::graph::AdjacencyList<std::int64_t>(topo), layout, geom));
 
   // auto mesh = std::make_shared<dolfinx::mesh::Mesh>(
   //     dolfinx::mesh::Partitioning::build_distributed_mesh(
