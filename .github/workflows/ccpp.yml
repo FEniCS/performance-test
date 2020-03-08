@@ -34,7 +34,7 @@ jobs:
           CC: clang
           CXX: clang++
         run: |
-          git clone -branch garth/remove-old-mesh-constructor https://github.com/FEniCS/dolfinx.git
+          git clone -b garth/remove-old-mesh-constructor --single-branch https://github.com/FEniCS/dolfinx.git
           cd $(mktemp -d)
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Release $OLDPWD/dolfinx/cpp
           ninja -j3 install
