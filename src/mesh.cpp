@@ -238,15 +238,16 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
               << geom.col(2).maxCoeff() << "\n";
   }
 
-  const dolfinx::fem::ElementDofLayout layout = dolfinx::fem::geometry_layout(
-      dolfinx::mesh::CellType::tetrahedron, topo.cols());
-  auto mesh = std::make_shared<dolfinx::mesh::Mesh>(dolfinx::mesh::create(
-      comm, dolfinx::graph::AdjacencyList<std::int64_t>(topo), layout, geom));
+  // For the new Mesh
+  // const dolfinx::fem::ElementDofLayout layout = dolfinx::fem::geometry_layout(
+  //     dolfinx::mesh::CellType::tetrahedron, topo.cols());
+  // auto mesh = std::make_shared<dolfinx::mesh::Mesh>(dolfinx::mesh::create(
+  //     comm, dolfinx::graph::AdjacencyList<std::int64_t>(topo), layout, geom));
 
-  // auto mesh = std::make_shared<dolfinx::mesh::Mesh>(
-  //     dolfinx::mesh::Partitioning::build_distributed_mesh(
-  //         comm, dolfinx::mesh::CellType::tetrahedron, geom, topo, {},
-  //         dolfinx::mesh::GhostMode::none));
+  auto mesh = std::make_shared<dolfinx::mesh::Mesh>(
+      dolfinx::mesh::Partitioning::build_distributed_mesh(
+          comm, dolfinx::mesh::CellType::tetrahedron, geom, topo, {},
+          dolfinx::mesh::GhostMode::none));
 
   mesh->create_entities(1);
 
