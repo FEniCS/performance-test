@@ -11,7 +11,9 @@
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshFunction.h>
 #include <dolfinx/mesh/Partitioning.h>
+#include <dolfinx/mesh/cell_types.h>
 #include <dolfinx/refinement/refine.h>
+#include <memory>
 
 namespace
 {
@@ -235,8 +237,9 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   }
 
   auto mesh = std::make_shared<dolfinx::mesh::Mesh>(
-      comm, dolfinx::mesh::CellType::tetrahedron, geom, topo, {},
-      dolfinx::mesh::GhostMode::none);
+      comm, dolfinx::mesh::CellType::tetrahedron, geom, topo,
+      std::vector<std::int64_t>(), dolfinx::mesh::GhostMode::none);
+
   // auto mesh = std::make_shared<dolfinx::mesh::Mesh>(
   //     dolfinx::mesh::Partitioning::build_distributed_mesh(
   //         comm, dolfinx::mesh::CellType::tetrahedron, geom, topo, {},
