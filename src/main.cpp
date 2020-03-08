@@ -152,7 +152,7 @@ int main(int argc, char* argv[])
     std::string filename
         = output_dir + "/solution-" + std::to_string(num_processes) + ".xdmf";
     dolfinx::io::XDMFFile file(MPI_COMM_WORLD, filename);
-    file.write(*u);
+    file.write(*u, 0.0);
     t6.stop();
   }
 

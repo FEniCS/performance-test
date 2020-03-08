@@ -34,9 +34,9 @@ std::int64_t nvertices(int i, int j, int k, int nrefine)
 } // namespace
 
 std::shared_ptr<dolfinx::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
-                                                     std::size_t target_dofs,
-                                                     bool target_dofs_total,
-                                                     std::size_t dofs_per_node)
+                                                      std::size_t target_dofs,
+                                                      bool target_dofs_total,
+                                                      std::size_t dofs_per_node)
 {
   // Get number of processes
   const std::size_t num_processes = dolfinx::MPI::size(comm);
@@ -110,10 +110,9 @@ std::shared_ptr<dolfinx::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
   return mesh;
 }
 //-----------------------------------------------------------------------------
-std::shared_ptr<dolfinx::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
-                                                      std::size_t target_dofs,
-                                                      bool target_dofs_total,
-                                                      std::size_t dofs_per_node)
+std::shared_ptr<dolfinx::mesh::Mesh>
+create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
+                  bool target_dofs_total, std::size_t dofs_per_node)
 {
   int target = target_dofs / dofs_per_node;
   int mpi_size = dolfinx::MPI::size(comm);
@@ -236,9 +235,12 @@ std::shared_ptr<dolfinx::mesh::Mesh> create_spoke_mesh(MPI_Comm comm,
   }
 
   auto mesh = std::make_shared<dolfinx::mesh::Mesh>(
-      dolfinx::mesh::Partitioning::build_distributed_mesh(
-          comm, dolfinx::mesh::CellType::tetrahedron, geom, topo, {},
-          dolfinx::mesh::GhostMode::none));
+      comm, dolfinx::mesh::CellType::tetrahedron, geom, topo, {},
+      dolfinx::mesh::GhostMode::none);
+  // auto mesh = std::make_shared<dolfinx::mesh::Mesh>(
+  //     dolfinx::mesh::Partitioning::build_distributed_mesh(
+  //         comm, dolfinx::mesh::CellType::tetrahedron, geom, topo, {},
+  //         dolfinx::mesh::GhostMode::none));
 
   mesh->create_entities(1);
 
