@@ -91,8 +91,10 @@ int main(int argc, char* argv[])
 
     // Create Poisson problem
     auto data = poisson::problem(mesh);
-    A = std::make_shared<dolfinx::la::PETScMatrix>(std::move(std::get<0>(data)));
-    b = std::make_shared<dolfinx::la::PETScVector>(std::move(std::get<1>(data)));
+    A = std::make_shared<dolfinx::la::PETScMatrix>(
+        std::move(std::get<0>(data)));
+    b = std::make_shared<dolfinx::la::PETScVector>(
+        std::move(std::get<1>(data)));
     u = std::get<2>(data);
   }
   else if (problem_type == "elasticity")
@@ -108,8 +110,10 @@ int main(int argc, char* argv[])
     // Create elasticity problem. Near-nullspace will be attached to the
     // linear operator (matrix).
     auto data = elastic::problem(mesh);
-    A = std::make_shared<dolfinx::la::PETScMatrix>(std::move(std::get<0>(data)));
-    b = std::make_shared<dolfinx::la::PETScVector>(std::move(std::get<1>(data)));
+    A = std::make_shared<dolfinx::la::PETScMatrix>(
+        std::move(std::get<0>(data)));
+    b = std::make_shared<dolfinx::la::PETScVector>(
+        std::move(std::get<1>(data)));
     u = std::get<2>(data);
   }
   else
