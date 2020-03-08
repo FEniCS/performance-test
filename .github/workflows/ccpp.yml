@@ -1,23 +1,33 @@
-name: C/C++ CI
+name: FEniCS Performance Test CI
 
-on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
+on: [push, pull_request]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-    
+    container: fenicsproject/performance-tests:latest
+
     steps:
-    - uses: actions/checkout@v2
-    - name: configure
-      run: ./configure
-    - name: make
-      run: make
-    - name: make check
-      run: make check
-    - name: make distcheck
-      run: make distcheck
+      - uses: actions/checkout@v2
+      - name: Install FEniCS Python components
+        run: |
+          pip3 install git+https://github.com/FEniCS/fiat.git --upgrade
+          pip3 install git+https://github.com/FEniCS/ufl.git --upgrade
+          pip3 install git+https://github.com/FEniCS/ffcx --upgrade
+          rm -rf /usr/local/include/dolfin /usr/local/include/dolfin.h
+      - name: Build dolfinx cpp
+        env:
+          PETSC_DIR: /usr/local/petsc-64
+        run: |
+          git clone --depth=1 --branch master https://github.com/FEniCS/dolfinx.git
+          cd $(mktemp -d)
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Release $OLDPWD/dolfinx/cpp
+          ninja  install
+      - name: Build performance test
+        env:
+          PETSC_DIR: /usr/local/petsc-64
+        run: |
+          mkdir build
+          cd build
+          cmake -G Ninja ../src
+          ninja
