@@ -19,6 +19,8 @@ jobs:
           name: Install DOLFIN (C++)
           environment:
             PETSC_DIR: /usr/local/petsc-64
+            CC: clang
+            CXX: clang++
           command: |
             git clone -b garth/remove-old-mesh-constructor --single-branch https://github.com/FEniCS/dolfinx.git
             cd $(mktemp -d)
@@ -33,6 +35,8 @@ jobs:
           name: Build test program
           environment:
             PETSC_DIR: /usr/local/petsc-64
+            CC: clang
+            CXX: clang++
           command: |
             mkdir build
             cd build
