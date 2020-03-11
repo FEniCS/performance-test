@@ -119,6 +119,13 @@ int main(int argc, char* argv[])
   else
     throw std::runtime_error("Unknown problem type: " + problem_type);
 
+  {
+    // Create mesh entity permutations outside of the assembler
+    dolfinx::common::Timer t0("ZZZ Create mesh entity permutations");
+    u->function_space()->mesh()->create_entity_permutations();
+    t0.stop();
+  }
+
   // Print simulation summary
   if (dolfinx::MPI::rank(MPI_COMM_WORLD) == 0)
   {
