@@ -105,6 +105,23 @@ jobs:
           -pc_type hypre \
           -pc_hypre_type boomeramg \
           -pc_hypre_boomeramg_strong_threshold 0.5
+      - name: Run elasticity test (GAMG, serial)
+        run: |
+          cd build/
+          ./dolfinx-scaling-test \
+          --problem_type elasticity \
+          --scaling_type weak \
+          --ndofs 100000 \
+          -log_view \
+          -ksp_view \
+          -ksp_type cg \
+          -ksp_rtol 1.0e-8 \
+          -pc_type gamg \
+          -pc_gamg_coarse_eq_limit 1000 \
+          -mg_levels_ksp_type chebyshev \
+          -mg_levels_pc_type jacobi \
+          -mg_levels_esteig_ksp_type cg \
+          -matptap_via scalable
       - name: Run elasticity test (GAMG, weak)
         run: |
           cd build/
