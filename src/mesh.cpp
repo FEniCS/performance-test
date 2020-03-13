@@ -249,7 +249,9 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
 
   LOG(INFO) << "target:" << target << "\n";
 
-  while (mesh->num_entities_global(0) + mesh->num_entities_global(1) < target)
+  while (mesh->topology().index_map(0)->size_global()
+             + mesh->topology().index_map(1)->size_global()
+         < target)
   {
     mesh = std::make_shared<dolfinx::mesh::Mesh>(
         dolfinx::refinement::refine(*mesh, false));
@@ -257,8 +259,9 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     mesh->create_entities(1);
   }
 
-  double fraction = (double)(target - mesh->num_entities_global(0))
-                    / mesh->num_entities_global(1);
+  double fraction
+      = (double)(target - mesh->topology().index_map(0)->size_global())
+        / mesh->topology().index_map(1)->size_global();
 
   if (mpi_rank == 0)
   {
@@ -290,8 +293,9 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
         dolfinx::refinement::refine(*mesh, marker, false));
 
     double actual_fraction
-        = (double)(meshi->num_entities_global(0) - mesh->num_entities_global(0))
-          / mesh->num_entities_global(1);
+        = (double)(meshi->topology().index_map(0)->size_global()
+                   - mesh->topology().index_map(0)->size_global())
+          / mesh->topology().index_map(1)->size_global();
 
     if (mpi_rank == 0)
     {
