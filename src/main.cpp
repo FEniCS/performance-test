@@ -89,10 +89,10 @@ int main(int argc, char* argv[])
       mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1);
     t0.stop();
 
-      // Create mesh entity permutations outside of the assembler
-      dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
-      mesh->create_entity_permutations();
-      tperm.stop();
+    // Create mesh entity permutations outside of the assembler
+    dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
+    mesh->create_entity_permutations();
+    tperm.stop();
 
     // Create Poisson problem
     auto data = poisson::problem(mesh);
@@ -112,10 +112,10 @@ int main(int argc, char* argv[])
       mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3);
     t0.stop();
 
-      // Create mesh entity permutations outside of the assembler
-      dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
-      mesh->create_entity_permutations();
-      tperm.stop();
+    // Create mesh entity permutations outside of the assembler
+    dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
+    mesh->create_entity_permutations();
+    tperm.stop();
 
     // Create elasticity problem. Near-nullspace will be attached to the
     // linear operator (matrix).
@@ -128,7 +128,6 @@ int main(int argc, char* argv[])
   }
   else
     throw std::runtime_error("Unknown problem type: " + problem_type);
-
 
   // Print simulation summary
   if (dolfinx::MPI::rank(MPI_COMM_WORLD) == 0)
@@ -170,7 +169,7 @@ int main(int argc, char* argv[])
     file.write(*u, 0.0);
     t6.stop();
   }
-  
+
   // Display timings
   dolfinx::list_timings(MPI_COMM_WORLD, {dolfinx::TimingType::wall});
 
