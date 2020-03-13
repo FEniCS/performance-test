@@ -107,6 +107,7 @@ std::shared_ptr<dolfinx::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
 
   for (int i = 0; i < r; ++i)
   {
+    mesh->create_connectivity(3, 1);
     mesh = std::make_shared<dolfinx::mesh::Mesh>(
         dolfinx::refinement::refine(*mesh, false));
   }
