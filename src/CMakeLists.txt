@@ -34,8 +34,8 @@ target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 
 set_source_files_properties(main.cpp PROPERTIES COMPILE_FLAGS "-march=native -Wall -Wextra -pedantic -Werror -Ofast")
 
-set_source_files_properties(Poisson.c PROPERTIES COMPILE_FLAGS "-march-native -Ofast")
+set_source_files_properties(Poisson.c PROPERTIES COMPILE_FLAGS "-march=native -Ofast")
 
-set_source_files_properties(Elasticity.c PROPERTIES COMPILE_FLAGS "-march-native -Ofast")
+set_source_files_properties(Elasticity.c PROPERTIES COMPILE_FLAGS "-march=native -Ofast")
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
