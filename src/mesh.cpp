@@ -285,7 +285,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     for (int i = 0; i < mesh->num_entities(1); ++i)
       marker_array[i] = (i % 2000 < nmarked);
 
-    mesh->compute_connectivity(3, 1);
+    mesh->create_connectivity(3, 1);
     meshi = std::make_shared<dolfinx::mesh::Mesh>(
         dolfinx::refinement::refine(*mesh, marker, false));
 
