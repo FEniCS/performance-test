@@ -89,6 +89,11 @@ int main(int argc, char* argv[])
       mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1);
     t0.stop();
 
+      // Create mesh entity permutations outside of the assembler
+      dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
+      mesh->create_entity_permutations();
+      tperm.stop();
+
     // Create Poisson problem
     auto data = poisson::problem(mesh);
     A = std::make_shared<dolfinx::la::PETScMatrix>(
@@ -107,6 +112,11 @@ int main(int argc, char* argv[])
       mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3);
     t0.stop();
 
+      // Create mesh entity permutations outside of the assembler
+      dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
+      mesh->create_entity_permutations();
+      tperm.stop();
+
     // Create elasticity problem. Near-nullspace will be attached to the
     // linear operator (matrix).
     auto data = elastic::problem(mesh);
@@ -119,12 +129,6 @@ int main(int argc, char* argv[])
   else
     throw std::runtime_error("Unknown problem type: " + problem_type);
 
-  {
-    // Create mesh entity permutations outside of the assembler
-    dolfinx::common::Timer t0("ZZZ Create mesh entity permutations");
-    u->function_space()->mesh()->create_entity_permutations();
-    t0.stop();
-  }
 
   // Print simulation summary
   if (dolfinx::MPI::rank(MPI_COMM_WORLD) == 0)
@@ -153,7 +157,7 @@ int main(int argc, char* argv[])
 
   // Solve
   dolfinx::common::Timer t5("ZZZ Solve");
-  std::size_t num_iter = solver.solve(u->vector().vec(), b->vec());
+  int num_iter = solver.solve(u->vector().vec(), b->vec());
 
   t5.stop();
 
@@ -166,7 +170,7 @@ int main(int argc, char* argv[])
     file.write(*u, 0.0);
     t6.stop();
   }
-
+  
   // Display timings
   dolfinx::list_timings(MPI_COMM_WORLD, {dolfinx::TimingType::wall});
 
