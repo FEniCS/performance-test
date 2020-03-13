@@ -9,6 +9,7 @@
 #include "Poisson.h"
 #include <Eigen/Dense>
 #include <cfloat>
+#include <dolfinx/common/IndexMap.h>
 #include <dolfinx/common/Timer.h>
 #include <dolfinx/function/Function.h>
 #include <dolfinx/function/FunctionSpace.h>
@@ -17,6 +18,8 @@
 #include <dolfinx/mesh/Mesh.h>
 #include <memory>
 #include <utility>
+
+#include <spmv.h>
 
 namespace poisson
 {
@@ -81,6 +84,32 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   MatZeroEntries(A.mat());
   dolfinx::common::Timer t2("ZZZ Assemble matrix");
   dolfinx::fem::assemble_matrix(A.mat(), *a, {bc});
+
+  // Assembly into Eigen::SparseMatrix
+  //-------------------------------------------------------
+  auto spmat = dolfinx::fem::assemble_matrix(*a, {bc});
+  assert(bc);
+  assert(V->contains(*bc->function_space()));
+  const Eigen::Array<std::int32_t, Eigen::Dynamic, 1>& owned_dofs
+      = bc->dofs_owned().col(0);
+  for (int i = 0; i < owned_dofs.size(); ++i)
+  {
+    int r = owned_dofs[i];
+    spmat.coeffRef(r, r) += 1.0;
+  }
+  auto im = L->function_space(0)->dofmap()->index_map;
+  std::int64_t local_size = im->size_local();
+  std::vector<std::int64_t> ghosts(im->ghosts().data(),
+                                   im->ghosts().data() + im->num_ghosts());
+  auto Aspmv = spmv::Matrix::create_matrix(mesh->mpi_comm(), spmat, local_size,
+                                           local_size, ghosts, ghosts);
+  int mpi_rank = dolfinx::MPI::rank(mesh->mpi_comm());
+  std::cout << "RANK " << mpi_rank << ", spmat = " << spmat.rows() << "x"
+            << spmat.cols() << "\n"
+            << "A_spmv = " << Aspmv.rows() << "x"
+            << Aspmv.col_map()->local_size(true) << "\n";
+  //-------------------------------------------------------
+
   dolfinx::fem::add_diagonal(A.mat(), *V, {bc});
   MatAssemblyBegin(A.mat(), MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(A.mat(), MAT_FINAL_ASSEMBLY);
@@ -97,6 +126,17 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   VecGhostUpdateEnd(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   dolfinx::fem::set_bc(b.vec(), {bc}, nullptr);
   t3.stop();
+
+  // Empty RHS
+  Eigen::VectorXd bspmv(Aspmv.rows());
+  bspmv.col(0).array() += 1.0;
+  std::cout << bspmv.size() << "\n";
+
+  double rtol = 1e-3;
+  int max_its = 1000;
+  auto [result, its] = spmv::cg(mesh->mpi_comm(), Aspmv, bspmv, max_its, rtol);
+  std::cout << "Got result" << result.norm() << " in " << its
+            << " iterations\n";
 
   t1.stop();
 
