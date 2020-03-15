@@ -34,17 +34,12 @@ dolfinx::la::VectorSpaceBasis
 build_near_nullspace(const dolfinx::function::FunctionSpace& V)
 {
   // Get subspaces
-  auto V0 = V.sub({0});
-  auto V1 = V.sub({1});
-  auto V2 = V.sub({2});
+  std::array W{V.sub({0}), V.sub({1}), V.sub({2})};
 
   // Create vectors for nullspace basis
-  std::vector<std::shared_ptr<dolfinx::la::PETScVector>> basis_vec;
-  for (std::size_t i = 0; i < 6; ++i)
-  {
-    basis_vec.push_back(
-        std::make_shared<dolfinx::la::PETScVector>(*V.dofmap()->index_map));
-  }
+  // std::vector<std::shared_ptr<dolfinx::la::PETScVector>> basis_vec;
+  std::vector basis_vec(
+      6, std::make_shared<dolfinx::la::PETScVector>(*V.dofmap()->index_map));
 
   {
     // Unwrap the PETSc Vec objects to allow array (Eigen) access
@@ -52,20 +47,28 @@ build_near_nullspace(const dolfinx::function::FunctionSpace& V)
     for (auto vec : basis_vec)
       basis.push_back(dolfinx::la::VecWrapper(vec->vec()));
 
+    // NOTE: The below will be simpler once Eigen 3.4 is released, see
+    // http://eigen.tuxfamily.org/dox-devel/group__TutorialSlicingIndexing.html
+
     // x0, x1, x2 translations
-    V0->dofmap()->set(basis[0].x, 1.0);
-    V1->dofmap()->set(basis[1].x, 1.0);
-    V2->dofmap()->set(basis[2].x, 1.0);
+    for (std::size_t i = 0; i < W.size(); ++i)
+    {
+      const Eigen::Array<std::int32_t, Eigen::Dynamic, 1>& ind
+          = W[i]->dofmap()->list().array();
+      Eigen::Map<Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1>>& x = basis[i].x;
+      for (Eigen::Index j = 0; j < ind.rows(); ++j)
+        x[ind[j]] = 1.0;
+    }
 
     // Rotations
-    V0->set_x(basis[3].x, -1.0, 1);
-    V1->set_x(basis[3].x, 1.0, 0);
+    W[0]->set_x(basis[3].x, -1.0, 1);
+    W[1]->set_x(basis[3].x, 1.0, 0);
 
-    V0->set_x(basis[4].x, 1.0, 2);
-    V2->set_x(basis[4].x, -1.0, 0);
+    W[0]->set_x(basis[4].x, 1.0, 2);
+    W[2]->set_x(basis[4].x, -1.0, 0);
 
-    V2->set_x(basis[5].x, 1.0, 1);
-    V1->set_x(basis[5].x, -1.0, 2);
+    W[2]->set_x(basis[5].x, 1.0, 1);
+    W[1]->set_x(basis[5].x, -1.0, 2);
   }
 
   // Create vector space and orthonormalize
