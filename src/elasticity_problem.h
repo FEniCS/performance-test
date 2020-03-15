@@ -53,7 +53,7 @@ build_near_nullspace(const dolfinx::function::FunctionSpace& V)
     // x0, x1, x2 translations
     for (std::size_t i = 0; i < W.size(); ++i)
     {
-      const Eigen::Array<std::int32_t, Eigen::Dynamic, 1>& ind
+      const Eigen::Array<PetscInt, Eigen::Dynamic, 1>& ind
           = W[i]->dofmap()->list().array();
       Eigen::Map<Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1>>& x = basis[i].x;
       for (Eigen::Index j = 0; j < ind.rows(); ++j)
