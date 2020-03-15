@@ -37,9 +37,12 @@ build_near_nullspace(const dolfinx::function::FunctionSpace& V)
   std::array W{V.sub({0}), V.sub({1}), V.sub({2})};
 
   // Create vectors for nullspace basis
-  // std::vector<std::shared_ptr<dolfinx::la::PETScVector>> basis_vec;
-  std::vector basis_vec(
-      6, std::make_shared<dolfinx::la::PETScVector>(*V.dofmap()->index_map));
+  std::vector<std::shared_ptr<dolfinx::la::PETScVector>> basis_vec;
+  for (std::size_t i = 0; i < 6; ++i)
+  {
+    basis_vec.push_back(
+        std::make_shared<dolfinx::la::PETScVector>(*V.dofmap()->index_map));
+  }
 
   {
     // Unwrap the PETSc Vec objects to allow array (Eigen) access
