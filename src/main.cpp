@@ -91,6 +91,11 @@ int main(int argc, char* argv[])
       mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1);
     t0.stop();
 
+    // Create mesh entity permutations outside of the assembler
+    dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
+    mesh->create_entity_permutations();
+    tperm.stop();
+
     // Create Poisson problem
     auto data = poisson::problem(mesh);
     A = std::make_shared<dolfinx::la::PETScMatrix>(
@@ -108,6 +113,11 @@ int main(int argc, char* argv[])
     else
       mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3);
     t0.stop();
+
+    // Create mesh entity permutations outside of the assembler
+    dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
+    mesh->create_entity_permutations();
+    tperm.stop();
 
     // Create elasticity problem. Near-nullspace will be attached to the
     // linear operator (matrix).
@@ -148,7 +158,7 @@ int main(int argc, char* argv[])
 
   // Solve
   dolfinx::common::Timer t5("ZZZ Solve");
-  std::size_t num_iter = solver.solve(u->vector().vec(), b->vec());
+  int num_iter = solver.solve(u->vector().vec(), b->vec());
 
   t5.stop();
 

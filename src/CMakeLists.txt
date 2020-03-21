@@ -34,6 +34,10 @@ target_link_libraries(${PROJECT_NAME} dolfinx ${Boost_PROGRAM_OPTIONS_LIBRARY} s
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 # target_compile_options(${PROJECT_NAME} PRIVATE -Wall -pedantic -Werror)
 
-set_source_files_properties(main.cpp PROPERTIES COMPILE_FLAGS "-Wall -Wextra -pedantic -Werror")
+set_source_files_properties(main.cpp PROPERTIES COMPILE_FLAGS "-march=native -Wall -Wextra -pedantic -Werror -Ofast")
+
+set_source_files_properties(Poisson.c PROPERTIES COMPILE_FLAGS "-march=native -Ofast")
+
+set_source_files_properties(Elasticity.c PROPERTIES COMPILE_FLAGS "-march=native -Ofast")
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
