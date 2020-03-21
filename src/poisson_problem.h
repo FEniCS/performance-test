@@ -87,7 +87,7 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   // Assembly into Eigen::SparseMatrix
   //-------------------------------------------------------
-  auto spmat = dolfinx::fem::assemble_eigen_matrix(*a, {bc});
+  auto spmat = dolfinx::fem::assemble_matrix_eigen(*a, {bc});
   assert(bc);
   assert(V->contains(*bc->function_space()));
   const Eigen::Array<std::int32_t, Eigen::Dynamic, 1>& owned_dofs
@@ -99,15 +99,23 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   }
   auto im = L->function_space(0)->dofmap()->index_map;
   std::int64_t local_size = im->size_local();
+  auto l2g = std::make_shared<spmv::L2GMap>(MPI_COMM_WORLD, local_size,
+                                            std::vector<std::int64_t>());
   std::vector<std::int64_t> ghosts(im->ghosts().data(),
                                    im->ghosts().data() + im->num_ghosts());
   auto Aspmv = spmv::Matrix::create_matrix(mesh->mpi_comm(), spmat, local_size,
                                            local_size, ghosts, ghosts);
   int mpi_rank = dolfinx::MPI::rank(mesh->mpi_comm());
-  std::cout << "RANK " << mpi_rank << ", spmat = " << spmat.rows() << "x"
-            << spmat.cols() << "\n"
-            << "A_spmv = " << Aspmv.rows() << "x"
-            << Aspmv.col_map()->local_size(true) << "\n";
+  std::stringstream s;
+  s << "RANK " << mpi_rank << ", spmat = " << spmat.rows() << "x"
+    << spmat.cols() << "\n"
+    << Aspmv.norm() << "\n";
+
+  double asum
+      = std::accumulate(Aspmv.mat().valuePtr(),
+                        Aspmv.mat().valuePtr() + Aspmv.mat().nonZeros(), 0.0);
+  s << "Asum = " << asum << "\n";
+  std::cout << s.str();
   //-------------------------------------------------------
 
   dolfinx::fem::add_diagonal(A.mat(), *V, {bc});
@@ -127,17 +135,22 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::fem::set_bc(b.vec(), {bc}, nullptr);
   t3.stop();
 
-  // Empty RHS
+  // // Empty RHS
   Eigen::VectorXd bspmv(Aspmv.rows());
-  bspmv.col(0).array() += 1.0;
-  std::cout << bspmv.size() << "\n";
+  std::vector<int> rows(Aspmv.rows());
+  std::iota(rows.begin(), rows.end(), 0);
+  VecGetValues(b.vec(), Aspmv.rows(), rows.data(), bspmv.data());
 
   double rtol = 1e-3;
   int max_its = 1000;
-  auto [result, its] = spmv::cg(mesh->mpi_comm(), Aspmv, bspmv, max_its, rtol);
-  std::cout << "Got result" << result.norm() << " in " << its
-            << " iterations\n";
+  auto [result, its] = spmv::cg(MPI_COMM_WORLD, Aspmv, bspmv, max_its, rtol);
 
+  double norm = result.squaredNorm();
+
+  std::cout << "Got result: " << norm << " in " << its << " iterations\n";
+
+  std::cout << "l2g.refcount = " << l2g.use_count() << "\n";
+  l2g.reset();
   t1.stop();
 
   // Create Function to hold solution
