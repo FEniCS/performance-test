@@ -7,7 +7,7 @@ project(${PROJECT_NAME})
 # DOLFIN_CMAKE_CONFIG_PATH)
 find_package(DOLFINX REQUIRED)
 
-find_package(libspmv REQUIRED)
+# find_package(libspmv REQUIRED)
 
 set(CMAKE_BUILD_TYPE "Release")
 

@@ -87,7 +87,7 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   // Assembly into Eigen::SparseMatrix
   //-------------------------------------------------------
-  auto spmat = dolfinx::fem::assemble_matrix(*a, {bc});
+  auto spmat = dolfinx::fem::assemble_eigen_matrix(*a, {bc});
   assert(bc);
   assert(V->contains(*bc->function_space()));
   const Eigen::Array<std::int32_t, Eigen::Dynamic, 1>& owned_dofs
