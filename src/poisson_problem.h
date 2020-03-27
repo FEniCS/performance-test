@@ -99,26 +99,11 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   }
   auto im = L->function_space(0)->dofmap()->index_map;
   std::int64_t local_size = im->size_local();
-  auto l2g = std::make_shared<spmv::L2GMap>(MPI_COMM_WORLD, local_size,
-                                            std::vector<std::int64_t>());
   std::vector<std::int64_t> ghosts(im->ghosts().data(),
                                    im->ghosts().data() + im->num_ghosts());
   auto Aspmv = spmv::Matrix::create_matrix(mesh->mpi_comm(), spmat, local_size,
                                            local_size, ghosts, ghosts);
-  int mpi_rank = dolfinx::MPI::rank(mesh->mpi_comm());
-  std::stringstream s;
-  s << "RANK " << mpi_rank << ", spmat = " << spmat.rows() << "x"
-    << spmat.cols() << " " << spmat.norm() << "\n"
-    << Aspmv.mat().rows() << "x" << Aspmv.mat().cols() << " "
-    << Aspmv.mat().norm() << "\n";
 
-  double anorm = Aspmv.mat().squaredNorm();
-  double anorm_sum;
-  MPI_Allreduce(&anorm, &anorm_sum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-  anorm_sum = std::sqrt(anorm_sum);
-
-  s << "Anorm = " << anorm_sum << "\n";
-  std::cout << s.str();
   //-------------------------------------------------------
 
   dolfinx::fem::add_diagonal(A.mat(), *V, {bc});
@@ -138,18 +123,15 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::fem::set_bc(b.vec(), {bc}, nullptr);
   t3.stop();
 
-  // // Empty RHS
-  Eigen::VectorXd bspmv(Aspmv.rows());
-  std::vector<int> rows(Aspmv.rows());
+  // Empty RHS
+  Eigen::VectorXd bspmv(Aspmv.mat().rows());
+  std::vector<int> rows(Aspmv.mat().rows());
   std::iota(rows.begin(), rows.end(), Aspmv.row_map()->global_offset());
-  VecGetValues(b.vec(), Aspmv.rows(), rows.data(), bspmv.data());
+  VecAssemblyBegin(b.vec());
+  VecAssemblyEnd(b.vec());
+  VecGetValues(b.vec(), Aspmv.mat().rows(), rows.data(), bspmv.data());
 
-  double bnorm = bspmv.squaredNorm();
-  double bnorm_sum;
-  MPI_Allreduce(&bnorm, &bnorm_sum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-  std::cout << "bnorm = " << std::sqrt(bnorm_sum) << "\n";
-
-  double rtol = 1e-12;
+  double rtol = 1e-16;
   int max_its = 1000;
   auto [result, its] = spmv::cg(MPI_COMM_WORLD, Aspmv, bspmv, max_its, rtol);
 
@@ -157,15 +139,20 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   double rnorm_sum;
   MPI_Allreduce(&rnorm, &rnorm_sum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-  std::cout << "Got result: " << std::sqrt(rnorm_sum) << " in " << its
+  std::cout << "SPMV: Got result: " << std::sqrt(rnorm_sum) << " in " << its
             << " iterations\n";
 
-  std::cout << "l2g.refcount = " << l2g.use_count() << "\n";
-  l2g.reset();
   t1.stop();
 
   // Create Function to hold solution
   auto u = std::make_shared<dolfinx::function::Function>(V);
+
+  std::vector<PetscInt> idx(Aspmv.row_map()->local_size(false));
+  std::iota(idx.begin(), idx.end(), 0);
+  VecSetValuesLocal(u->vector().vec(), idx.size(), idx.data(), result.data(),
+                    INSERT_VALUES);
+  VecAssemblyBegin(u->vector().vec());
+  VecAssemblyEnd(u->vector().vec());
 
   return std::tuple<dolfinx::la::PETScMatrix, dolfinx::la::PETScVector,
                     std::shared_ptr<dolfinx::function::Function>>(
