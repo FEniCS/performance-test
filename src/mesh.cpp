@@ -11,7 +11,7 @@
 #include <dolfinx/graph/AdjacencyList.h>
 #include <dolfinx/mesh/DistributedMeshTools.h>
 #include <dolfinx/mesh/Mesh.h>
-#include <dolfinx/mesh/MeshFunction.h>
+#include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx/mesh/Partitioning.h>
 #include <dolfinx/mesh/cell_types.h>
 #include <dolfinx/refinement/refine.h>
@@ -284,10 +284,14 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   for (int k = 0; k < 5; ++k)
   {
     // Trial step
-    dolfinx::mesh::MeshFunction<int> marker(mesh, 1, false);
-    auto marker_array = marker.values();
-    for (int i = 0; i < mesh->num_entities(1); ++i)
-      marker_array[i] = (i % 2000 < nmarked);
+    mesh->create_entities(1);
+    std::vector<std::int32_t> mesh_indices(mesh->num_entities(1));
+    std::vector<std::int8_t> mesh_tags(mesh->num_entities(1));
+    for (int i = 0; i < mesh->num_entities(1); ++i) {
+      mesh_indices[i] = i;
+      mesh_tags[i] = (i % 2000 < nmarked);
+    }
+    dolfinx::mesh::MeshTags<std::int8_t> marker(mesh, 1, mesh_indices, mesh_tags);
 
     mesh->create_connectivity(1, 1);
     meshi = std::make_shared<dolfinx::mesh::Mesh>(
