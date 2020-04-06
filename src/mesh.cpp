@@ -280,14 +280,14 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   int umark = 2000;
 
   std::shared_ptr<dolfinx::mesh::Mesh> meshi;
-
   for (int k = 0; k < 5; ++k)
   {
     // Trial step
     mesh->create_entities(1);
-    std::vector<std::int32_t> mesh_indices(mesh->num_entities(1));
-    std::vector<std::int8_t> mesh_tags(mesh->num_entities(1));
-    for (int i = 0; i < mesh->num_entities(1); ++i) {
+    const std::int32_t num_edges = mesh->topology().index_map(1)->size_local();
+    std::vector<std::int32_t> mesh_indices(num_edges);
+    std::vector<std::int8_t> mesh_tags(num_edges);
+    for (int i = 0; i < num_edges; ++i) {
       mesh_indices[i] = i;
       mesh_tags[i] = (i % 2000 < nmarked);
     }
