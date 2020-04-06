@@ -75,14 +75,13 @@ int main(int argc, char* argv[])
   const std::size_t num_processes = dolfinx::MPI::size(MPI_COMM_WORLD);
 
   // Assemble problem
+  std::shared_ptr<dolfinx::mesh::Mesh> mesh;
   std::shared_ptr<dolfinx::la::PETScMatrix> A;
   std::shared_ptr<dolfinx::la::PETScVector> b;
   std::shared_ptr<dolfinx::function::Function> u;
   if (problem_type == "poisson")
   {
     dolfinx::common::Timer t0("ZZZ Create Mesh");
-
-    std::shared_ptr<dolfinx::mesh::Mesh> mesh;
     if (mesh_type == "cube")
       mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1);
     else
@@ -105,7 +104,6 @@ int main(int argc, char* argv[])
   else if (problem_type == "elasticity")
   {
     dolfinx::common::Timer t0("ZZZ Create Mesh");
-    std::shared_ptr<dolfinx::mesh::Mesh> mesh;
     if (mesh_type == "cube")
       mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3);
     else
@@ -165,8 +163,9 @@ int main(int argc, char* argv[])
     dolfinx::common::Timer t6("ZZZ Output");
     std::string filename
         = output_dir + "/solution-" + std::to_string(num_processes) + ".xdmf";
-    dolfinx::io::XDMFFile file(MPI_COMM_WORLD, filename);
-    file.write(*u, 0.0);
+    dolfinx::io::XDMFFile file(MPI_COMM_WORLD, filename, "w");
+    file.write_mesh(*mesh);
+    file.write_function(*u, 0.0);
     t6.stop();
   }
 

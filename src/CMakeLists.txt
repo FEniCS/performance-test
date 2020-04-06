@@ -3,6 +3,11 @@ cmake_minimum_required(VERSION 3.10)
 set(PROJECT_NAME dolfinx-scaling-test)
 project(${PROJECT_NAME})
 
+# Use C++17
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 # Get DOLFIN configuration data (DOLFINConfig.cmake must be in
 # DOLFIN_CMAKE_CONFIG_PATH)
 find_package(DOLFINX REQUIRED)
@@ -29,13 +34,10 @@ add_executable(${PROJECT_NAME} main.cpp mesh.cpp
 
 # Target libraries
 target_link_libraries(${PROJECT_NAME} dolfinx ${Boost_PROGRAM_OPTIONS_LIBRARY})
-target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
-# target_compile_options(${PROJECT_NAME} PRIVATE -Wall -pedantic -Werror)
 
+# target_link_libraries(${PROJECT_NAME} stdc++fs)
 set_source_files_properties(main.cpp PROPERTIES COMPILE_FLAGS "-march=native -Wall -Wextra -pedantic -Werror -Ofast")
-
 set_source_files_properties(Poisson.c PROPERTIES COMPILE_FLAGS "-march=native -Ofast")
-
 set_source_files_properties(Elasticity.c PROPERTIES COMPILE_FLAGS "-march=native -Ofast")
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
