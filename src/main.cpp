@@ -12,6 +12,7 @@
 #include <dolfinx/common/Timer.h>
 #include <dolfinx/common/timing.h>
 #include <dolfinx/fem/Form.h>
+#include <dolfinx/fem/utils.h>
 #include <dolfinx/function/Function.h>
 #include <dolfinx/function/FunctionSpace.h>
 #include <dolfinx/io/XDMFFile.h>
@@ -82,15 +83,17 @@ int main(int argc, char* argv[])
   if (problem_type == "poisson")
   {
     dolfinx::common::Timer t0("ZZZ Create Mesh");
+    auto cmap
+        = dolfinx::fem::create_coordinate_map(create_coordinate_map_Poisson);
     if (mesh_type == "cube")
-      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1);
+      mesh = create_cube_mesh(MPI_COMM_WORLD, cmap, ndofs, strong_scaling, 1);
     else
-      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1);
+      mesh = create_spoke_mesh(MPI_COMM_WORLD, cmap, ndofs, strong_scaling, 1);
     t0.stop();
 
     // Create mesh entity permutations outside of the assembler
     dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
-    mesh->create_entity_permutations();
+    mesh->topology_mutable().create_entity_permutations();
     tperm.stop();
 
     // Create Poisson problem
@@ -104,15 +107,17 @@ int main(int argc, char* argv[])
   else if (problem_type == "elasticity")
   {
     dolfinx::common::Timer t0("ZZZ Create Mesh");
+    auto cmap
+        = dolfinx::fem::create_coordinate_map(create_coordinate_map_Elasticity);
     if (mesh_type == "cube")
-      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3);
+      mesh = create_cube_mesh(MPI_COMM_WORLD, cmap, ndofs, strong_scaling, 3);
     else
-      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3);
+      mesh = create_spoke_mesh(MPI_COMM_WORLD, cmap, ndofs, strong_scaling, 3);
     t0.stop();
 
     // Create mesh entity permutations outside of the assembler
     dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
-    mesh->create_entity_permutations();
+    mesh->topology_mutable().create_entity_permutations();
     tperm.stop();
 
     // Create elasticity problem. Near-nullspace will be attached to the
