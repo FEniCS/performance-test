@@ -90,7 +90,7 @@ int main(int argc, char* argv[])
 
     // Create mesh entity permutations outside of the assembler
     dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
-    mesh->create_entity_permutations();
+    mesh->topology_mutable().create_entity_permutations();
     tperm.stop();
 
     // Create Poisson problem
