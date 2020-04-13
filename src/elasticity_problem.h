@@ -102,10 +102,6 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   std::shared_ptr<dolfinx::fem::Form> a
       = dolfinx::fem::create_form(create_form_Elasticity_a, {V, V});
 
-  // Attach 'coordinate mapping' to mesh
-  auto cmap = a->coordinate_mapping();
-  mesh->geometry().coord_mapping = cmap;
-
   // Define boundary condition
   auto u0 = std::make_shared<dolfinx::function::Function>(V);
   dolfinx::la::VecWrapper _u0(u0->vector().vec());
