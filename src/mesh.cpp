@@ -107,7 +107,7 @@ std::shared_ptr<dolfinx::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
 
   for (int i = 0; i < r; ++i)
   {
-    mesh->create_connectivity(3, 1);
+    mesh->topology_mutable().create_connectivity(3, 1);
     mesh = std::make_shared<dolfinx::mesh::Mesh>(
         dolfinx::refinement::refine(*mesh, false));
   }
@@ -293,7 +293,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     }
     dolfinx::mesh::MeshTags<std::int8_t> marker(mesh, 1, mesh_indices, mesh_tags);
 
-    mesh->create_connectivity(1, 1);
+    mesh->topology_mutable().create_connectivity(1, 1);
     meshi = std::make_shared<dolfinx::mesh::Mesh>(
         dolfinx::refinement::refine(*mesh, marker, false));
 
