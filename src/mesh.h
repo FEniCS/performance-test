@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <mpi.h>
+#include <dolfinx/fem/CoordinateElement.h>
 
 namespace dolfinx::mesh
 {
@@ -14,8 +15,10 @@ class Mesh;
 
 std::shared_ptr<dolfinx::mesh::Mesh>
 create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
-                 std::size_t dofs_per_node);
+                 std::size_t dofs_per_node,
+                 const dolfinx::fem::CoordinateElement& element);
 
 std::shared_ptr<dolfinx::mesh::Mesh>
 create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
-                  bool target_dofs_total, std::size_t dofs_per_node);
+                  bool target_dofs_total, std::size_t dofs_per_node,
+                  const dolfinx::fem::CoordinateElement& element);

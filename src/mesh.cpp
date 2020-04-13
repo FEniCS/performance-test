@@ -37,10 +37,10 @@ std::int64_t nvertices(int i, int j, int k, int nrefine)
 }
 } // namespace
 
-std::shared_ptr<dolfinx::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
-                                                      std::size_t target_dofs,
-                                                      bool target_dofs_total,
-                                                      std::size_t dofs_per_node)
+std::shared_ptr<dolfinx::mesh::Mesh>
+create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
+                 bool target_dofs_total, std::size_t dofs_per_node,
+                 const dolfinx::fem::CoordinateElement& element)
 {
   // Get number of processes
   const std::size_t num_processes = dolfinx::MPI::size(comm);
@@ -96,8 +96,7 @@ std::shared_ptr<dolfinx::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
       dolfinx::generation::BoxMesh::create(
           comm,
           {Eigen::Vector3d(0.0, 0.0, 0.0), Eigen::Vector3d(1.0, 1.0, 1.0)},
-          {Nx, Ny, Nz}, dolfinx::mesh::CellType::tetrahedron,
-          dolfinx::mesh::GhostMode::none));
+          {Nx, Ny, Nz}, element, dolfinx::mesh::GhostMode::none));
 
   if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
   {
@@ -117,7 +116,8 @@ std::shared_ptr<dolfinx::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
 //-----------------------------------------------------------------------------
 std::shared_ptr<dolfinx::mesh::Mesh>
 create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
-                  bool target_dofs_total, std::size_t dofs_per_node)
+                  bool target_dofs_total, std::size_t dofs_per_node,
+                  const dolfinx::fem::CoordinateElement& element)
 {
   int target = target_dofs / dofs_per_node;
   int mpi_size = dolfinx::MPI::size(comm);

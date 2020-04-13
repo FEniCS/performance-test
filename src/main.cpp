@@ -84,9 +84,9 @@ int main(int argc, char* argv[])
     dolfinx::common::Timer t0("ZZZ Create Mesh");
     auto cmap = dolfinx::fem::create_coordinate_map(create_coordinate_map_Poisson);
     if (mesh_type == "cube")
-      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1);
+      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1, cmap);
     else
-      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1);
+      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1, cmap);
     t0.stop();
 
     // Create mesh entity permutations outside of the assembler
@@ -107,9 +107,9 @@ int main(int argc, char* argv[])
     dolfinx::common::Timer t0("ZZZ Create Mesh");
     auto cmap = dolfinx::fem::create_coordinate_map(create_coordinate_map_Elasticity);
     if (mesh_type == "cube")
-      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3);
+      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3, cmap);
     else
-      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3);
+      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3, cmap);
     t0.stop();
 
     // Create mesh entity permutations outside of the assembler
