@@ -240,8 +240,6 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   }
 
   // New Mesh
-  const dolfinx::fem::ElementDofLayout layout = dolfinx::fem::geometry_layout(
-      dolfinx::mesh::CellType::tetrahedron, topo.cols());
   auto mesh = std::make_shared<dolfinx::mesh::Mesh>(dolfinx::mesh::create(
       comm, dolfinx::graph::AdjacencyList<std::int64_t>(topo), element, geom,
       dolfinx::mesh::GhostMode::none));
