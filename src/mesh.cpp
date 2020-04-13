@@ -246,7 +246,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
       comm, dolfinx::graph::AdjacencyList<std::int64_t>(topo), layout, geom,
       dolfinx::mesh::GhostMode::none));
 
-  mesh->create_entities(1);
+  mesh->topology_mutable().create_entities(1);
 
   LOG(INFO) << "target:" << target << "\n";
 
@@ -257,7 +257,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     mesh = std::make_shared<dolfinx::mesh::Mesh>(
         dolfinx::refinement::refine(*mesh, false));
 
-    mesh->create_entities(1);
+    mesh->topology_mutable().create_entities(1);
   }
 
   double fraction
@@ -283,7 +283,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   for (int k = 0; k < 5; ++k)
   {
     // Trial step
-    mesh->create_entities(1);
+    mesh->topology_mutable().create_entities(1);
     const std::int32_t num_edges = mesh->topology().index_map(1)->size_local();
     std::vector<std::int32_t> mesh_indices(num_edges);
     std::vector<std::int8_t> mesh_tags(num_edges);
