@@ -38,8 +38,8 @@ std::int64_t nvertices(int i, int j, int k, int nrefine)
 } // namespace
 
 std::shared_ptr<dolfinx::mesh::Mesh>
-create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
-                 bool target_dofs_total, std::size_t dofs_per_node,
+create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
+                 std::size_t dofs_per_node,
                  const dolfinx::fem::CoordinateElement& element)
 {
   // Get number of processes
@@ -285,11 +285,13 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     const std::int32_t num_edges = mesh->topology().index_map(1)->size_local();
     std::vector<std::int32_t> mesh_indices(num_edges);
     std::vector<std::int8_t> mesh_tags(num_edges);
-    for (int i = 0; i < num_edges; ++i) {
+    for (int i = 0; i < num_edges; ++i)
+    {
       mesh_indices[i] = i;
       mesh_tags[i] = (i % 2000 < nmarked);
     }
-    dolfinx::mesh::MeshTags<std::int8_t> marker(mesh, 1, mesh_indices, mesh_tags);
+    dolfinx::mesh::MeshTags<std::int8_t> marker(mesh, 1, mesh_indices,
+                                                mesh_tags);
 
     mesh->topology_mutable().create_connectivity(1, 1);
     meshi = std::make_shared<dolfinx::mesh::Mesh>(
