@@ -18,6 +18,7 @@
 #include <dolfinx/la/PETScKrylovSolver.h>
 #include <dolfinx/la/PETScMatrix.h>
 #include <dolfinx/la/PETScVector.h>
+#include <AmgXSolver.hpp>
 #include <string>
 #include <utility>
 
@@ -31,6 +32,8 @@ int main(int argc, char* argv[])
 
   po::options_description desc("Allowed options");
   desc.add_options()("help,h", "print usage message")(
+      "solver", po::value<std::string>()->default_value("petsc"),
+      "solver (petsc or amgx)")(
       "problem_type", po::value<std::string>()->default_value("poisson"),
       "problem (poisson or elasticity)")(
       "mesh_type", po::value<std::string>()->default_value("cube"),
@@ -56,6 +59,7 @@ int main(int argc, char* argv[])
     return 0;
   }
 
+  const std::string solver_type = vm["solver"].as<std::string>();
   const std::string problem_type = vm["problem_type"].as<std::string>();
   const std::string mesh_type = vm["mesh_type"].as<std::string>();
   const std::string scaling_type = vm["scaling_type"].as<std::string>();
@@ -151,16 +155,27 @@ int main(int argc, char* argv[])
         << std::endl;
   }
 
-  // Create solver
-  dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
-  solver.set_from_options();
-  solver.set_operator(A->mat());
+  int num_iter;
+  if (solver_type == "petsc") {
+    // Create solver
+    dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
+    solver.set_from_options();
+    solver.set_operator(A->mat());
 
-  // Solve
-  dolfinx::common::Timer t5("ZZZ Solve");
-  int num_iter = solver.solve(u->vector().vec(), b->vec());
+    // Solve
+    dolfinx::common::Timer t5("ZZZ Solve");
+    num_iter = solver.solve(u->vector().vec(), b->vec());
 
-  t5.stop();
+    t5.stop();
+  }
+  else if (solver_type == "amgx" {
+    AmgXSolver amgx;
+    amgx.initialize(MPI_COMM_WORLD, "dDDI", amgx_config);
+    amgx.setA(A->mat());
+    amgx.solve(u->vector().vec(), b->vec());
+    amgx.getIters(&num_iter);
+  }
+  else throw std::runtime_error("Unknown solver type: " + solver_type);
 
   if (output)
   {
