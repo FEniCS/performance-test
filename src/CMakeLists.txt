@@ -11,6 +11,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Get DOLFIN configuration data (DOLFINConfig.cmake must be in
 # DOLFIN_CMAKE_CONFIG_PATH)
 find_package(DOLFINX REQUIRED)
+find_package(AmgXWrapper REQUIRED)
 
 set(CMAKE_BUILD_TYPE "Release")
 
@@ -33,7 +34,8 @@ add_executable(${PROJECT_NAME} main.cpp mesh.cpp
   ${CMAKE_CURRENT_BINARY_DIR}/Poisson.c)
 
 # Target libraries
-target_link_libraries(${PROJECT_NAME} dolfinx ${Boost_PROGRAM_OPTIONS_LIBRARY})
+target_link_libraries(${PROJECT_NAME} PUBLIC dolfinx ${Boost_PROGRAM_OPTIONS_LIBRARY})
+target_link_libraries(${PROJECT_NAME} PUBLIC AmgXWrapper)
 
 # target_link_libraries(${PROJECT_NAME} stdc++fs)
 set_source_files_properties(main.cpp PROPERTIES COMPILE_FLAGS "-march=native -Wall -Wextra -pedantic -Werror -Ofast")
