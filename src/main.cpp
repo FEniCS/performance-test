@@ -176,7 +176,7 @@ int main(int argc, char* argv[])
     amgx.initialize(MPI_COMM_WORLD, "dDDI", amgx_config);
     amgx.setA(A->mat());
     amgx.solve(u->vector().vec(), b->vec());
-    amgx.getIters(&num_iter);
+    amgx.getIters(num_iter);
   }
   else throw std::runtime_error("Unknown solver type: " + solver_type);
 
