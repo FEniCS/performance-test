@@ -161,21 +161,26 @@ int main(int argc, char* argv[])
   int num_iter;
   if (solver_type == "petsc") {
     // Create solver
+    dolfinx::common::Timer t5a("ZZZ Set operator");
     dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
     solver.set_from_options();
     solver.set_operator(A->mat());
+    t5a.stop();
 
     // Solve
-    dolfinx::common::Timer t5("ZZZ Solve");
+    dolfinx::common::Timer t5b("ZZZ Solve");
     num_iter = solver.solve(u->vector().vec(), b->vec());
-    t5.stop();
+    t5b.stop();
   }
   else if (solver_type == "amgx") {
+    dolfinx::common::Timer t5a("ZZZ Set operator");
     AmgXSolver amgx(MPI_COMM_WORLD, "dDDI", amgx_config);
     amgx.setA(A->mat());
-    dolfinx::common::Timer t5("ZZZ Solve");
+    t5a.stop();
+
+    dolfinx::common::Timer t5b("ZZZ Solve");
     amgx.solve(u->vector().vec(), b->vec());
-    r5.stop();
+    t5b.stop();
     amgx.getIters(num_iter);
   }
   else throw std::runtime_error("Unknown solver type: " + solver_type);
