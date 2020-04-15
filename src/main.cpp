@@ -171,7 +171,7 @@ int main(int argc, char* argv[])
 
     t5.stop();
   }
-  else if (solver_type == "amgx" {
+  else if (solver_type == "amgx") {
     AmgXSolver amgx;
     amgx.initialize(MPI_COMM_WORLD, "dDDI", amgx_config);
     amgx.setA(A->mat());
