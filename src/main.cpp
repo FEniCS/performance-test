@@ -43,7 +43,9 @@ int main(int argc, char* argv[])
       "output", po::value<std::string>()->default_value(""),
       "output directory (no output unless this is set)")(
       "ndofs", po::value<std::size_t>()->default_value(50000),
-      "number of degrees of freedom");
+      "number of degrees of freedom")(
+      "amgx_config", po::value<std::string>()->default_value("config.yaml"),
+      "amgx config file (default config.yaml)");
 
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv)
@@ -66,6 +68,7 @@ int main(int argc, char* argv[])
   const std::size_t ndofs = vm["ndofs"].as<std::size_t>();
   const std::string output_dir = vm["output"].as<std::string>();
   const bool output = (output_dir.size() > 0);
+  const std::string amgx_config = vm["amgx_config"].as<std::string>();
 
   bool strong_scaling;
   if (scaling_type == "strong")
