@@ -168,13 +168,14 @@ int main(int argc, char* argv[])
     // Solve
     dolfinx::common::Timer t5("ZZZ Solve");
     num_iter = solver.solve(u->vector().vec(), b->vec());
-
     t5.stop();
   }
   else if (solver_type == "amgx") {
     AmgXSolver amgx(MPI_COMM_WORLD, "dDDI", amgx_config);
     amgx.setA(A->mat());
+    dolfinx::common::Timer t5("ZZZ Solve");
     amgx.solve(u->vector().vec(), b->vec());
+    r5.stop();
     amgx.getIters(num_iter);
   }
   else throw std::runtime_error("Unknown solver type: " + solver_type);
