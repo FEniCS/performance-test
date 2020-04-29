@@ -7,6 +7,7 @@ equations - Poisson equation and elasticity - in three dimensions.
 Representative performance [data](performance.md) is provided for
 reference (Work in Progress).
 
+![FEniCS Performance Test CI](https://github.com/FEniCS/performance-test/workflows/FEniCS%20Performance%20Test%20CI/badge.svg)
 
 ## Building
 
