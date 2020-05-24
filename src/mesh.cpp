@@ -239,7 +239,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   }
 
   // New Mesh
-  auto mesh = std::make_shared<dolfinx::mesh::Mesh>(dolfinx::mesh::create(
+  auto mesh = std::make_shared<dolfinx::mesh::Mesh>(dolfinx::mesh::create_mesh(
       comm, dolfinx::graph::AdjacencyList<std::int64_t>(topo), element, geom,
       dolfinx::mesh::GhostMode::none));
 
