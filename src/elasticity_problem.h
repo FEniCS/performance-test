@@ -33,6 +33,8 @@ namespace elastic
 dolfinx::la::VectorSpaceBasis
 build_near_nullspace(const dolfinx::function::FunctionSpace& V)
 {
+  std::cout << "Step 0" << std::endl;
+
   // Get subspaces
   std::array W{V.sub({0}), V.sub({1}), V.sub({2})};
 
@@ -61,7 +63,7 @@ build_near_nullspace(const dolfinx::function::FunctionSpace& V)
   {
     const auto& ind = W[i]->dofmap()->list().array();
     for (Eigen::Index j = 0; j < ind.rows(); ++j)
-      basis(i, ind[j]) = 1.0;
+      basis.col(i)[ind[j]] = 1.0;
   }
 
   // Rotations
@@ -71,19 +73,20 @@ build_near_nullspace(const dolfinx::function::FunctionSpace& V)
   auto& dofs2 = W[2]->dofmap()->list().array();
   for (int i = 0; i < dofs0.rows(); ++i)
   {
-    basis(3, dofs0[i]) = -x(dofs0[i], 1);
-    basis(3, dofs1[i]) = x(dofs1[i], 0);
+    basis.col(3)(dofs0[i]) = -x(dofs0[i], 1);
+    basis.col(3)(dofs1[i]) = x(dofs1[i], 0);
 
-    basis(4, dofs0[i]) = x(dofs0[i], 2);
-    basis(4, dofs2[i]) = -x(dofs2[i], 0);
+    basis.col(4)(dofs0[i]) = x(dofs0[i], 2);
+    basis.col(4)(dofs2[i]) = -x(dofs2[i], 0);
 
-    basis(5, dofs2[i]) = x(dofs2[i], 1);
-    basis(5, dofs1[i]) = -x(dofs1[i], 2);
+    basis.col(5)(dofs2[i]) = x(dofs2[i], 1);
+    basis.col(5)(dofs1[i]) = -x(dofs1[i], 2);
   }
 
+  std::cout << "Step 2" << std::endl;
   const std::int32_t size = map->size_local() * map->block_size();
   std::vector<std::shared_ptr<dolfinx::la::PETScVector>> basis_vec;
-  for (int i = 0; i < 6; ++i)
+  for (int i = 0; i < 3; ++i)
   {
     Vec vec0, vec1;
     VecCreateMPIWithArray(V.mesh()->mpi_comm(), 1, size, PETSC_DECIDE,
@@ -95,9 +98,13 @@ build_near_nullspace(const dolfinx::function::FunctionSpace& V)
         std::make_shared<dolfinx::la::PETScVector>(vec1, false));
   }
 
+  std::cout << "Step 3" << std::endl;
+
   // Create vector space and orthonormalize
   dolfinx::la::VectorSpaceBasis vector_space(basis_vec);
   vector_space.orthonormalize();
+  if (!vector_space.is_orthonormal())
+    throw std::runtime_error("Space not orthonormal");
   return vector_space;
 }
 
