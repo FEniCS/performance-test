@@ -33,8 +33,6 @@ namespace elastic
 dolfinx::la::VectorSpaceBasis
 build_near_nullspace(const dolfinx::function::FunctionSpace& V)
 {
-  std::cout << "Step 0" << std::endl;
-
   // Get subspaces
   std::array W{V.sub({0}), V.sub({1}), V.sub({2})};
 
@@ -45,25 +43,17 @@ build_near_nullspace(const dolfinx::function::FunctionSpace& V)
   Eigen::Matrix<PetscScalar, Eigen::Dynamic, 6> basis
       = Eigen::Matrix<PetscScalar, Eigen::Dynamic, 6>::Zero(length, 6);
 
-  // std::vector<std::shared_ptr<dolfinx::la::PETScVector>> basis_vec;
-  // for (std::size_t i = 0; i < 6; ++i)
-  // {
-  //   basis_vec.push_back(
-  //       std::make_shared<dolfinx::la::PETScVector>(*V.dofmap()->index_map));
-  // }
-
   // NOTE: The below will be simpler once Eigen 3.4 is released, see
   //
   // http://eigen.tuxfamily.org/dox-devel/group__TutorialSlicingIndexing.html
-
-  // std::array dofs{V.sub(i).dofmap.list.array(), ]
 
   // x0, x1, x2 translations
   for (std::size_t i = 0; i < W.size(); ++i)
   {
     const auto& ind = W[i]->dofmap()->list().array();
+    auto b = basis.col(i);
     for (Eigen::Index j = 0; j < ind.rows(); ++j)
-      basis.col(i)[ind[j]] = 1.0;
+      b[ind[j]] = 1.0;
   }
 
   // Rotations
@@ -83,10 +73,9 @@ build_near_nullspace(const dolfinx::function::FunctionSpace& V)
     basis.col(5)(dofs1[i]) = -x(dofs1[i], 2);
   }
 
-  std::cout << "Step 2" << std::endl;
   const std::int32_t size = map->size_local() * map->block_size();
   std::vector<std::shared_ptr<dolfinx::la::PETScVector>> basis_vec;
-  for (int i = 0; i < 3; ++i)
+  for (int i = 0; i < 6; ++i)
   {
     Vec vec0, vec1;
     VecCreateMPIWithArray(V.mesh()->mpi_comm(), 1, size, PETSC_DECIDE,
@@ -97,8 +86,6 @@ build_near_nullspace(const dolfinx::function::FunctionSpace& V)
     basis_vec.push_back(
         std::make_shared<dolfinx::la::PETScVector>(vec1, false));
   }
-
-  std::cout << "Step 3" << std::endl;
 
   // Create vector space and orthonormalize
   dolfinx::la::VectorSpaceBasis vector_space(basis_vec);
@@ -187,6 +174,7 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   // Build near-nullspace and attach to matrix
   dolfinx::la::VectorSpaceBasis nullspace = build_near_nullspace(*V);
   A.set_near_nullspace(nullspace);
+
   t4.stop();
 
   return {std::move(A), std::move(b), u};
