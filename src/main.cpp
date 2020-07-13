@@ -78,7 +78,7 @@ int main(int argc, char* argv[])
   std::shared_ptr<dolfinx::mesh::Mesh> mesh;
   std::shared_ptr<dolfinx::la::PETScMatrix> A;
   std::shared_ptr<dolfinx::la::PETScVector> b;
-  std::shared_ptr<dolfinx::function::Function> u;
+  std::shared_ptr<dolfinx::function::Function<PetscScalar>> u;
   if (problem_type == "poisson")
   {
     dolfinx::common::Timer t0("ZZZ Create Mesh");
@@ -158,7 +158,7 @@ int main(int argc, char* argv[])
 
   // Solve
   dolfinx::common::Timer t5("ZZZ Solve");
-  int num_iter = solver.solve(u->vector().vec(), b->vec());
+  int num_iter = solver.solve(u->vector(), b->vec());
 
   t5.stop();
 
@@ -176,7 +176,8 @@ int main(int argc, char* argv[])
   // Display timings
   dolfinx::list_timings(MPI_COMM_WORLD, {dolfinx::TimingType::wall});
 
-  double norm = u->vector().norm(dolfinx::la::Norm::l2);
+  PetscReal norm = 0.0;
+  VecNorm(u->vector(), NORM_2, &norm);
   // Report number of Krylov iterations
   if (dolfinx::MPI::rank(MPI_COMM_WORLD) == 0)
   {

@@ -37,86 +37,94 @@ build_near_nullspace(const dolfinx::function::FunctionSpace& V)
   std::array W{V.sub({0}), V.sub({1}), V.sub({2})};
 
   // Create vectors for nullspace basis
-  std::vector<std::shared_ptr<dolfinx::la::PETScVector>> basis_vec;
-  for (std::size_t i = 0; i < 6; ++i)
+  auto map = V.dofmap()->index_map;
+  const std::int32_t length
+      = (map->size_local() + map->num_ghosts()) * map->block_size();
+  Eigen::Matrix<PetscScalar, Eigen::Dynamic, 6> basis
+      = Eigen::Matrix<PetscScalar, Eigen::Dynamic, 6>::Zero(length, 6);
+
+  // NOTE: The below will be simpler once Eigen 3.4 is released, see
+  //
+  // http://eigen.tuxfamily.org/dox-devel/group__TutorialSlicingIndexing.html
+
+  // x0, x1, x2 translations
+  for (std::size_t i = 0; i < W.size(); ++i)
   {
-    basis_vec.push_back(
-        std::make_shared<dolfinx::la::PETScVector>(*V.dofmap()->index_map));
+    const auto& ind = W[i]->dofmap()->list().array();
+    auto b = basis.col(i);
+    for (Eigen::Index j = 0; j < ind.rows(); ++j)
+      b[ind[j]] = 1.0;
   }
 
+  // Rotations
+  const auto x = V.tabulate_dof_coordinates();
+  auto& dofs0 = W[0]->dofmap()->list().array();
+  auto& dofs1 = W[1]->dofmap()->list().array();
+  auto& dofs2 = W[2]->dofmap()->list().array();
+  for (int i = 0; i < dofs0.rows(); ++i)
   {
-    // Unwrap the PETSc Vec objects to allow array (Eigen) access
-    std::vector<dolfinx::la::VecWrapper> basis;
-    for (auto vec : basis_vec)
-      basis.push_back(dolfinx::la::VecWrapper(vec->vec()));
+    basis.col(3)(dofs0[i]) = -x(dofs0[i], 1);
+    basis.col(3)(dofs1[i]) = x(dofs1[i], 0);
 
-    // NOTE: The below will be simpler once Eigen 3.4 is released, see
-    // http://eigen.tuxfamily.org/dox-devel/group__TutorialSlicingIndexing.html
+    basis.col(4)(dofs0[i]) = x(dofs0[i], 2);
+    basis.col(4)(dofs2[i]) = -x(dofs2[i], 0);
 
-    // x0, x1, x2 translations
-    for (std::size_t i = 0; i < W.size(); ++i)
-    {
-      const Eigen::Array<std::int32_t, Eigen::Dynamic, 1>& ind
-          = W[i]->dofmap()->list().array();
-      Eigen::Map<Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1>>& x = basis[i].x;
-      for (Eigen::Index j = 0; j < ind.rows(); ++j)
-        x[ind[j]] = 1.0;
-    }
+    basis.col(5)(dofs2[i]) = x(dofs2[i], 1);
+    basis.col(5)(dofs1[i]) = -x(dofs1[i], 2);
+  }
 
-    // Rotations
-    W[0]->set_x(basis[3].x, -1.0, 1);
-    W[1]->set_x(basis[3].x, 1.0, 0);
-
-    W[0]->set_x(basis[4].x, 1.0, 2);
-    W[2]->set_x(basis[4].x, -1.0, 0);
-
-    W[2]->set_x(basis[5].x, 1.0, 1);
-    W[1]->set_x(basis[5].x, -1.0, 2);
+  const std::int32_t size = map->size_local() * map->block_size();
+  std::vector<std::shared_ptr<dolfinx::la::PETScVector>> basis_vec;
+  for (int i = 0; i < 6; ++i)
+  {
+    Vec vec0, vec1;
+    VecCreateMPIWithArray(V.mesh()->mpi_comm(), 1, size, PETSC_DECIDE,
+                          basis.col(i).data(), &vec0);
+    VecDuplicate(vec0, &vec1);
+    VecCopy(vec0, vec1);
+    VecDestroy(&vec0);
+    basis_vec.push_back(
+        std::make_shared<dolfinx::la::PETScVector>(vec1, false));
   }
 
   // Create vector space and orthonormalize
   dolfinx::la::VectorSpaceBasis vector_space(basis_vec);
   vector_space.orthonormalize();
+  if (!vector_space.is_orthonormal())
+    throw std::runtime_error("Space not orthonormal");
   return vector_space;
 }
 
 std::tuple<dolfinx::la::PETScMatrix, dolfinx::la::PETScVector,
-           std::shared_ptr<dolfinx::function::Function>>
+           std::shared_ptr<dolfinx::function::Function<PetscScalar>>>
 problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 {
   dolfinx::common::Timer t0("ZZZ FunctionSpace");
 
-  std::shared_ptr<dolfinx::function::FunctionSpace> V
-      = dolfinx::fem::create_functionspace(
-          create_functionspace_form_Elasticity_a, "u", mesh);
+  auto V = dolfinx::fem::create_functionspace(
+      create_functionspace_form_Elasticity_a, "u", mesh);
 
   t0.stop();
 
   dolfinx::common::Timer t1("ZZZ Assemble prep");
 
   // Define variational forms
-
-  std::shared_ptr<dolfinx::fem::Form> L
-      = dolfinx::fem::create_form(create_form_Elasticity_L, {V});
-
-  std::shared_ptr<dolfinx::fem::Form> a
-      = dolfinx::fem::create_form(create_form_Elasticity_a, {V, V});
+  auto L = dolfinx::fem::create_form(create_form_Elasticity_L, {V});
+  auto a = dolfinx::fem::create_form(create_form_Elasticity_a, {V, V});
 
   // Define boundary condition
-  auto u0 = std::make_shared<dolfinx::function::Function>(V);
-  dolfinx::la::VecWrapper _u0(u0->vector().vec());
-  _u0.x.setZero();
-  _u0.restore();
+  auto u0 = std::make_shared<dolfinx::function::Function<PetscScalar>>(V);
+  u0->x()->array().setZero();
 
   const Eigen::Array<std::int32_t, Eigen::Dynamic, 1> bdofs
       = dolfinx::fem::locate_dofs_geometrical(
           {*V}, [](auto& x) { return x.row(1) < 1.0e-8; });
 
   // Bottom (x[1] = 0) surface
-  auto bc = std::make_shared<dolfinx::fem::DirichletBC>(u0, bdofs);
+  auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0, bdofs);
 
   // Define coefficients
-  auto f = std::make_shared<dolfinx::function::Function>(V);
+  auto f = std::make_shared<dolfinx::function::Function<PetscScalar>>(V);
   f->interpolate([](auto& x) {
     auto dx = x.row(0) - 0.5;
     auto dz = x.row(2) - 0.5;
@@ -161,15 +169,14 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::common::Timer t4("ZZZ Create near-nullspace");
 
   // Create Function to hold solution
-  auto u = std::make_shared<dolfinx::function::Function>(V);
+  auto u = std::make_shared<dolfinx::function::Function<PetscScalar>>(V);
 
   // Build near-nullspace and attach to matrix
   dolfinx::la::VectorSpaceBasis nullspace = build_near_nullspace(*V);
   A.set_near_nullspace(nullspace);
+
   t4.stop();
 
-  return std::tuple<dolfinx::la::PETScMatrix, dolfinx::la::PETScVector,
-                    std::shared_ptr<dolfinx::function::Function>>(
-      std::move(A), std::move(b), u);
+  return {std::move(A), std::move(b), u};
 }
 } // namespace elastic

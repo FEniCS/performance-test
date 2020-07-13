@@ -22,41 +22,36 @@ namespace poisson
 {
 
 std::tuple<dolfinx::la::PETScMatrix, dolfinx::la::PETScVector,
-           std::shared_ptr<dolfinx::function::Function>>
+           std::shared_ptr<dolfinx::function::Function<PetscScalar>>>
 problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 {
   dolfinx::common::Timer t0("ZZZ FunctionSpace");
 
-  std::shared_ptr<dolfinx::function::FunctionSpace> V
-      = dolfinx::fem::create_functionspace(create_functionspace_form_Poisson_a,
-                                           "u", mesh);
+  auto V = dolfinx::fem::create_functionspace(
+      create_functionspace_form_Poisson_a, "u", mesh);
 
   t0.stop();
 
   dolfinx::common::Timer t1("ZZZ Assemble");
 
   // Define variational forms
-  std::shared_ptr<dolfinx::fem::Form> L
-      = dolfinx::fem::create_form(create_form_Poisson_L, {V});
-  std::shared_ptr<dolfinx::fem::Form> a
-      = dolfinx::fem::create_form(create_form_Poisson_a, {V, V});
+  auto L = dolfinx::fem::create_form(create_form_Poisson_L, {V});
+  auto a = dolfinx::fem::create_form(create_form_Poisson_a, {V, V});
 
   // Define boundary condition
-  auto u0 = std::make_shared<dolfinx::function::Function>(V);
-  dolfinx::la::VecWrapper _u0(u0->vector().vec());
-  _u0.x.setZero();
-  _u0.restore();
+  auto u0 = std::make_shared<dolfinx::function::Function<PetscScalar>>(V);
+  u0->x()->array().setZero();
 
   const Eigen::Array<std::int32_t, Eigen::Dynamic, 1> bdofs
       = dolfinx::fem::locate_dofs_geometrical({*V}, [](auto& x) {
           return (x.row(0) < DBL_EPSILON or x.row(0) > 1.0 - DBL_EPSILON);
         });
 
-  auto bc = std::make_shared<dolfinx::fem::DirichletBC>(u0, bdofs);
+  auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0, bdofs);
 
   // Define coefficients
-  auto f = std::make_shared<dolfinx::function::Function>(V);
-  auto g = std::make_shared<dolfinx::function::Function>(V);
+  auto f = std::make_shared<dolfinx::function::Function<PetscScalar>>(V);
+  auto g = std::make_shared<dolfinx::function::Function<PetscScalar>>(V);
   f->interpolate([](auto& x) {
     auto dx = x.row(0) - 0.5;
     auto dy = x.row(1) - 0.5;
@@ -97,10 +92,8 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   t1.stop();
 
   // Create Function to hold solution
-  auto u = std::make_shared<dolfinx::function::Function>(V);
+  auto u = std::make_shared<dolfinx::function::Function<PetscScalar>>(V);
 
-  return std::tuple<dolfinx::la::PETScMatrix, dolfinx::la::PETScVector,
-                    std::shared_ptr<dolfinx::function::Function>>(
-      std::move(A), std::move(b), u);
+  return {std::move(A), std::move(b), u};
 }
 } // namespace poisson
