@@ -13,7 +13,7 @@
 #include <dolfinx/fem/DofMap.h>
 #include <dolfinx/fem/Form.h>
 #include <dolfinx/fem/assembler.h>
-#include <dolfinx/fem/utils.h>
+#include <dolfinx/fem/petsc.h>
 #include <dolfinx/function/Function.h>
 #include <dolfinx/function/FunctionSpace.h>
 #include <dolfinx/la/PETScMatrix.h>
