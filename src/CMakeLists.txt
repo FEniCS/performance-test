@@ -32,8 +32,16 @@ add_executable(${PROJECT_NAME} main.cpp mesh.cpp
   ${CMAKE_CURRENT_BINARY_DIR}/Elasticity.c
   ${CMAKE_CURRENT_BINARY_DIR}/Poisson.c)
 
+# Find Boost program_options
+if(DEFINED ENV{BOOST_ROOT} OR DEFINED BOOST_ROOT)
+  set(Boost_NO_SYSTEM_PATHS on)
+endif()
+set(Boost_USE_MULTITHREADED $ENV{BOOST_USE_MULTITHREADED})
+set(Boost_VERBOSE TRUE)
+find_package(Boost 1.70 REQUIRED program_options)
+
 # Target libraries
-target_link_libraries(${PROJECT_NAME} dolfinx ${Boost_PROGRAM_OPTIONS_LIBRARY})
+target_link_libraries(${PROJECT_NAME} dolfinx Boost::program_options)
 
 # target_link_libraries(${PROJECT_NAME} stdc++fs)
 set_source_files_properties(main.cpp PROPERTIES COMPILE_FLAGS "-march=native -Wall -Wextra -pedantic -Werror -Ofast")
