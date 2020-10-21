@@ -34,11 +34,6 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   dolfinx::common::Timer t1("ZZZ Assemble");
 
-  // Define variational forms
-  auto L = dolfinx::fem::create_form<PetscScalar>(create_form_Poisson_L, {V});
-  auto a
-      = dolfinx::fem::create_form<PetscScalar>(create_form_Poisson_a, {V, V});
-
   // Define boundary condition
   auto u0 = std::make_shared<dolfinx::function::Function<PetscScalar>>(V);
   u0->x()->array().setZero();
@@ -64,11 +59,15 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
     }
   });
 
-  L->set_coefficients({{"f", f}, {"g", g}});
+  // Define variational forms
+  auto L = dolfinx::fem::create_form<PetscScalar>(create_form_Poisson_L, {V},
+                                                  {{"f", f}, {"g", g}}, {}, {});
+  auto a = dolfinx::fem::create_form<PetscScalar>(create_form_Poisson_a, {V, V},
+                                                  {}, {}, {});
 
   // Create matrices and vector, and assemble system
   dolfinx::la::PETScMatrix A = dolfinx::fem::create_matrix(*a);
-  dolfinx::la::PETScVector b(*L->function_space(0)->dofmap()->index_map);
+  dolfinx::la::PETScVector b(*L->function_spaces()[0]->dofmap()->index_map);
 
   MatZeroEntries(A.mat());
   dolfinx::common::Timer t2("ZZZ Assemble matrix");
