@@ -135,9 +135,9 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   // Define variational forms
   auto L = dolfinx::fem::create_form<PetscScalar>(create_form_Elasticity_L, {V},
-                                                  {}, {}, {});
+                                                  {{"f", f}}, {}, {});
   auto a = dolfinx::fem::create_form<PetscScalar>(create_form_Elasticity_a,
-                                                  {V, V}, {{"f", f}}, {}, {});
+                                                  {V, V}, {}, {}, {});
   // L->set_coefficients({{"f", f}});
 
   t1.stop();
