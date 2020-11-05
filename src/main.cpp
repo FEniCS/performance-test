@@ -135,6 +135,9 @@ int main(int argc, char* argv[])
   // Print simulation summary
   if (dolfinx::MPI::rank(MPI_COMM_WORLD) == 0)
   {
+    char petsc_version[256];
+    PetscGetVersion(petsc_version, 256);
+
     std::cout
         << "----------------------------------------------------------------"
         << std::endl;
@@ -142,6 +145,7 @@ int main(int argc, char* argv[])
     std::cout << "  dolfinx version: " << DOLFINX_VERSION_STRING << std::endl;
     std::cout << "  dolfinx git:     " << DOLFINX_VERSION_GIT << std::endl;
     std::cout << "  ufl version:     " << UFC_SIGNATURE << std::endl;
+    std::cout << "  petsc version:   " << petsc_version << std::endl;
     std::cout << "  Problem type:    " << problem_type << std::endl;
     std::cout << "  Scaling type:    " << scaling_type << std::endl;
     std::cout << "  Num processes:   " << num_processes << std::endl;
