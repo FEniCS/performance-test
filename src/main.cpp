@@ -140,6 +140,7 @@ int main(int argc, char* argv[])
         << std::endl;
     std::cout << "Test problem summary" << std::endl;
     std::cout << "  dolfinx version: " << DOLFINX_VERSION_STRING << std::endl;
+    std::cout << "  dolfinx git:     " << DOLFINX_VERSION_GIT << std::endl;
     std::cout << "  Problem type:    " << problem_type << std::endl;
     std::cout << "  Scaling type:    " << scaling_type << std::endl;
     std::cout << "  Num processes:   " << num_processes << std::endl;
