@@ -23,12 +23,8 @@
 
 namespace po = boost::program_options;
 
-int main(int argc, char* argv[])
+void solve(int argc, char* argv[])
 {
-  dolfinx::common::SubSystemsManager::init_logging(argc, argv);
-  dolfinx::common::SubSystemsManager::init_mpi();
-  dolfinx::common::SubSystemsManager::init_petsc(argc, argv);
-
   po::options_description desc("Allowed options");
   desc.add_options()("help,h", "print usage message")(
       "problem_type", po::value<std::string>()->default_value("poisson"),
@@ -53,7 +49,7 @@ int main(int argc, char* argv[])
   if (vm.count("help"))
   {
     std::cout << desc << "\n";
-    return 0;
+    return;
   }
 
   const std::string problem_type = vm["problem_type"].as<std::string>();
@@ -184,6 +180,15 @@ int main(int argc, char* argv[])
     std::cout << "*** Number of Krylov iterations: " << num_iter << std::endl;
     std::cout << "*** Solution norm:  " << norm << std::endl;
   }
+}
+
+int main(int argc, char* argv[])
+{
+  dolfinx::common::SubSystemsManager::init_logging(argc, argv);
+  dolfinx::common::SubSystemsManager::init_mpi();
+  dolfinx::common::SubSystemsManager::init_petsc(argc, argv);
+
+  solve(argc, argv);
 
   dolfinx::common::SubSystemsManager::finalize_petsc();
   dolfinx::common::SubSystemsManager::finalize_mpi();
