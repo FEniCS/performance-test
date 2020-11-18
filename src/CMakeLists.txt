@@ -43,13 +43,4 @@ find_package(Boost 1.70 REQUIRED program_options)
 # Target libraries
 target_link_libraries(${PROJECT_NAME} dolfinx Boost::program_options)
 
-# target_link_libraries(${PROJECT_NAME} stdc++fs)
-# set_source_files_properties(main.cpp PROPERTIES COMPILE_FLAGS "-march=native -Wall -Wextra -pedantic -Werror -Ofast")
-# set_source_files_properties(Poisson.c PROPERTIES COMPILE_FLAGS "-march=native -Ofast")
-# set_source_files_properties(Elasticity.c PROPERTIES COMPILE_FLAGS "-march=native -Ofast")
-
-set_source_files_properties(main.cpp PROPERTIES COMPILE_FLAGS "-Wall -Wextra -pedantic -Werror -Ofast")
-set_source_files_properties(Poisson.c PROPERTIES COMPILE_FLAGS "-Ofast")
-set_source_files_properties(Elasticity.c PROPERTIES COMPILE_FLAGS "-Ofast")
-
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
