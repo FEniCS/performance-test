@@ -11,6 +11,7 @@
 #include <dolfinx/common/SubSystemsManager.h>
 #include <dolfinx/common/Timer.h>
 #include <dolfinx/common/timing.h>
+#include <dolfinx/common/version.h>
 #include <dolfinx/fem/Form.h>
 #include <dolfinx/function/Function.h>
 #include <dolfinx/function/FunctionSpace.h>
@@ -130,13 +131,20 @@ void solve(int argc, char* argv[])
   // Print simulation summary
   if (dolfinx::MPI::rank(MPI_COMM_WORLD) == 0)
   {
+    char petsc_version[256];
+    PetscGetVersion(petsc_version, 256);
+
     std::cout
         << "----------------------------------------------------------------"
         << std::endl;
     std::cout << "Test problem summary" << std::endl;
-    std::cout << "  Problem type:   " << problem_type << std::endl;
-    std::cout << "  Scaling type:   " << scaling_type << std::endl;
-    std::cout << "  Num processes:  " << num_processes << std::endl;
+    std::cout << "  dolfinx version: " << DOLFINX_VERSION_STRING << std::endl;
+    std::cout << "  dolfinx hash:    " << DOLFINX_VERSION_GIT << std::endl;
+    std::cout << "  ufl hash:        " << UFC_SIGNATURE << std::endl;
+    std::cout << "  petsc version:   " << petsc_version << std::endl;
+    std::cout << "  Problem type:    " << problem_type << std::endl;
+    std::cout << "  Scaling type:    " << scaling_type << std::endl;
+    std::cout << "  Num processes:   " << num_processes << std::endl;
     std::cout << "  Total degrees of freedom:               "
               << u->function_space()->dim() << std::endl;
     std::cout << "  Average degrees of freedom per process: "
