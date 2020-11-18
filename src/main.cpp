@@ -185,5 +185,7 @@ int main(int argc, char* argv[])
     std::cout << "*** Solution norm:  " << norm << std::endl;
   }
 
+  dolfinx::common::SubSystemsManager::finalize_petsc();
+  dolfinx::common::SubSystemsManager::finalize_mpi();
   return 0;
 }
