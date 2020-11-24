@@ -11,6 +11,7 @@
 #include <dolfinx/common/SubSystemsManager.h>
 #include <dolfinx/common/Timer.h>
 #include <dolfinx/common/timing.h>
+#include <dolfinx/common/version.h>
 #include <dolfinx/fem/Form.h>
 #include <dolfinx/function/Function.h>
 #include <dolfinx/function/FunctionSpace.h>
@@ -23,12 +24,8 @@
 
 namespace po = boost::program_options;
 
-int main(int argc, char* argv[])
+void solve(int argc, char* argv[])
 {
-  dolfinx::common::SubSystemsManager::init_logging(argc, argv);
-  dolfinx::common::SubSystemsManager::init_mpi();
-  dolfinx::common::SubSystemsManager::init_petsc(argc, argv);
-
   po::options_description desc("Allowed options");
   desc.add_options()("help,h", "print usage message")(
       "problem_type", po::value<std::string>()->default_value("poisson"),
@@ -53,7 +50,7 @@ int main(int argc, char* argv[])
   if (vm.count("help"))
   {
     std::cout << desc << "\n";
-    return 0;
+    return;
   }
 
   const std::string problem_type = vm["problem_type"].as<std::string>();
@@ -134,13 +131,20 @@ int main(int argc, char* argv[])
   // Print simulation summary
   if (dolfinx::MPI::rank(MPI_COMM_WORLD) == 0)
   {
+    char petsc_version[256];
+    PetscGetVersion(petsc_version, 256);
+
     std::cout
         << "----------------------------------------------------------------"
         << std::endl;
     std::cout << "Test problem summary" << std::endl;
-    std::cout << "  Problem type:   " << problem_type << std::endl;
-    std::cout << "  Scaling type:   " << scaling_type << std::endl;
-    std::cout << "  Num processes:  " << num_processes << std::endl;
+    std::cout << "  dolfinx version: " << DOLFINX_VERSION_STRING << std::endl;
+    std::cout << "  dolfinx hash:    " << DOLFINX_VERSION_GIT << std::endl;
+    std::cout << "  ufl hash:        " << UFC_SIGNATURE << std::endl;
+    std::cout << "  petsc version:   " << petsc_version << std::endl;
+    std::cout << "  Problem type:    " << problem_type << std::endl;
+    std::cout << "  Scaling type:    " << scaling_type << std::endl;
+    std::cout << "  Num processes:   " << num_processes << std::endl;
     std::cout << "  Total degrees of freedom:               "
               << u->function_space()->dim() << std::endl;
     std::cout << "  Average degrees of freedom per process: "
@@ -184,6 +188,17 @@ int main(int argc, char* argv[])
     std::cout << "*** Number of Krylov iterations: " << num_iter << std::endl;
     std::cout << "*** Solution norm:  " << norm << std::endl;
   }
+}
 
+int main(int argc, char* argv[])
+{
+  dolfinx::common::SubSystemsManager::init_logging(argc, argv);
+  dolfinx::common::SubSystemsManager::init_mpi();
+  dolfinx::common::SubSystemsManager::init_petsc(argc, argv);
+
+  solve(argc, argv);
+
+  dolfinx::common::SubSystemsManager::finalize_petsc();
+  dolfinx::common::SubSystemsManager::finalize_mpi();
   return 0;
 }
