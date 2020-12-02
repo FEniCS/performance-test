@@ -38,8 +38,8 @@ build_near_nullspace(const dolfinx::function::FunctionSpace& V)
 
   // Create vectors for nullspace basis
   auto map = V.dofmap()->index_map;
-  const std::int32_t length
-      = (map->size_local() + map->num_ghosts()) * map->block_size();
+  int bs = V.dofmap()->index_map_bs();
+  const std::int32_t length = (map->size_local() + map->num_ghosts()) * bs;
   Eigen::Matrix<PetscScalar, Eigen::Dynamic, 6> basis
       = Eigen::Matrix<PetscScalar, Eigen::Dynamic, 6>::Zero(length, 6);
 
@@ -73,7 +73,7 @@ build_near_nullspace(const dolfinx::function::FunctionSpace& V)
     basis.col(5)(dofs1[i]) = -x(dofs1[i], 2);
   }
 
-  const std::int32_t size = map->size_local() * map->block_size();
+  const std::int32_t size = map->size_local() * bs;
   std::vector<std::shared_ptr<dolfinx::la::PETScVector>> basis_vec;
   for (int i = 0; i < 6; ++i)
   {
@@ -144,7 +144,8 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   // Create matrices and vector, and assemble system
   dolfinx::la::PETScMatrix A = dolfinx::fem::create_matrix(*a);
-  dolfinx::la::PETScVector b(*L->function_spaces()[0]->dofmap()->index_map);
+  dolfinx::la::PETScVector b(*L->function_spaces()[0]->dofmap()->index_map,
+                             L->function_spaces()[0]->dofmap()->index_map_bs());
 
   MatZeroEntries(A.mat());
 
