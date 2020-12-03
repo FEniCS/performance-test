@@ -162,6 +162,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     // Add n 'cubes' to make a joined up ring.
     for (int i = 0; i < n; ++i)
     {
+      std::cout << "Adding cube " << i << "\n";
       // Get the points for current cube
       Eigen::Array<int, 8, 1> pts;
       for (int j = 0; j < 8; ++j)
@@ -190,6 +191,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     // Add spurs to ring
     for (int i = 0; i < n; ++i)
     {
+      std::cout << "Adding spur " << i << "\n";
       // Intermediate angle between two faces
       double th0 = 2 * M_PI * (i + .5) / n;
 
@@ -245,15 +247,12 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
 
   mesh->topology_mutable().create_entities(1);
 
-  LOG(INFO) << "target:" << target << "\n";
-
   while (mesh->topology().index_map(0)->size_global()
              + mesh->topology().index_map(1)->size_global()
          < target)
   {
     mesh = std::make_shared<dolfinx::mesh::Mesh>(
         dolfinx::refinement::refine(*mesh, false));
-
     mesh->topology_mutable().create_entities(1);
   }
 
@@ -263,7 +262,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
 
   if (mpi_rank == 0)
   {
-    LOG(INFO) << "Create unstructured mesh: desired fraction=" << fraction
+    std::cout << "Create unstructured mesh: desired fraction=" << fraction
               << std::endl;
   }
 
@@ -282,12 +281,15 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     // Trial step
     mesh->topology_mutable().create_entities(1);
     const std::int32_t num_edges = mesh->topology().index_map(1)->size_local();
-    std::vector<std::int32_t> mesh_indices(num_edges);
-    std::vector<std::int8_t> mesh_tags(num_edges);
+    std::vector<std::int32_t> mesh_indices;
+    std::vector<std::int8_t> mesh_tags;
     for (int i = 0; i < num_edges; ++i)
     {
-      mesh_indices[i] = i;
-      mesh_tags[i] = (i % 2000 < nmarked);
+      if (i % 2000 < nmarked)
+      {
+        mesh_indices.push_back(i);
+        mesh_tags.push_back(1);
+      }
     }
     dolfinx::mesh::MeshTags<std::int8_t> marker(mesh, 1, mesh_indices,
                                                 mesh_tags);
@@ -303,8 +305,8 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
 
     if (mpi_rank == 0)
     {
-      LOG(INFO) << "Edges marked = " << nmarked << "/2000\n";
-      LOG(INFO) << "Step " << k
+      std::cout << "Edges marked = " << nmarked << "/2000\n";
+      std::cout << "Step " << k
                 << " achieved actual fraction = " << actual_fraction << "\n";
     }
 
