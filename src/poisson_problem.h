@@ -67,7 +67,8 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   // Create matrices and vector, and assemble system
   dolfinx::la::PETScMatrix A = dolfinx::fem::create_matrix(*a);
-  dolfinx::la::PETScVector b(*L->function_spaces()[0]->dofmap()->index_map);
+  dolfinx::la::PETScVector b(*L->function_spaces()[0]->dofmap()->index_map,
+                             L->function_spaces()[0]->dofmap()->index_map_bs());
 
   MatZeroEntries(A.mat());
   dolfinx::common::Timer t2("ZZZ Assemble matrix");
