@@ -1,13 +1,13 @@
 # Performance test codes for FEniCS/DOLFIN-X
 
-This repository contains solvers for testing the parallel performance
-of DOLFIN-X and the underlying linear solvers. It tests elliptic
-equations - Poisson equation and elasticity - in three dimensions.
+This repository contains solvers for testing the parallel performance of
+DOLFIN-X and the underlying linear solvers. It tests elliptic equations
+- Poisson equation and elasticity - in three dimensions.
 
-Representative performance [data](performance.md) is provided for
-reference (Work in Progress).
+Representative performance data is available at
+https://fenics.github.io/performance-test-results/.
 
-![FEniCS Performance Test CI](https://github.com/FEniCS/performance-test/workflows/FEniCS%20Performance%20Test%20CI/badge.svg)
+![FEniCS Performance Test CI](https://github.com/FEniCS/performance-test/workflows/FEniCS%20Performance%20Test%20CI/badge.svg)[https://github.com/FEniCS/performance-test/actions?query=branch%3Amaster]
 
 ## Building
 
@@ -145,11 +145,6 @@ mpirun -np 8 ./dolfinx-scaling-test \
 Reference performance data is provided [here](performance.md) to help
 in assessing performance on a given system.
 
-
-## Test status
-
-The code is tested on CircleCI.
-[![CircleCI](https://circleci.com/gh/FEniCS/performance-test.svg?style=svg)](https://circleci.com/gh/FEniCS/performance-test)
 
 ## Authors and license
 
