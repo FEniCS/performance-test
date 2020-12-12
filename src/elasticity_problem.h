@@ -33,13 +33,11 @@ namespace elastic
 dolfinx::la::VectorSpaceBasis
 build_near_nullspace(const dolfinx::function::FunctionSpace& V)
 {
-  // Get subspaces
-  std::array W{V.sub({0}), V.sub({1}), V.sub({2})};
-
   // Create vectors for nullspace basis
   auto map = V.dofmap()->index_map;
   int bs = V.dofmap()->index_map_bs();
-  const std::int32_t length = (map->size_local() + map->num_ghosts()) * bs;
+  const std::int32_t length_block = map->size_local() + map->num_ghosts();
+  const std::int32_t length = bs * length_block;
   Eigen::Matrix<PetscScalar, Eigen::Dynamic, 6> basis
       = Eigen::Matrix<PetscScalar, Eigen::Dynamic, 6>::Zero(length, 6);
 
@@ -48,37 +46,35 @@ build_near_nullspace(const dolfinx::function::FunctionSpace& V)
   // http://eigen.tuxfamily.org/dox-devel/group__TutorialSlicingIndexing.html
 
   // x0, x1, x2 translations
-  for (std::size_t i = 0; i < W.size(); ++i)
+  for (int k = 0; k < 3; ++k)
   {
-    const auto& ind = W[i]->dofmap()->list().array();
-    auto b = basis.col(i);
-    for (Eigen::Index j = 0; j < ind.rows(); ++j)
-      b[ind[j]] = 1.0;
+    for (std::int32_t i = 0; i < length_block; ++i)
+      basis(bs * i + k, k) = 1.0;
   }
 
   // Rotations
-  const auto x = V.tabulate_dof_coordinates();
-  auto& dofs0 = W[0]->dofmap()->list().array();
-  auto& dofs1 = W[1]->dofmap()->list().array();
-  auto& dofs2 = W[2]->dofmap()->list().array();
-  for (int i = 0; i < dofs0.rows(); ++i)
+  const Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor> x
+      = V.tabulate_dof_coordinates();
+  auto& dofs = V.dofmap()->list().array();
+  for (int i = 0; i < dofs.rows(); ++i)
   {
-    basis.col(3)(dofs0[i]) = -x(dofs0[i], 1);
-    basis.col(3)(dofs1[i]) = x(dofs1[i], 0);
+    basis.col(3)(bs * dofs[i] + 0) = -x(dofs[i], 1);
+    basis.col(3)(bs * dofs[i] + 1) = x(dofs[i], 0);
 
-    basis.col(4)(dofs0[i]) = x(dofs0[i], 2);
-    basis.col(4)(dofs2[i]) = -x(dofs2[i], 0);
+    basis.col(4)(bs * dofs[i] + 0) = x(dofs[i], 2);
+    basis.col(4)(bs * dofs[i] + 2) = -x(dofs[i], 0);
 
-    basis.col(5)(dofs2[i]) = x(dofs2[i], 1);
-    basis.col(5)(dofs1[i]) = -x(dofs1[i], 2);
+    basis.col(5)(bs * dofs[i] + 2) = x(dofs[i], 1);
+    basis.col(5)(bs * dofs[i] + 1) = -x(dofs[i], 2);
   }
 
   const std::int32_t size = map->size_local() * bs;
+  const std::int64_t size_global = map->size_global() * bs;
   std::vector<std::shared_ptr<dolfinx::la::PETScVector>> basis_vec;
   for (int i = 0; i < 6; ++i)
   {
     Vec vec0, vec1;
-    VecCreateMPIWithArray(V.mesh()->mpi_comm(), 1, size, PETSC_DECIDE,
+    VecCreateMPIWithArray(V.mesh()->mpi_comm(), 3, size, size_global,
                           basis.col(i).data(), &vec0);
     VecDuplicate(vec0, &vec1);
     VecCopy(vec0, vec1);
@@ -147,11 +143,9 @@ problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::la::PETScVector b(*L->function_spaces()[0]->dofmap()->index_map,
                              L->function_spaces()[0]->dofmap()->index_map_bs());
 
-  MatZeroEntries(A.mat());
-
   dolfinx::common::Timer t2("ZZZ Assemble matrix");
-  dolfinx::fem::assemble_matrix(dolfinx::la::PETScMatrix::add_fn(A.mat()), *a,
-                                {bc});
+  dolfinx::fem::assemble_matrix(dolfinx::la::PETScMatrix::add_block_fn(A.mat()),
+                                *a, {bc});
   dolfinx::fem::add_diagonal(dolfinx::la::PETScMatrix::add_fn(A.mat()), *V,
                              {bc});
   MatAssemblyBegin(A.mat(), MAT_FINAL_ASSEMBLY);
