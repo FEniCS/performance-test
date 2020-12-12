@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier:    MIT
 
+#include "Elasticity.h"
 #include "elasticity_problem.h"
 #include "mesh.h"
 #include "poisson_problem.h"

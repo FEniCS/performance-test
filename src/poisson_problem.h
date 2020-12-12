@@ -10,6 +10,10 @@
 #include <Eigen/Dense>
 #include <cfloat>
 #include <dolfinx/common/Timer.h>
+#include <dolfinx/fem/DirichletBC.h>
+#include <dolfinx/fem/assembler.h>
+#include <dolfinx/fem/petsc.h>
+#include <dolfinx/fem/utils.h>
 #include <dolfinx/function/Function.h>
 #include <dolfinx/function/FunctionSpace.h>
 #include <dolfinx/la/PETScMatrix.h>
