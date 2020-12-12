@@ -4,9 +4,13 @@
 
 #pragma once
 
-#include <dolfinx/fem/CoordinateElement.h>
 #include <memory>
 #include <mpi.h>
+
+namespace dolfinx::fem
+{
+class CoordinateElement;
+}
 
 namespace dolfinx::mesh
 {
