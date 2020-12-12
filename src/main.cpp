@@ -5,6 +5,7 @@
 // SPDX-License-Identifier:    MIT
 
 #include "Elasticity.h"
+#include "Poisson.h"
 #include "elasticity_problem.h"
 #include "mesh.h"
 #include "poisson_problem.h"
@@ -14,6 +15,7 @@
 #include <dolfinx/common/timing.h>
 #include <dolfinx/common/version.h>
 #include <dolfinx/fem/Form.h>
+#include <dolfinx/fem/utils.h>
 #include <dolfinx/function/Function.h>
 #include <dolfinx/function/FunctionSpace.h>
 #include <dolfinx/io/XDMFFile.h>

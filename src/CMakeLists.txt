@@ -28,7 +28,7 @@ add_custom_command(
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 # Executable
-add_executable(${PROJECT_NAME} main.cpp mesh.cpp elasticity_problem.cpp
+add_executable(${PROJECT_NAME} main.cpp mesh.cpp elasticity_problem.cpp poisson_problem.cpp
   ${CMAKE_CURRENT_BINARY_DIR}/Elasticity.c
   ${CMAKE_CURRENT_BINARY_DIR}/Poisson.c)
 
