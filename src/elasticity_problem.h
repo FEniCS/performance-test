@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include <dolfinx/function/Function.h>
+#include <dolfinx/fem/Function.h>
 #include <dolfinx/la/PETScMatrix.h>
 #include <dolfinx/la/PETScVector.h>
 #include <memory>
@@ -21,7 +21,7 @@ namespace elastic
 {
 
 std::tuple<dolfinx::la::PETScMatrix, dolfinx::la::PETScVector,
-           std::shared_ptr<dolfinx::function::Function<PetscScalar>>>
+           std::shared_ptr<dolfinx::fem::Function<PetscScalar>>>
 problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh);
 
 } // namespace elastic

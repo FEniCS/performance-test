@@ -11,10 +11,10 @@
 #include <dolfinx/fem/DirichletBC.h>
 #include <dolfinx/fem/DofMap.h>
 #include <dolfinx/fem/Form.h>
+#include <dolfinx/fem/Function.h>
+#include <dolfinx/fem/FunctionSpace.h>
 #include <dolfinx/fem/assembler.h>
 #include <dolfinx/fem/petsc.h>
-#include <dolfinx/function/Function.h>
-#include <dolfinx/function/FunctionSpace.h>
 #include <dolfinx/la/PETScMatrix.h>
 #include <dolfinx/la/PETScVector.h>
 #include <dolfinx/la/VectorSpaceBasis.h>
@@ -29,7 +29,7 @@ namespace
 // Function to compute the near nullspace for elasticity - it is made up
 // of the six rigid body modes
 dolfinx::la::VectorSpaceBasis
-build_near_nullspace(const dolfinx::function::FunctionSpace& V)
+build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
 {
   // Create vectors for nullspace basis
   auto map = V.dofmap()->index_map;
@@ -91,7 +91,7 @@ build_near_nullspace(const dolfinx::function::FunctionSpace& V)
 } // namespace
 
 std::tuple<dolfinx::la::PETScMatrix, dolfinx::la::PETScVector,
-           std::shared_ptr<dolfinx::function::Function<PetscScalar>>>
+           std::shared_ptr<dolfinx::fem::Function<PetscScalar>>>
 elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 {
   dolfinx::common::Timer t0("ZZZ FunctionSpace");
@@ -104,7 +104,7 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::common::Timer t1("ZZZ Assemble prep");
 
   // Define boundary condition
-  auto u0 = std::make_shared<dolfinx::function::Function<PetscScalar>>(V);
+  auto u0 = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   u0->x()->array().setZero();
 
   const Eigen::Array<std::int32_t, Eigen::Dynamic, 1> bdofs
@@ -115,7 +115,7 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0, bdofs);
 
   // Define coefficients
-  auto f = std::make_shared<dolfinx::function::Function<PetscScalar>>(V);
+  auto f = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   f->interpolate([](auto& x) {
     auto dx = x.row(0) - 0.5;
     auto dz = x.row(2) - 0.5;
@@ -166,7 +166,7 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::common::Timer t4("ZZZ Create near-nullspace");
 
   // Create Function to hold solution
-  auto u = std::make_shared<dolfinx::function::Function<PetscScalar>>(V);
+  auto u = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
 
   // Build near-nullspace and attach to matrix
   dolfinx::la::VectorSpaceBasis nullspace = build_near_nullspace(*V);
