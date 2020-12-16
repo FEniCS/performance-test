@@ -10,11 +10,11 @@
 #include <cfloat>
 #include <dolfinx/common/Timer.h>
 #include <dolfinx/fem/DirichletBC.h>
+#include <dolfinx/fem/Function.h>
+#include <dolfinx/fem/FunctionSpace.h>
 #include <dolfinx/fem/assembler.h>
 #include <dolfinx/fem/petsc.h>
 #include <dolfinx/fem/utils.h>
-#include <dolfinx/function/Function.h>
-#include <dolfinx/function/FunctionSpace.h>
 #include <dolfinx/la/PETScMatrix.h>
 #include <dolfinx/la/PETScVector.h>
 #include <dolfinx/mesh/Mesh.h>
@@ -22,7 +22,7 @@
 #include <utility>
 
 std::tuple<dolfinx::la::PETScMatrix, dolfinx::la::PETScVector,
-           std::shared_ptr<dolfinx::function::Function<PetscScalar>>>
+           std::shared_ptr<dolfinx::fem::Function<PetscScalar>>>
 poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 {
   dolfinx::common::Timer t0("ZZZ FunctionSpace");
@@ -35,7 +35,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::common::Timer t1("ZZZ Assemble");
 
   // Define boundary condition
-  auto u0 = std::make_shared<dolfinx::function::Function<PetscScalar>>(V);
+  auto u0 = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   u0->x()->array().setZero();
 
   const Eigen::Array<std::int32_t, Eigen::Dynamic, 1> bdofs
@@ -46,8 +46,8 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0, bdofs);
 
   // Define coefficients
-  auto f = std::make_shared<dolfinx::function::Function<PetscScalar>>(V);
-  auto g = std::make_shared<dolfinx::function::Function<PetscScalar>>(V);
+  auto f = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
+  auto g = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   f->interpolate([](auto& x) {
     auto dx = x.row(0) - 0.5;
     auto dy = x.row(1) - 0.5;
@@ -95,7 +95,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   t1.stop();
 
   // Create Function to hold solution
-  auto u = std::make_shared<dolfinx::function::Function<PetscScalar>>(V);
+  auto u = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
 
   return {std::move(A), std::move(b), u};
 }

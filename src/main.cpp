@@ -15,9 +15,9 @@
 #include <dolfinx/common/timing.h>
 #include <dolfinx/common/version.h>
 #include <dolfinx/fem/Form.h>
+#include <dolfinx/fem/Function.h>
+#include <dolfinx/fem/FunctionSpace.h>
 #include <dolfinx/fem/utils.h>
-#include <dolfinx/function/Function.h>
-#include <dolfinx/function/FunctionSpace.h>
 #include <dolfinx/io/XDMFFile.h>
 #include <dolfinx/la/PETScKrylovSolver.h>
 #include <dolfinx/la/PETScMatrix.h>
@@ -78,7 +78,7 @@ void solve(int argc, char* argv[])
   std::shared_ptr<dolfinx::mesh::Mesh> mesh;
   std::shared_ptr<dolfinx::la::PETScMatrix> A;
   std::shared_ptr<dolfinx::la::PETScVector> b;
-  std::shared_ptr<dolfinx::function::Function<PetscScalar>> u;
+  std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u;
   if (problem_type == "poisson")
   {
     dolfinx::common::Timer t0("ZZZ Create Mesh");

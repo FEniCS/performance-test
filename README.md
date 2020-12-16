@@ -7,7 +7,7 @@ DOLFIN-X and the underlying linear solvers. It tests elliptic equations
 Representative performance data is available at
 https://fenics.github.io/performance-test-results/.
 
-![FEniCS Performance Test CI](https://github.com/FEniCS/performance-test/workflows/FEniCS%20Performance%20Test%20CI/badge.svg)[https://github.com/FEniCS/performance-test/actions?query=branch%3Amaster]
+[![FEniCS Performance Test CI](https://github.com/FEniCS/performance-test/workflows/FEniCS%20Performance%20Test%20CI/badge.svg)](https://github.com/FEniCS/performance-test/actions?query=branch%3Amaster)
 
 ## Building
 
