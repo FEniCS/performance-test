@@ -10,14 +10,14 @@
 #include "mesh.h"
 #include "poisson_problem.h"
 #include <boost/program_options.hpp>
-#include <dolfinx/common/SubSystemsManager.h>
 #include <dolfinx/common/Timer.h>
+#include <dolfinx/common/subsystem.h>
 #include <dolfinx/common/timing.h>
 #include <dolfinx/common/version.h>
 #include <dolfinx/fem/Form.h>
-#include <dolfinx/fem/utils.h>
 #include <dolfinx/fem/Function.h>
 #include <dolfinx/fem/FunctionSpace.h>
+#include <dolfinx/fem/utils.h>
 #include <dolfinx/io/XDMFFile.h>
 #include <dolfinx/la/PETScKrylovSolver.h>
 #include <dolfinx/la/PETScMatrix.h>
@@ -195,13 +195,13 @@ void solve(int argc, char* argv[])
 
 int main(int argc, char* argv[])
 {
-  dolfinx::common::SubSystemsManager::init_logging(argc, argv);
-  dolfinx::common::SubSystemsManager::init_mpi();
-  dolfinx::common::SubSystemsManager::init_petsc(argc, argv);
+  dolfinx::common::subsystem::init_logging(argc, argv);
+  dolfinx::common::subsystem::init_mpi();
+  dolfinx::common::subsystem::init_petsc(argc, argv);
 
   solve(argc, argv);
 
-  dolfinx::common::SubSystemsManager::finalize_petsc();
-  dolfinx::common::SubSystemsManager::finalize_mpi();
+  dolfinx::common::subsystem::finalize_petsc();
+  dolfinx::common::subsystem::finalize_mpi();
   return 0;
 }
