@@ -101,7 +101,7 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   t0.stop();
 
-  dolfinx::common::Timer t1("ZZZ Assemble prep");
+  dolfinx::common::Timer t0a("ZZZ Create boundary conditions");
 
   // Define boundary condition
   auto u0 = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
@@ -113,6 +113,10 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   // Bottom (x[1] = 0) surface
   auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0, bdofs);
+
+  t0a.stop();
+
+  dolfinx::common::Timer t0b("ZZZ Create RHS function");
 
   // Define coefficients
   auto f = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
@@ -128,14 +132,16 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
     return values;
   });
 
+  t0b.stop();
+
+  dolfinx::common::Timer t0c("ZZZ Create forms");
+
   // Define variational forms
   auto L = dolfinx::fem::create_form<PetscScalar>(create_form_Elasticity_L, {V},
                                                   {{"f", f}}, {}, {});
   auto a = dolfinx::fem::create_form<PetscScalar>(create_form_Elasticity_a,
                                                   {V, V}, {}, {}, {});
-  // L->set_coefficients({{"f", f}});
-
-  t1.stop();
+  t0c.stop();
 
   // Create matrices and vector, and assemble system
   dolfinx::la::PETScMatrix A = dolfinx::fem::create_matrix(*a);
