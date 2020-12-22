@@ -54,7 +54,7 @@ build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
   const Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor> x
       = V.tabulate_dof_coordinates();
   auto& dofs = V.dofmap()->list().array();
-  for (int i = 0; i < dofs.rows(); ++i)
+  for (int i = 0; i < dofs.size(); ++i)
   {
     basis.col(3)(bs * dofs[i] + 0) = -x(dofs[i], 1);
     basis.col(3)(bs * dofs[i] + 1) = x(dofs[i], 0);
@@ -107,9 +107,8 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   auto u0 = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   u0->x()->array().setZero();
 
-  const Eigen::Array<std::int32_t, Eigen::Dynamic, 1> bdofs
-      = dolfinx::fem::locate_dofs_geometrical(
-          {*V}, [](auto& x) { return x.row(1) < 1.0e-8; });
+  const std::vector<std::int32_t> bdofs = dolfinx::fem::locate_dofs_geometrical(
+      {*V}, [](auto& x) { return x.row(1) < 1.0e-8; });
 
   // Bottom (x[1] = 0) surface
   auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0, bdofs);

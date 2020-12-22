@@ -38,7 +38,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   auto u0 = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   u0->x()->array().setZero();
 
-  const Eigen::Array<std::int32_t, Eigen::Dynamic, 1> bdofs
+  const std::vector<std::int32_t> bdofs
       = dolfinx::fem::locate_dofs_geometrical({*V}, [](auto& x) {
           return (x.row(0) < DBL_EPSILON or x.row(0) > 1.0 - DBL_EPSILON);
         });
