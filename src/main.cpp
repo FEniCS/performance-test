@@ -188,7 +188,7 @@ void solve(int argc, char* argv[])
   // Report number of Krylov iterations
   if (dolfinx::MPI::rank(MPI_COMM_WORLD) == 0)
   {
-    // std::cout << "*** Number of Krylov iterations: " << num_iter << std::endl;
+    std::cout << "*** Number of Krylov iterations: " << num_iter << std::endl;
     std::cout << "*** Solution norm:  " << norm << std::endl;
   }
 }
