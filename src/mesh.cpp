@@ -152,10 +152,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   }
 
   Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor> geom(npoints, 3);
-  // Eigen::Array<std::int64_t, Eigen::Dynamic, 4, Eigen::RowMajor> topo(ncells,
-  //                                                                     4);
   std::vector<std::int64_t> topo(4 * ncells);
-
   if (mpi_rank == 0)
   {
     int p = 0;

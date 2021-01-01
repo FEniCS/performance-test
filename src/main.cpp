@@ -165,7 +165,7 @@ void solve(int argc, char* argv[])
 
   // Solve
   dolfinx::common::Timer t5("ZZZ Solve");
-  // int num_iter = solver.solve(u->vector(), b->vec());
+  int num_iter = solver.solve(u->vector(), b->vec());
 
   t5.stop();
 
