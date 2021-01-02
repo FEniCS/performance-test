@@ -32,19 +32,20 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   t0.stop();
 
-  dolfinx::common::Timer t1("ZZZ Assemble");
-
   // Define boundary condition
   auto u0 = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   u0->x()->array().setZero();
 
+  dolfinx::common::Timer t_bc_find("ZZZ Find boundary condition dofs");
   const std::vector<std::int32_t> bdofs
-      = dolfinx::fem::locate_dofs_geometrical({*V}, [](auto& x) {
+      = dolfinx::fem::locate_dofs_geometrical(*V, [](auto& x) {
           return (x.row(0) < DBL_EPSILON or x.row(0) > 1.0 - DBL_EPSILON);
         });
+  t_bc_find.stop();
 
   auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0, bdofs);
 
+  dolfinx::common::Timer t_interp("ZZZ Interpolate coefficients");
   // Define coefficients
   auto f = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   auto g = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
@@ -58,19 +59,25 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
       return (5.0 * x.row(0)).sin();
     }
   });
+  t_interp.stop();
 
+  dolfinx::common::Timer t_forms("ZZZ Create forms");
   // Define variational forms
   auto L = dolfinx::fem::create_form<PetscScalar>(create_form_Poisson_L, {V},
                                                   {{"f", f}, {"g", g}}, {}, {});
   auto a = dolfinx::fem::create_form<PetscScalar>(create_form_Poisson_a, {V, V},
                                                   {}, {}, {});
+  t_forms.stop();
+
+  dolfinx::common::Timer t1("ZZZ Assemble");
 
   // Create matrices and vector, and assemble system
+  dolfinx::common::Timer t_matrix("ZZZ Create matrix");
   dolfinx::la::PETScMatrix A = dolfinx::fem::create_matrix(*a);
+  t_matrix.stop();
   dolfinx::la::PETScVector b(*L->function_spaces()[0]->dofmap()->index_map,
                              L->function_spaces()[0]->dofmap()->index_map_bs());
 
-  MatZeroEntries(A.mat());
   dolfinx::common::Timer t2("ZZZ Assemble matrix");
   dolfinx::fem::assemble_matrix(dolfinx::la::PETScMatrix::add_fn(A.mat()), *a,
                                 {bc});

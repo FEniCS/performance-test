@@ -143,9 +143,11 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   t0c.stop();
 
   // Create matrices and vector, and assemble system
+  dolfinx::common::Timer t_matrix("ZZZ Create matrix");
   dolfinx::la::PETScMatrix A = dolfinx::fem::create_matrix(*a);
   dolfinx::la::PETScVector b(*L->function_spaces()[0]->dofmap()->index_map,
                              L->function_spaces()[0]->dofmap()->index_map_bs());
+  t_matrix.stop();
 
   dolfinx::common::Timer t2("ZZZ Assemble matrix");
   dolfinx::fem::assemble_matrix(dolfinx::la::PETScMatrix::add_block_fn(A.mat()),
