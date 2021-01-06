@@ -137,6 +137,9 @@ void solve(int argc, char* argv[])
     char petsc_version[256];
     PetscGetVersion(petsc_version, 256);
 
+    const std::int64_t num_dofs
+        = u->function_space()->dofmap()->index_map->size_global()
+          * u->function_space()->dofmap()->index_map_bs();
     std::cout
         << "----------------------------------------------------------------"
         << std::endl;
@@ -148,11 +151,10 @@ void solve(int argc, char* argv[])
     std::cout << "  Problem type:    " << problem_type << std::endl;
     std::cout << "  Scaling type:    " << scaling_type << std::endl;
     std::cout << "  Num processes:   " << num_processes << std::endl;
-    std::cout << "  Total degrees of freedom:               "
-              << u->function_space()->dim() << std::endl;
-    std::cout << "  Average degrees of freedom per process: "
-              << u->function_space()->dim() / dolfinx::MPI::size(MPI_COMM_WORLD)
+    std::cout << "  Total degrees of freedom:               " << num_dofs
               << std::endl;
+    std::cout << "  Average degrees of freedom per process: "
+              << num_dofs / dolfinx::MPI::size(MPI_COMM_WORLD) << std::endl;
     std::cout
         << "----------------------------------------------------------------"
         << std::endl;
