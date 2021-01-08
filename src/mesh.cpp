@@ -6,12 +6,12 @@
 #include <dolfinx/common/MPI.h>
 #include <dolfinx/common/log.h>
 #include <dolfinx/common/types.h>
+#include <dolfinx/fem/CoordinateElement.h>
 #include <dolfinx/fem/ElementDofLayout.h>
 #include <dolfinx/generation/BoxMesh.h>
 #include <dolfinx/graph/AdjacencyList.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshTags.h>
-#include <dolfinx/mesh/Partitioning.h>
 #include <dolfinx/mesh/cell_types.h>
 #include <dolfinx/refinement/refine.h>
 #include <memory>
@@ -152,8 +152,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   }
 
   Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor> geom(npoints, 3);
-  Eigen::Array<std::int64_t, Eigen::Dynamic, 4, Eigen::RowMajor> topo(ncells,
-                                                                      4);
+  std::vector<std::int64_t> topo(4 * ncells);
   if (mpi_rank == 0)
   {
     int p = 0;
@@ -172,7 +171,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
       for (int k = 0; k < 6; ++k)
       {
         for (int j = 0; j < 4; ++j)
-          topo(c, j) = pts[cube[k][j]];
+          topo[4 * c + j] = pts[cube[k][j]];
         ++c;
       }
 
@@ -218,7 +217,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
         for (int m = 0; m < 6; ++m)
         {
           for (int j = 0; j < 4; ++j)
-            topo(c, j) = pts[cube[m][j]];
+            topo[4 * c + j] = pts[cube[m][j]];
           ++c;
         }
 
@@ -241,9 +240,14 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   }
 
   // New Mesh
+  std::vector<std::int32_t> offsets(ncells + 1, 0);
+  for (std::size_t i = 0; i < offsets.size() - 1; ++i)
+    offsets[i + 1] = offsets[i] + 4;
   auto mesh = std::make_shared<dolfinx::mesh::Mesh>(dolfinx::mesh::create_mesh(
-      comm, dolfinx::graph::AdjacencyList<std::int64_t>(topo), element, geom,
-      dolfinx::mesh::GhostMode::none));
+      comm,
+      dolfinx::graph::AdjacencyList<std::int64_t>(std::move(topo),
+                                                  std::move(offsets)),
+      element, geom, dolfinx::mesh::GhostMode::none));
 
   mesh->topology_mutable().create_entities(1);
 

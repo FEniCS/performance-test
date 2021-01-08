@@ -4,17 +4,20 @@
 //
 // SPDX-License-Identifier:    MIT
 
+#include "Elasticity.h"
+#include "Poisson.h"
 #include "elasticity_problem.h"
 #include "mesh.h"
 #include "poisson_problem.h"
 #include <boost/program_options.hpp>
-#include <dolfinx/common/SubSystemsManager.h>
 #include <dolfinx/common/Timer.h>
+#include <dolfinx/common/subsystem.h>
 #include <dolfinx/common/timing.h>
 #include <dolfinx/common/version.h>
 #include <dolfinx/fem/Form.h>
-#include <dolfinx/function/Function.h>
-#include <dolfinx/function/FunctionSpace.h>
+#include <dolfinx/fem/Function.h>
+#include <dolfinx/fem/FunctionSpace.h>
+#include <dolfinx/fem/utils.h>
 #include <dolfinx/io/XDMFFile.h>
 #include <dolfinx/la/PETScKrylovSolver.h>
 #include <dolfinx/la/PETScMatrix.h>
@@ -75,7 +78,7 @@ void solve(int argc, char* argv[])
   std::shared_ptr<dolfinx::mesh::Mesh> mesh;
   std::shared_ptr<dolfinx::la::PETScMatrix> A;
   std::shared_ptr<dolfinx::la::PETScVector> b;
-  std::shared_ptr<dolfinx::function::Function<PetscScalar>> u;
+  std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u;
   if (problem_type == "poisson")
   {
     dolfinx::common::Timer t0("ZZZ Create Mesh");
@@ -134,6 +137,9 @@ void solve(int argc, char* argv[])
     char petsc_version[256];
     PetscGetVersion(petsc_version, 256);
 
+    const std::int64_t num_dofs
+        = u->function_space()->dofmap()->index_map->size_global()
+          * u->function_space()->dofmap()->index_map_bs();
     std::cout
         << "----------------------------------------------------------------"
         << std::endl;
@@ -145,11 +151,10 @@ void solve(int argc, char* argv[])
     std::cout << "  Problem type:    " << problem_type << std::endl;
     std::cout << "  Scaling type:    " << scaling_type << std::endl;
     std::cout << "  Num processes:   " << num_processes << std::endl;
-    std::cout << "  Total degrees of freedom:               "
-              << u->function_space()->dim() << std::endl;
-    std::cout << "  Average degrees of freedom per process: "
-              << u->function_space()->dim() / dolfinx::MPI::size(MPI_COMM_WORLD)
+    std::cout << "  Total degrees of freedom:               " << num_dofs
               << std::endl;
+    std::cout << "  Average degrees of freedom per process: "
+              << num_dofs / dolfinx::MPI::size(MPI_COMM_WORLD) << std::endl;
     std::cout
         << "----------------------------------------------------------------"
         << std::endl;
@@ -192,13 +197,13 @@ void solve(int argc, char* argv[])
 
 int main(int argc, char* argv[])
 {
-  dolfinx::common::SubSystemsManager::init_logging(argc, argv);
-  dolfinx::common::SubSystemsManager::init_mpi();
-  dolfinx::common::SubSystemsManager::init_petsc(argc, argv);
+  dolfinx::common::subsystem::init_logging(argc, argv);
+  dolfinx::common::subsystem::init_mpi();
+  dolfinx::common::subsystem::init_petsc(argc, argv);
 
   solve(argc, argv);
 
-  dolfinx::common::SubSystemsManager::finalize_petsc();
-  dolfinx::common::SubSystemsManager::finalize_mpi();
+  dolfinx::common::subsystem::finalize_petsc();
+  dolfinx::common::subsystem::finalize_mpi();
   return 0;
 }
