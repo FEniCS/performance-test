@@ -105,6 +105,10 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::fem::add_diagonal(tpetra_insert, *V, {bc});
   A_Tpetra.fillComplete();
 
+  double Tpetra_norm = A_Tpetra.getFrobeniusNorm();
+  if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
+    std::cout << "NormA(Tpetra) = " << Tpetra_norm << "\n";
+
   // Create matrices and vector, and assemble system
   dolfinx::la::PETScMatrix A = dolfinx::fem::create_matrix(*a);
   dolfinx::la::PETScVector b(*L->function_spaces()[0]->dofmap()->index_map,
