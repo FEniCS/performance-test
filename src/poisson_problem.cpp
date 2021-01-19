@@ -80,11 +80,10 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
       global_indices.data(), global_indices.size());
   Teuchos::RCP<const Tpetra::Map<>> rowMap = Teuchos::rcp(new Tpetra::Map<>(
       V->dofmap()->index_map->size_global(), global_index_view, 0, comm));
+  Teuchos::RCP<const Tpetra::Map<>> colMap = Teuchos::rcp(new Tpetra::Map<>(
+      V->dofmap()->index_map->size_global(), global_index_view, 0, comm));
 
-  Teuchos::RCP<const Tpetra::Map<>> colMap = Teuchos::rcp(
-      new Tpetra::Map<>(V->dofmap()->index_map->size_global(), 0, comm));
-
-  Tpetra::CrsMatrix<PetscScalar> A_Tpetra(rowMap, colMap, 20);
+  Tpetra::CrsMatrix<PetscScalar> A_Tpetra(rowMap, colMap, 50);
 
   std::function<int(std::int32_t, const std::int32_t*, std::int32_t,
                     const std::int32_t*, const PetscScalar*)>
@@ -123,6 +122,11 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   MatAssemblyBegin(A.mat(), MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(A.mat(), MAT_FINAL_ASSEMBLY);
   t2.stop();
+
+  double norm;
+  MatNorm(A.mat(), NORM_FROBENIUS, &norm);
+  if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
+    std::cout << "NormA(Petsc) = " << norm << "\n";
 
   VecSet(b.vec(), 0.0);
   VecGhostUpdateBegin(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
