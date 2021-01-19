@@ -140,6 +140,9 @@ void solve(int argc, char* argv[])
     const std::int64_t num_dofs
         = u->function_space()->dofmap()->index_map->size_global()
           * u->function_space()->dofmap()->index_map_bs();
+    const int tdim = mesh->topology().dim();
+    const std::int64_t num_cells
+        = mesh->topology().index_map(tdim)->size_global();
     std::cout
         << "----------------------------------------------------------------"
         << std::endl;
@@ -151,6 +154,7 @@ void solve(int argc, char* argv[])
     std::cout << "  Problem type:    " << problem_type << std::endl;
     std::cout << "  Scaling type:    " << scaling_type << std::endl;
     std::cout << "  Num processes:   " << num_processes << std::endl;
+    std::cout << "  Num cells        " << num_cells << std::endl;
     std::cout << "  Total degrees of freedom:               " << num_dofs
               << std::endl;
     std::cout << "  Average degrees of freedom per process: "
