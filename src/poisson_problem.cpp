@@ -69,13 +69,22 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
                                                   {}, {}, {});
 
   auto comm = Tpetra::getDefaultComm();
-  Teuchos::RCP<const Tpetra::Map<>> rowMap = Teuchos::rcp(
-      new Tpetra::Map<>(V->dofmap()->index_map->size_global(), 0, comm));
+  const std::vector<std::int64_t> global_indices0
+      = V->dofmap()->index_map->global_indices();
+  // Dumb copy (long long and int64_t should be the same, but compiler
+  // complains)
+  const std::vector<long long> global_indices(global_indices0.begin(),
+                                              global_indices0.end());
+
+  const Teuchos::ArrayView<const long long> global_index_view(
+      global_indices.data(), global_indices.size());
+  Teuchos::RCP<const Tpetra::Map<>> rowMap = Teuchos::rcp(new Tpetra::Map<>(
+      V->dofmap()->index_map->size_global(), global_index_view, 0, comm));
 
   Teuchos::RCP<const Tpetra::Map<>> colMap = Teuchos::rcp(
       new Tpetra::Map<>(V->dofmap()->index_map->size_global(), 0, comm));
 
-  Tpetra::CrsMatrix<> A_Tpetra(rowMap, colMap, 20);
+  Tpetra::CrsMatrix<PetscScalar> A_Tpetra(rowMap, colMap, 20);
 
   std::function<int(std::int32_t, const std::int32_t*, std::int32_t,
                     const std::int32_t*, const PetscScalar*)>
