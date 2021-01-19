@@ -93,6 +93,8 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
         };
 
   dolfinx::fem::assemble_matrix(tpetra_insert, *a, {bc});
+  dolfinx::fem::add_diagonal(tpetra_insert, *V, {bc});
+  A_Tpetra.fillComplete();
 
   // Create matrices and vector, and assemble system
   dolfinx::la::PETScMatrix A = dolfinx::fem::create_matrix(*a);
