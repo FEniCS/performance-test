@@ -32,6 +32,10 @@ add_executable(${PROJECT_NAME} main.cpp mesh.cpp elasticity_problem.cpp poisson_
   ${CMAKE_CURRENT_BINARY_DIR}/Elasticity.c
   ${CMAKE_CURRENT_BINARY_DIR}/Poisson.c)
 
+target_include_directories(${PROJECT_NAME} PRIVATE "/home/chris/packages/trilinos/include")
+target_link_directories(${PROJECT_NAME} PRIVATE "/home/chris/packages/trilinos/lib")
+
+
 # Find Boost program_options
 if(DEFINED ENV{BOOST_ROOT} OR DEFINED BOOST_ROOT)
   set(Boost_NO_SYSTEM_PATHS on)
@@ -41,6 +45,6 @@ set(Boost_VERBOSE TRUE)
 find_package(Boost 1.70 REQUIRED program_options)
 
 # Target libraries
-target_link_libraries(${PROJECT_NAME} dolfinx Boost::program_options)
+target_link_libraries(${PROJECT_NAME} dolfinx Boost::program_options tpetra teuchoscomm teuchoscore kokkoscore)
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)

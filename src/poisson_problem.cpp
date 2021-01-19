@@ -7,6 +7,9 @@
 #include "poisson_problem.h"
 #include "Poisson.h"
 #include <Eigen/Dense>
+#include <Tpetra_Core.hpp>
+#include <Tpetra_CrsMatrix.hpp>
+
 #include <cfloat>
 #include <dolfinx/common/Timer.h>
 #include <dolfinx/fem/DirichletBC.h>
@@ -64,6 +67,32 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
                                                   {{"f", f}, {"g", g}}, {}, {});
   auto a = dolfinx::fem::create_form<PetscScalar>(create_form_Poisson_a, {V, V},
                                                   {}, {}, {});
+
+  auto comm = Tpetra::getDefaultComm();
+  Teuchos::RCP<const Tpetra::Map<>> rowMap = Teuchos::rcp(
+      new Tpetra::Map<>(V->dofmap()->index_map->size_global(), 0, comm));
+
+  Teuchos::RCP<const Tpetra::Map<>> colMap = Teuchos::rcp(
+      new Tpetra::Map<>(V->dofmap()->index_map->size_global(), 0, comm));
+
+  Tpetra::CrsMatrix<> A_Tpetra(rowMap, colMap, 20);
+
+  std::function<int(std::int32_t, const std::int32_t*, std::int32_t,
+                    const std::int32_t*, const PetscScalar*)>
+      tpetra_insert
+      = [&A_Tpetra](std::int32_t nr, const std::int32_t* rows,
+                    const std::int32_t nc, const std::int32_t* cols,
+                    const PetscScalar* data) {
+          Teuchos::ArrayView<const std::int32_t> col_view(cols, nc);
+          for (std::int32_t i = 0; i < nr; ++i)
+          {
+            Teuchos::ArrayView<const double> data_view(data + i * nc, nc);
+            A_Tpetra.insertLocalValues(rows[i], col_view, data_view);
+          }
+          return 0;
+        };
+
+  dolfinx::fem::assemble_matrix(tpetra_insert, *a, {bc});
 
   // Create matrices and vector, and assemble system
   dolfinx::la::PETScMatrix A = dolfinx::fem::create_matrix(*a);
