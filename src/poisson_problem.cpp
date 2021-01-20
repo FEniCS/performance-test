@@ -106,7 +106,12 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   dolfinx::fem::assemble_matrix(tpetra_insert, *a, {bc});
   dolfinx::fem::add_diagonal(tpetra_insert, *V, {bc});
-  A_Tpetra.fillComplete();
+
+  const Teuchos::ArrayView<const long long> global_index_vec_view(
+      global_indices.data(), V->dofmap()->index_map->size_local());
+  Teuchos::RCP<const Tpetra::Map<>> vecMap = Teuchos::rcp(new Tpetra::Map<>(
+      V->dofmap()->index_map->size_global(), global_index_vec_view, 0, comm));
+  A_Tpetra.fillComplete(vecMap, vecMap);
 
   Tpetra::MatrixMarket::Writer<Tpetra::CrsMatrix<>>::writeSparseFile(
       "testa.dat", A_Tpetra);
@@ -115,17 +120,12 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
     std::cout << "NormA(Tpetra) = " << Tpetra_norm << "\n";
 
-  const Teuchos::ArrayView<const long long> global_index_vec_view(
-      global_indices.data(), V->dofmap()->index_map->size_local());
-  Teuchos::RCP<const Tpetra::Map<>> vecMap = Teuchos::rcp(new Tpetra::Map<>(
-      V->dofmap()->index_map->size_global(), global_index_vec_view, 0, comm));
   Tpetra::Vector<PetscScalar> bdist_Tpetra(colMap), b_Tpetra(vecMap);
   Teuchos::ArrayRCP<PetscScalar> bdist_view = bdist_Tpetra.getDataNonConst();
   Teuchos::ArrayRCP<PetscScalar> b_view = b_Tpetra.getDataNonConst();
   Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1> b_eigen(bdist_view.size());
   b_eigen.fill(0.0);
   dolfinx::fem::assemble_vector(Eigen::Ref<Eigen::VectorXd>(b_eigen), *L);
-
   dolfinx::fem::apply_lifting(Eigen::Ref<Eigen::VectorXd>(b_eigen), {a}, {{bc}},
                               {}, 1.0);
   dolfinx::fem::set_bc(Eigen::Ref<Eigen::VectorXd>(b_eigen), {bc});
