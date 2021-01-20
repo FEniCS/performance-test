@@ -7,6 +7,7 @@
 #include "poisson_problem.h"
 #include "Poisson.h"
 #include <Eigen/Dense>
+#include <MatrixMarket_Tpetra.hpp>
 #include <Tpetra_Core.hpp>
 #include <Tpetra_CrsMatrix.hpp>
 
@@ -88,9 +89,12 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   std::function<int(std::int32_t, const std::int32_t*, std::int32_t,
                     const std::int32_t*, const PetscScalar*)>
       tpetra_insert
-      = [&A_Tpetra](std::int32_t nr, const std::int32_t* rows,
-                    const std::int32_t nc, const std::int32_t* cols,
-                    const PetscScalar* data) {
+      = [&A_Tpetra, &global_indices](
+            std::int32_t nr, const std::int32_t* rows, const std::int32_t nc,
+            const std::int32_t* cols, const PetscScalar* data) {
+          // std::vector<long long> global_cols;
+          // for (std::int32_t i = 0; i < nc; ++i)
+          //  global_cols.push_back(global_indices[cols[i]]);
           Teuchos::ArrayView<const std::int32_t> col_view(cols, nc);
           for (std::int32_t i = 0; i < nr; ++i)
           {
@@ -104,9 +108,34 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::fem::add_diagonal(tpetra_insert, *V, {bc});
   A_Tpetra.fillComplete();
 
+  Tpetra::MatrixMarket::Writer<Tpetra::CrsMatrix<>>::writeSparseFile(
+      "testa.dat", A_Tpetra);
+
   double Tpetra_norm = A_Tpetra.getFrobeniusNorm();
   if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
     std::cout << "NormA(Tpetra) = " << Tpetra_norm << "\n";
+
+  const Teuchos::ArrayView<const long long> global_index_vec_view(
+      global_indices.data(), V->dofmap()->index_map->size_local());
+  Teuchos::RCP<const Tpetra::Map<>> vecMap = Teuchos::rcp(new Tpetra::Map<>(
+      V->dofmap()->index_map->size_global(), global_index_vec_view, 0, comm));
+  Tpetra::Vector<PetscScalar> bdist_Tpetra(colMap), b_Tpetra(vecMap);
+  Teuchos::ArrayRCP<PetscScalar> bdist_view = bdist_Tpetra.getDataNonConst();
+  Teuchos::ArrayRCP<PetscScalar> b_view = b_Tpetra.getDataNonConst();
+  Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1> b_eigen(bdist_view.size());
+  b_eigen.fill(0.0);
+  dolfinx::fem::assemble_vector(Eigen::Ref<Eigen::VectorXd>(b_eigen), *L);
+
+  dolfinx::fem::apply_lifting(Eigen::Ref<Eigen::VectorXd>(b_eigen), {a}, {{bc}},
+                              {}, 1.0);
+  dolfinx::fem::set_bc(Eigen::Ref<Eigen::VectorXd>(b_eigen), {bc});
+
+  std::stringstream s;
+  std::copy(b_eigen.data(), b_eigen.data() + b_eigen.size(), bdist_view.get());
+  Tpetra::Export vec_export(colMap, vecMap);
+  b_Tpetra.doExport(bdist_Tpetra, vec_export, Tpetra::CombineMode::ADD);
+  s << "Norm[b](Tpetra) = " << b_Tpetra.norm2() << "\n";
+  std::cout << s.str();
 
   // Create matrices and vector, and assemble system
   dolfinx::la::PETScMatrix A = dolfinx::fem::create_matrix(*a);
@@ -140,7 +169,8 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::fem::set_bc_petsc(b.vec(), {bc}, nullptr);
   t3.stop();
 
-  t1.stop();
+  VecNorm(b.vec(), NORM_2, &norm);
+  std::cout << "Norm[b](Petsc) = " << norm << "\n";
 
   // Create Function to hold solution
   auto u = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
