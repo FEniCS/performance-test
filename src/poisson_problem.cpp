@@ -9,7 +9,6 @@
 #include <BelosSolverFactory.hpp>
 #include <BelosTpetraAdapter.hpp>
 #include <Eigen/Dense>
-#include <MatrixMarket_Tpetra.hpp>
 #include <MueLu_CreateTpetraPreconditioner.hpp>
 #include <Tpetra_Core.hpp>
 #include <Tpetra_CrsMatrix.hpp>
