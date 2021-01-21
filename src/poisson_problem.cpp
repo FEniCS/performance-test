@@ -21,6 +21,7 @@
 #include <dolfinx/fem/utils.h>
 #include <dolfinx/la/PETScMatrix.h>
 #include <dolfinx/la/PETScVector.h>
+#include <dolfinx/la/SparsityPattern.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <memory>
 #include <utility>
@@ -69,6 +70,18 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   auto a = dolfinx::fem::create_form<PetscScalar>(create_form_Poisson_a, {V, V},
                                                   {}, {}, {});
 
+  dolfinx::la::SparsityPattern pattern
+      = dolfinx::fem::create_sparsity_pattern(*a);
+  pattern.assemble();
+  const dolfinx::graph::AdjacencyList<std::int32_t>& diagonal_pattern
+      = pattern.diagonal_pattern();
+  const dolfinx::graph::AdjacencyList<std::int64_t>& off_diagonal_pattern
+      = pattern.off_diagonal_pattern();
+
+  std::vector<std::size_t> nnz(diagonal_pattern.num_nodes());
+  for (int i = 0; i < diagonal_pattern.num_nodes(); ++i)
+    nnz[i] = diagonal_pattern.num_links(i) + off_diagonal_pattern.num_links(i);
+
   auto comm = Tpetra::getDefaultComm();
   const std::vector<std::int64_t> global_indices0
       = V->dofmap()->index_map->global_indices();
@@ -84,7 +97,28 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   Teuchos::RCP<const Tpetra::Map<>> colMap = Teuchos::rcp(new Tpetra::Map<>(
       V->dofmap()->index_map->size_global(), global_index_view, 0, comm));
 
-  Tpetra::CrsMatrix<PetscScalar> A_Tpetra(rowMap, colMap, 50);
+  const Teuchos::ArrayView<const long long> global_index_vec_view(
+      global_indices.data(), V->dofmap()->index_map->size_local());
+  Teuchos::RCP<const Tpetra::Map<>> vecMap = Teuchos::rcp(new Tpetra::Map<>(
+      V->dofmap()->index_map->size_global(), global_index_vec_view, 0, comm));
+
+  Teuchos::ArrayView<std::size_t> _nnz(nnz.data(), nnz.size());
+  Teuchos::RCP<Tpetra::CrsGraph<>> crs_graph(
+      new Tpetra::CrsGraph<>(vecMap, _nnz));
+
+  for (std::size_t i = 0; i != diagonal_pattern.num_nodes(); ++i)
+  {
+    std::vector<long long> indices(diagonal_pattern.links(i).begin(),
+                                   diagonal_pattern.links(i).end());
+    indices.insert(indices.end(), off_diagonal_pattern.links(i).begin(),
+                   off_diagonal_pattern.links(i).end());
+    Teuchos::ArrayView<long long> _indices(indices.data(), indices.size());
+    crs_graph->insertGlobalIndices(global_indices[i], _indices);
+  }
+
+  crs_graph->fillComplete(vecMap, vecMap);
+
+  Tpetra::CrsMatrix<PetscScalar> A_Tpetra(crs_graph);
 
   std::function<int(std::int32_t, const std::int32_t*, std::int32_t,
                     const std::int32_t*, const PetscScalar*)>
@@ -92,14 +126,15 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
       = [&A_Tpetra, &global_indices](
             std::int32_t nr, const std::int32_t* rows, const std::int32_t nc,
             const std::int32_t* cols, const PetscScalar* data) {
-          // std::vector<long long> global_cols;
-          // for (std::int32_t i = 0; i < nc; ++i)
-          //  global_cols.push_back(global_indices[cols[i]]);
-          Teuchos::ArrayView<const std::int32_t> col_view(cols, nc);
+          std::vector<long long> global_cols;
+          for (std::int32_t i = 0; i < nc; ++i)
+            global_cols.push_back(global_indices[cols[i]]);
+          Teuchos::ArrayView<const long long> col_view(global_cols.data(), nc);
           for (std::int32_t i = 0; i < nr; ++i)
           {
             Teuchos::ArrayView<const double> data_view(data + i * nc, nc);
-            A_Tpetra.insertLocalValues(rows[i], col_view, data_view);
+            A_Tpetra.sumIntoGlobalValues(global_indices[rows[i]], col_view,
+                                         data_view);
           }
           return 0;
         };
@@ -107,11 +142,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::fem::assemble_matrix(tpetra_insert, *a, {bc});
   dolfinx::fem::add_diagonal(tpetra_insert, *V, {bc});
 
-  const Teuchos::ArrayView<const long long> global_index_vec_view(
-      global_indices.data(), V->dofmap()->index_map->size_local());
-  Teuchos::RCP<const Tpetra::Map<>> vecMap = Teuchos::rcp(new Tpetra::Map<>(
-      V->dofmap()->index_map->size_global(), global_index_vec_view, 0, comm));
-  A_Tpetra.fillComplete(vecMap, vecMap);
+  A_Tpetra.fillComplete();
 
   Tpetra::MatrixMarket::Writer<Tpetra::CrsMatrix<>>::writeSparseFile(
       "testa.dat", A_Tpetra);
