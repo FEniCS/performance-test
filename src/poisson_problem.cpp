@@ -98,8 +98,8 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   const Teuchos::ArrayView<const long long> global_index_view(
       global_indices.data(), global_indices.size());
-  Teuchos::RCP<const Tpetra::Map<>> rowMap = Teuchos::rcp(new Tpetra::Map<>(
-      V->dofmap()->index_map->size_global(), global_index_view, 0, comm));
+  //  Teuchos::RCP<const Tpetra::Map<>> rowMap = Teuchos::rcp(new Tpetra::Map<>(
+  //      V->dofmap()->index_map->size_global(), global_index_view, 0, comm));
   Teuchos::RCP<const Tpetra::Map<>> colMap = Teuchos::rcp(new Tpetra::Map<>(
       V->dofmap()->index_map->size_global(), global_index_view, 0, comm));
 
@@ -160,25 +160,29 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
     s << "NormA(Tpetra) = " << Tpetra_norm << "\n";
 
-  Teuchos::RCP<Tpetra::MultiVector<PetscScalar>> bdist_Tpetra(
-      new Tpetra::MultiVector<PetscScalar>(colMap, 1));
   Teuchos::RCP<Tpetra::MultiVector<PetscScalar>> b_Tpetra(
       new Tpetra::MultiVector<PetscScalar>(vecMap, 1));
   Teuchos::RCP<Tpetra::MultiVector<PetscScalar>> x_Tpetra(
       new Tpetra::MultiVector<PetscScalar>(vecMap, 1));
 
-  Teuchos::ArrayRCP<PetscScalar> bdist_view = bdist_Tpetra->getDataNonConst(0);
-  Teuchos::ArrayRCP<PetscScalar> b_view = b_Tpetra->getDataNonConst(0);
-  Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1> b_eigen(bdist_view.size());
-  b_eigen.fill(0.0);
-  dolfinx::fem::assemble_vector(Eigen::Ref<Eigen::VectorXd>(b_eigen), *L);
-  dolfinx::fem::apply_lifting(Eigen::Ref<Eigen::VectorXd>(b_eigen), {a}, {{bc}},
-                              {}, 1.0);
-  dolfinx::fem::set_bc(Eigen::Ref<Eigen::VectorXd>(b_eigen), {bc});
+  {
+    // Assemble RHS and gather ghost entries
+    Teuchos::RCP<Tpetra::MultiVector<PetscScalar>> bdist_Tpetra(
+        new Tpetra::MultiVector<PetscScalar>(colMap, 1));
+    Teuchos::ArrayRCP<PetscScalar> bdist_view
+        = bdist_Tpetra->getDataNonConst(0);
+    Eigen::Map<Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1>> b_eigen(
+        bdist_view.get(), bdist_view.size());
+    b_eigen.fill(0.0);
+    dolfinx::fem::assemble_vector(Eigen::Ref<Eigen::VectorXd>(b_eigen), *L);
+    dolfinx::fem::apply_lifting(Eigen::Ref<Eigen::VectorXd>(b_eigen), {a},
+                                {{bc}}, {}, 1.0);
+    dolfinx::fem::set_bc(Eigen::Ref<Eigen::VectorXd>(b_eigen), {bc});
 
-  std::copy(b_eigen.data(), b_eigen.data() + b_eigen.size(), bdist_view.get());
-  Tpetra::Export vec_export(colMap, vecMap);
-  b_Tpetra->doExport(*bdist_Tpetra, vec_export, Tpetra::CombineMode::ADD);
+    Tpetra::Export vec_export(colMap, vecMap);
+    b_Tpetra->doExport(*bdist_Tpetra, vec_export, Tpetra::CombineMode::ADD);
+  }
+
   double norm2;
   Teuchos::ArrayView<double> norm_view(&norm2, 1);
   b_Tpetra->norm2(norm_view);
@@ -203,7 +207,6 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
                                          | Belos::FinalSummary);
   solver_paramList->set("Output Style", (int)Belos::Brief);
   solver_paramList->set("Output Frequency", 1);
-
   Belos::SolverFactory<PetscScalar, Tpetra::MultiVector<PetscScalar>,
                        Tpetra::Operator<PetscScalar>>
       factory;
