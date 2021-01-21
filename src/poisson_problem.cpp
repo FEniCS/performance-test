@@ -182,7 +182,8 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   double norm2;
   Teuchos::ArrayView<double> norm_view(&norm2, 1);
   b_Tpetra->norm2(norm_view);
-  s << "Norm[b](Tpetra) = " << norm2 << "\n";
+  if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
+    s << "Norm[b](Tpetra) = " << norm2 << "\n";
 
   // Muelu preconditioner, to be constructed from a Tpetra Operator
   // or Matrix
@@ -195,14 +196,23 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   Teuchos::RCP<Teuchos::ParameterList> solver_paramList(
       new Teuchos::ParameterList);
+  solver_paramList->set("Convergence Tolerance", 1e-8);
+  solver_paramList->set("Verbosity", Belos::Warnings | Belos::IterationDetails
+                                         | Belos::StatusTestDetails
+                                         | Belos::TimingDetails
+                                         | Belos::FinalSummary);
+  solver_paramList->set("Output Style", (int)Belos::Brief);
+  solver_paramList->set("Output Frequency", 1);
+
   Belos::SolverFactory<PetscScalar, Tpetra::MultiVector<PetscScalar>,
                        Tpetra::Operator<PetscScalar>>
       factory;
   Teuchos::RCP<
       Belos::SolverManager<PetscScalar, Tpetra::MultiVector<PetscScalar>,
                            Tpetra::Operator<PetscScalar>>>
-      belos_solver = factory.create("GMRES", solver_paramList);
+      belos_solver = factory.create("CG", solver_paramList);
 
+  dolfinx::common::Timer ttri("Trilinos solve");
   Teuchos::RCP<Belos::LinearProblem<double, Tpetra::MultiVector<PetscScalar>,
                                     Tpetra::Operator<PetscScalar>>>
       problem(new Belos::LinearProblem<double, Tpetra::MultiVector<PetscScalar>,
@@ -213,7 +223,9 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   belos_solver->setProblem(problem);
   belos_solver->solve();
   x_Tpetra->norm2(norm_view);
-  s << "Norm[x](Tpetra) = " << norm2 << "\n";
+  if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
+    s << "Norm[x](Tpetra) = " << norm2 << "\n";
+  ttri.stop();
 
   // Create matrices and vector, and assemble system
   dolfinx::la::PETScMatrix A = dolfinx::fem::create_matrix(*a);
