@@ -160,9 +160,15 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
     s << "NormA(Tpetra) = " << Tpetra_norm << "\n";
 
-  Tpetra::Vector<PetscScalar> bdist_Tpetra(colMap), b_Tpetra(vecMap);
-  Teuchos::ArrayRCP<PetscScalar> bdist_view = bdist_Tpetra.getDataNonConst();
-  Teuchos::ArrayRCP<PetscScalar> b_view = b_Tpetra.getDataNonConst();
+  Teuchos::RCP<Tpetra::MultiVector<PetscScalar>> bdist_Tpetra(
+      new Tpetra::MultiVector<PetscScalar>(colMap, 1));
+  Teuchos::RCP<Tpetra::MultiVector<PetscScalar>> b_Tpetra(
+      new Tpetra::MultiVector<PetscScalar>(vecMap, 1));
+  Teuchos::RCP<Tpetra::MultiVector<PetscScalar>> x_Tpetra(
+      new Tpetra::MultiVector<PetscScalar>(vecMap, 1));
+
+  Teuchos::ArrayRCP<PetscScalar> bdist_view = bdist_Tpetra->getDataNonConst(0);
+  Teuchos::ArrayRCP<PetscScalar> b_view = b_Tpetra->getDataNonConst(0);
   Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1> b_eigen(bdist_view.size());
   b_eigen.fill(0.0);
   dolfinx::fem::assemble_vector(Eigen::Ref<Eigen::VectorXd>(b_eigen), *L);
@@ -172,8 +178,11 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   std::copy(b_eigen.data(), b_eigen.data() + b_eigen.size(), bdist_view.get());
   Tpetra::Export vec_export(colMap, vecMap);
-  b_Tpetra.doExport(bdist_Tpetra, vec_export, Tpetra::CombineMode::ADD);
-  s << "Norm[b](Tpetra) = " << b_Tpetra.norm2() << "\n";
+  b_Tpetra->doExport(*bdist_Tpetra, vec_export, Tpetra::CombineMode::ADD);
+  double norm2;
+  Teuchos::ArrayView<double> norm_view(&norm2, 1);
+  b_Tpetra->norm2(norm_view);
+  s << "Norm[b](Tpetra) = " << norm2 << "\n";
 
   // Muelu preconditioner, to be constructed from a Tpetra Operator
   // or Matrix
@@ -193,6 +202,18 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
       Belos::SolverManager<PetscScalar, Tpetra::MultiVector<PetscScalar>,
                            Tpetra::Operator<PetscScalar>>>
       belos_solver = factory.create("GMRES", solver_paramList);
+
+  Teuchos::RCP<Belos::LinearProblem<double, Tpetra::MultiVector<PetscScalar>,
+                                    Tpetra::Operator<PetscScalar>>>
+      problem(new Belos::LinearProblem<double, Tpetra::MultiVector<PetscScalar>,
+                                       Tpetra::Operator<PetscScalar>>);
+  problem->setOperator(A_Tpetra);
+  problem->setLeftPrec(muelu_prec);
+  problem->setProblem(x_Tpetra, b_Tpetra);
+  belos_solver->setProblem(problem);
+  belos_solver->solve();
+  x_Tpetra->norm2(norm_view);
+  s << "Norm[x](Tpetra) = " << norm2 << "\n";
 
   // Create matrices and vector, and assemble system
   dolfinx::la::PETScMatrix A = dolfinx::fem::create_matrix(*a);
