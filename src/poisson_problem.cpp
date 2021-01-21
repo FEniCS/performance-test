@@ -6,8 +6,11 @@
 
 #include "poisson_problem.h"
 #include "Poisson.h"
+#include <BelosSolverFactory.hpp>
+#include <BelosTpetraAdapter.hpp>
 #include <Eigen/Dense>
 #include <MatrixMarket_Tpetra.hpp>
+#include <MueLu_CreateTpetraPreconditioner.hpp>
 #include <Tpetra_Core.hpp>
 #include <Tpetra_CrsMatrix.hpp>
 
@@ -31,6 +34,7 @@ std::tuple<dolfinx::la::PETScMatrix, dolfinx::la::PETScVector,
 poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 {
   dolfinx::common::Timer t0("ZZZ FunctionSpace");
+  std::stringstream s;
 
   auto V = dolfinx::fem::create_functionspace(
       create_functionspace_form_Poisson_a, "u", mesh);
@@ -82,7 +86,9 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   for (int i = 0; i < diagonal_pattern.num_nodes(); ++i)
     nnz[i] = diagonal_pattern.num_links(i) + off_diagonal_pattern.num_links(i);
 
-  auto comm = Tpetra::getDefaultComm();
+  Teuchos::RCP<const Teuchos::Comm<int>> comm
+      = Teuchos::rcp(new Teuchos::MpiComm<int>(mesh->mpi_comm()));
+
   const std::vector<std::int64_t> global_indices0
       = V->dofmap()->index_map->global_indices();
   // Dumb copy (long long and int64_t should be the same, but compiler
@@ -106,10 +112,13 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   Teuchos::RCP<Tpetra::CrsGraph<>> crs_graph(
       new Tpetra::CrsGraph<>(vecMap, _nnz));
 
+  const std::int64_t r0 = V->dofmap()->index_map->local_range()[0];
   for (std::size_t i = 0; i != diagonal_pattern.num_nodes(); ++i)
   {
     std::vector<long long> indices(diagonal_pattern.links(i).begin(),
                                    diagonal_pattern.links(i).end());
+    for (long long& q : indices)
+      q += r0;
     indices.insert(indices.end(), off_diagonal_pattern.links(i).begin(),
                    off_diagonal_pattern.links(i).end());
     Teuchos::ArrayView<long long> _indices(indices.data(), indices.size());
@@ -118,38 +127,38 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   crs_graph->fillComplete(vecMap, vecMap);
 
-  Tpetra::CrsMatrix<PetscScalar> A_Tpetra(crs_graph);
-
+  Teuchos::RCP<Tpetra::CrsMatrix<PetscScalar>> A_Tpetra
+      = Teuchos::rcp(new Tpetra::CrsMatrix<PetscScalar>(crs_graph));
+  std::vector<long long> global_cols;
   std::function<int(std::int32_t, const std::int32_t*, std::int32_t,
                     const std::int32_t*, const PetscScalar*)>
-      tpetra_insert
-      = [&A_Tpetra, &global_indices](
-            std::int32_t nr, const std::int32_t* rows, const std::int32_t nc,
-            const std::int32_t* cols, const PetscScalar* data) {
-          std::vector<long long> global_cols;
-          for (std::int32_t i = 0; i < nc; ++i)
-            global_cols.push_back(global_indices[cols[i]]);
-          Teuchos::ArrayView<const long long> col_view(global_cols.data(), nc);
-          for (std::int32_t i = 0; i < nr; ++i)
-          {
-            Teuchos::ArrayView<const double> data_view(data + i * nc, nc);
-            A_Tpetra.sumIntoGlobalValues(global_indices[rows[i]], col_view,
-                                         data_view);
-          }
-          return 0;
-        };
+      tpetra_insert = [&A_Tpetra, &global_indices, &global_cols](
+                          std::int32_t nr, const std::int32_t* rows,
+                          const std::int32_t nc, const std::int32_t* cols,
+                          const PetscScalar* data) {
+        global_cols.resize(nc);
+        for (std::int32_t i = 0; i < nc; ++i)
+          global_cols[i] = global_indices[cols[i]];
+        Teuchos::ArrayView<const long long> col_view(global_cols.data(), nc);
+        for (std::int32_t i = 0; i < nr; ++i)
+        {
+          Teuchos::ArrayView<const double> data_view(data + i * nc, nc);
+          int nvalid = A_Tpetra->sumIntoGlobalValues(global_indices[rows[i]],
+                                                     col_view, data_view);
+          if (nvalid != nc)
+            throw std::runtime_error("Could not insert on row "
+                                     + std::to_string(global_indices[rows[i]]));
+        }
+        return 0;
+      };
 
   dolfinx::fem::assemble_matrix(tpetra_insert, *a, {bc});
   dolfinx::fem::add_diagonal(tpetra_insert, *V, {bc});
+  A_Tpetra->fillComplete(vecMap, vecMap);
 
-  A_Tpetra.fillComplete();
-
-  Tpetra::MatrixMarket::Writer<Tpetra::CrsMatrix<>>::writeSparseFile(
-      "testa.dat", A_Tpetra);
-
-  double Tpetra_norm = A_Tpetra.getFrobeniusNorm();
+  double Tpetra_norm = A_Tpetra->getFrobeniusNorm();
   if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
-    std::cout << "NormA(Tpetra) = " << Tpetra_norm << "\n";
+    s << "NormA(Tpetra) = " << Tpetra_norm << "\n";
 
   Tpetra::Vector<PetscScalar> bdist_Tpetra(colMap), b_Tpetra(vecMap);
   Teuchos::ArrayRCP<PetscScalar> bdist_view = bdist_Tpetra.getDataNonConst();
@@ -161,12 +170,29 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
                               {}, 1.0);
   dolfinx::fem::set_bc(Eigen::Ref<Eigen::VectorXd>(b_eigen), {bc});
 
-  std::stringstream s;
   std::copy(b_eigen.data(), b_eigen.data() + b_eigen.size(), bdist_view.get());
   Tpetra::Export vec_export(colMap, vecMap);
   b_Tpetra.doExport(bdist_Tpetra, vec_export, Tpetra::CombineMode::ADD);
   s << "Norm[b](Tpetra) = " << b_Tpetra.norm2() << "\n";
-  std::cout << s.str();
+
+  // Muelu preconditioner, to be constructed from a Tpetra Operator
+  // or Matrix
+  Teuchos::RCP<Teuchos::ParameterList> muelu_paramList(
+      new Teuchos::ParameterList);
+  Teuchos::RCP<MueLu::TpetraOperator<PetscScalar>> muelu_prec
+      = MueLu::CreateTpetraPreconditioner(
+          Teuchos::rcp_dynamic_cast<Tpetra::Operator<PetscScalar>>(A_Tpetra),
+          *muelu_paramList);
+
+  Teuchos::RCP<Teuchos::ParameterList> solver_paramList(
+      new Teuchos::ParameterList);
+  Belos::SolverFactory<PetscScalar, Tpetra::MultiVector<PetscScalar>,
+                       Tpetra::Operator<PetscScalar>>
+      factory;
+  Teuchos::RCP<
+      Belos::SolverManager<PetscScalar, Tpetra::MultiVector<PetscScalar>,
+                           Tpetra::Operator<PetscScalar>>>
+      belos_solver = factory.create("GMRES", solver_paramList);
 
   // Create matrices and vector, and assemble system
   dolfinx::la::PETScMatrix A = dolfinx::fem::create_matrix(*a);
@@ -186,7 +212,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   double norm;
   MatNorm(A.mat(), NORM_FROBENIUS, &norm);
   if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
-    std::cout << "NormA(Petsc) = " << norm << "\n";
+    s << "NormA(Petsc) = " << norm << "\n";
 
   VecSet(b.vec(), 0.0);
   VecGhostUpdateBegin(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
@@ -201,10 +227,10 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   t3.stop();
 
   VecNorm(b.vec(), NORM_2, &norm);
-  std::cout << "Norm[b](Petsc) = " << norm << "\n";
+  s << "Norm[b](Petsc) = " << norm << "\n";
 
   // Create Function to hold solution
   auto u = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
-
+  std::cout << s.str();
   return {std::move(A), std::move(b), u};
 }
