@@ -189,10 +189,13 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
     s << "Norm[b](Tpetra) = " << norm2 << "\n";
 
+  dolfinx::common::Timer ttri("Trilinos solve");
+
   // Muelu preconditioner, to be constructed from a Tpetra Operator
   // or Matrix
   Teuchos::RCP<Teuchos::ParameterList> muelu_paramList(
       new Teuchos::ParameterList);
+  muelu_paramList->set("problem: type", "Poisson-3D");
   Teuchos::RCP<MueLu::TpetraOperator<PetscScalar>> muelu_prec
       = MueLu::CreateTpetraPreconditioner(
           Teuchos::rcp_dynamic_cast<Tpetra::Operator<PetscScalar>>(A_Tpetra),
@@ -215,7 +218,6 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
                            Tpetra::Operator<PetscScalar>>>
       belos_solver = factory.create("CG", solver_paramList);
 
-  dolfinx::common::Timer ttri("Trilinos solve");
   Teuchos::RCP<Belos::LinearProblem<double, Tpetra::MultiVector<PetscScalar>,
                                     Tpetra::Operator<PetscScalar>>>
       problem(new Belos::LinearProblem<double, Tpetra::MultiVector<PetscScalar>,
