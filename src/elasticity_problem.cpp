@@ -17,12 +17,17 @@
 #include <dolfinx/fem/petsc.h>
 #include <dolfinx/la/PETScMatrix.h>
 #include <dolfinx/la/PETScVector.h>
+#include <dolfinx/la/SparsityPattern.h>
 #include <dolfinx/la/VectorSpaceBasis.h>
 #include <dolfinx/la/utils.h>
 #include <dolfinx/mesh/Geometry.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <memory>
 #include <utility>
+
+#include <MueLu_CreateTpetraPreconditioner.hpp>
+#include <Tpetra_Core.hpp>
+#include <Tpetra_CrsMatrix.hpp>
 
 namespace
 {
@@ -141,6 +146,62 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   auto a = dolfinx::fem::create_form<PetscScalar>(create_form_Elasticity_a,
                                                   {V, V}, {}, {}, {});
   t0c.stop();
+
+  dolfinx::common::Timer tcre("Trilinos: create sparsity");
+  dolfinx::la::SparsityPattern pattern
+      = dolfinx::fem::create_sparsity_pattern(*a);
+  pattern.assemble();
+  const dolfinx::graph::AdjacencyList<std::int32_t>& diagonal_pattern
+      = pattern.diagonal_pattern();
+  const dolfinx::graph::AdjacencyList<std::int64_t>& off_diagonal_pattern
+      = pattern.off_diagonal_pattern();
+
+  std::vector<std::size_t> nnz(diagonal_pattern.num_nodes());
+  for (int i = 0; i < diagonal_pattern.num_nodes(); ++i)
+    nnz[i] = diagonal_pattern.num_links(i) + off_diagonal_pattern.num_links(i);
+
+  Teuchos::RCP<const Teuchos::Comm<int>> comm
+      = Teuchos::rcp(new Teuchos::MpiComm<int>(mesh->mpi_comm()));
+  const std::vector<std::int64_t> global_indices0
+      = V->dofmap()->index_map->global_indices();
+  // Dumb copy (long long and int64_t should be the same, but compiler
+  // complains)
+  const std::vector<long long> global_indices(global_indices0.begin(),
+                                              global_indices0.end());
+
+  const Teuchos::ArrayView<const long long> global_index_view(
+      global_indices.data(), global_indices.size());
+  //  Teuchos::RCP<const Tpetra::Map<>> rowMap = Teuchos::rcp(new Tpetra::Map<>(
+  //      V->dofmap()->index_map->size_global(), global_index_view, 0, comm));
+  Teuchos::RCP<const Tpetra::Map<>> colMap = Teuchos::rcp(new Tpetra::Map<>(
+      V->dofmap()->index_map->size_global(), global_index_view, 0, comm));
+
+  const Teuchos::ArrayView<const long long> global_index_vec_view(
+      global_indices.data(), V->dofmap()->index_map->size_local());
+  Teuchos::RCP<const Tpetra::Map<>> vecMap = Teuchos::rcp(new Tpetra::Map<>(
+      V->dofmap()->index_map->size_global(), global_index_vec_view, 0, comm));
+
+  Teuchos::ArrayView<std::size_t> _nnz(nnz.data(), nnz.size());
+  Teuchos::RCP<Tpetra::CrsGraph<>> crs_graph(
+      new Tpetra::CrsGraph<>(vecMap, _nnz));
+
+  const std::int64_t r0 = V->dofmap()->index_map->local_range()[0];
+  for (std::size_t i = 0; i != diagonal_pattern.num_nodes(); ++i)
+  {
+    std::vector<long long> indices(diagonal_pattern.links(i).begin(),
+                                   diagonal_pattern.links(i).end());
+    for (long long& q : indices)
+      q += r0;
+    indices.insert(indices.end(), off_diagonal_pattern.links(i).begin(),
+                   off_diagonal_pattern.links(i).end());
+    Teuchos::ArrayView<long long> _indices(indices.data(), indices.size());
+    crs_graph->insertGlobalIndices(global_indices[i], _indices);
+  }
+
+  crs_graph->fillComplete(vecMap, vecMap);
+  tcre.stop();
+  Teuchos::RCP<Tpetra::BlockCrsMatrix<PetscScalar>> A_Tpetra
+      = Teuchos::rcp(new Tpetra::BlockCrsMatrix<PetscScalar>(*crs_graph, 3));
 
   // Create matrices and vector, and assemble system
   dolfinx::la::PETScMatrix A = dolfinx::fem::create_matrix(*a);

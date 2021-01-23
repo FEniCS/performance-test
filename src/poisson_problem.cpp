@@ -88,6 +88,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   Teuchos::RCP<const Teuchos::Comm<int>> comm
       = Teuchos::rcp(new Teuchos::MpiComm<int>(mesh->mpi_comm()));
 
+  dolfinx::common::Timer tcre("Trilinos: create sparsity");
   const std::vector<std::int64_t> global_indices0
       = V->dofmap()->index_map->global_indices();
   // Dumb copy (long long and int64_t should be the same, but compiler
@@ -125,6 +126,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   }
 
   crs_graph->fillComplete(vecMap, vecMap);
+  tcre.stop();
 
   Teuchos::RCP<Tpetra::CrsMatrix<PetscScalar>> A_Tpetra
       = Teuchos::rcp(new Tpetra::CrsMatrix<PetscScalar>(crs_graph));
@@ -151,14 +153,17 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
         return 0;
       };
 
+  dolfinx::common::Timer tassm("Trilinos: assemble matrix");
   dolfinx::fem::assemble_matrix(tpetra_insert, *a, {bc});
   dolfinx::fem::add_diagonal(tpetra_insert, *V, {bc});
   A_Tpetra->fillComplete(vecMap, vecMap);
+  tassm.stop();
 
   double Tpetra_norm = A_Tpetra->getFrobeniusNorm();
   if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
     s << "NormA(Tpetra) = " << Tpetra_norm << "\n";
 
+  dolfinx::common::Timer tassv("Trilinos: assemble vector");
   Teuchos::RCP<Tpetra::MultiVector<PetscScalar>> b_Tpetra(
       new Tpetra::MultiVector<PetscScalar>(vecMap, 1));
   Teuchos::RCP<Tpetra::MultiVector<PetscScalar>> x_Tpetra(
@@ -181,6 +186,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
     Tpetra::Export vec_export(colMap, vecMap);
     b_Tpetra->doExport(*bdist_Tpetra, vec_export, Tpetra::CombineMode::ADD);
   }
+  tassv.stop();
 
   double norm2;
   Teuchos::ArrayView<double> norm_view(&norm2, 1);
@@ -188,7 +194,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
     s << "Norm[b](Tpetra) = " << norm2 << "\n";
 
-  dolfinx::common::Timer ttri("Trilinos solve");
+  dolfinx::common::Timer ttri("Trilinos: solve");
 
   // Muelu preconditioner, to be constructed from a Tpetra Operator
   // or Matrix
