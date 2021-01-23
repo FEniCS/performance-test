@@ -110,7 +110,8 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   // Define boundary condition
   auto u0 = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
-  u0->x()->array().setZero();
+  std::fill(u0->x()->mutable_array().begin(), u0->x()->mutable_array().end(),
+            0.0);
 
   const std::vector<std::int32_t> bdofs = dolfinx::fem::locate_dofs_geometrical(
       {*V}, [](auto& x) { return x.row(1) < 1.0e-8; });
@@ -204,7 +205,7 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
       = Teuchos::rcp(new Tpetra::BlockCrsMatrix<PetscScalar>(*crs_graph, 3));
 
   // Create matrices and vector, and assemble system
-  dolfinx::la::PETScMatrix A = dolfinx::fem::create_matrix(*a);
+  dolfinx::la::PETScMatrix A(dolfinx::fem::create_matrix(*a), false);
   dolfinx::la::PETScVector b(*L->function_spaces()[0]->dofmap()->index_map,
                              L->function_spaces()[0]->dofmap()->index_map_bs());
 
