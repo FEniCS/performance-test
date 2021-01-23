@@ -91,19 +91,19 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   const std::vector<std::int64_t> global_indices0
       = V->dofmap()->index_map->global_indices();
-  // Dumb copy (long long and int64_t should be the same, but compiler
+  // Dumb copy (long and int64_t should be the same, but compiler
   // complains)
-  const std::vector<long long> global_indices(global_indices0.begin(),
+  const std::vector<long> global_indices(global_indices0.begin(),
                                               global_indices0.end());
 
-  const Teuchos::ArrayView<const long long> global_index_view(
+  const Teuchos::ArrayView<const long> global_index_view(
       global_indices.data(), global_indices.size());
   //  Teuchos::RCP<const Tpetra::Map<>> rowMap = Teuchos::rcp(new Tpetra::Map<>(
   //      V->dofmap()->index_map->size_global(), global_index_view, 0, comm));
   Teuchos::RCP<const Tpetra::Map<>> colMap = Teuchos::rcp(new Tpetra::Map<>(
       V->dofmap()->index_map->size_global(), global_index_view, 0, comm));
 
-  const Teuchos::ArrayView<const long long> global_index_vec_view(
+  const Teuchos::ArrayView<const long> global_index_vec_view(
       global_indices.data(), V->dofmap()->index_map->size_local());
   Teuchos::RCP<const Tpetra::Map<>> vecMap = Teuchos::rcp(new Tpetra::Map<>(
       V->dofmap()->index_map->size_global(), global_index_vec_view, 0, comm));
@@ -115,13 +115,13 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   const std::int64_t r0 = V->dofmap()->index_map->local_range()[0];
   for (std::size_t i = 0; i != diagonal_pattern.num_nodes(); ++i)
   {
-    std::vector<long long> indices(diagonal_pattern.links(i).begin(),
+    std::vector<long> indices(diagonal_pattern.links(i).begin(),
                                    diagonal_pattern.links(i).end());
-    for (long long& q : indices)
+    for (long& q : indices)
       q += r0;
     indices.insert(indices.end(), off_diagonal_pattern.links(i).begin(),
                    off_diagonal_pattern.links(i).end());
-    Teuchos::ArrayView<long long> _indices(indices.data(), indices.size());
+    Teuchos::ArrayView<long> _indices(indices.data(), indices.size());
     crs_graph->insertGlobalIndices(global_indices[i], _indices);
   }
 
@@ -129,7 +129,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   Teuchos::RCP<Tpetra::CrsMatrix<PetscScalar>> A_Tpetra
       = Teuchos::rcp(new Tpetra::CrsMatrix<PetscScalar>(crs_graph));
-  std::vector<long long> global_cols;
+  std::vector<long> global_cols;
   std::function<int(std::int32_t, const std::int32_t*, std::int32_t,
                     const std::int32_t*, const PetscScalar*)>
       tpetra_insert = [&A_Tpetra, &global_indices, &global_cols](
@@ -139,7 +139,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
         global_cols.resize(nc);
         for (std::int32_t i = 0; i < nc; ++i)
           global_cols[i] = global_indices[cols[i]];
-        Teuchos::ArrayView<const long long> col_view(global_cols.data(), nc);
+        Teuchos::ArrayView<const long> col_view(global_cols.data(), nc);
         for (std::int32_t i = 0; i < nr; ++i)
         {
           Teuchos::ArrayView<const double> data_view(data + i * nc, nc);
@@ -171,13 +171,14 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
         new Tpetra::MultiVector<PetscScalar>(colMap, 1));
     Teuchos::ArrayRCP<PetscScalar> bdist_view
         = bdist_Tpetra->getDataNonConst(0);
-    Eigen::Map<Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1>> b_eigen(
-        bdist_view.get(), bdist_view.size());
-    b_eigen.fill(0.0);
-    dolfinx::fem::assemble_vector(Eigen::Ref<Eigen::VectorXd>(b_eigen), *L);
-    dolfinx::fem::apply_lifting(Eigen::Ref<Eigen::VectorXd>(b_eigen), {a},
+    tcb::span b_(bdist_view.get(), bdist_view.size());
+    for (PetscScalar &v : bdist_view)
+      v =0;
+
+    dolfinx::fem::assemble_vector(b_, *L);
+    dolfinx::fem::apply_lifting(b_, {a},
                                 {{bc}}, {}, 1.0);
-    dolfinx::fem::set_bc(Eigen::Ref<Eigen::VectorXd>(b_eigen), {bc});
+    dolfinx::fem::set_bc(b_, {bc});
 
     Tpetra::Export vec_export(colMap, vecMap);
     b_Tpetra->doExport(*bdist_Tpetra, vec_export, Tpetra::CombineMode::ADD);

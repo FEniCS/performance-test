@@ -32,7 +32,9 @@ add_executable(${PROJECT_NAME} main.cpp mesh.cpp elasticity_problem.cpp poisson_
   ${CMAKE_CURRENT_BINARY_DIR}/Elasticity.c
   ${CMAKE_CURRENT_BINARY_DIR}/Poisson.c)
 
-target_include_directories(${PROJECT_NAME} PRIVATE "/home/chris/packages/trilinos/include")
+find_package(Trilinos REQUIRED)
+
+target_include_directories(${PROJECT_NAME} PRIVATE ${Trilinos_INCLUDE_DIRS})
 target_link_directories(${PROJECT_NAME} PRIVATE "/home/chris/packages/trilinos/lib")
 
 
