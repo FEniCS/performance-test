@@ -90,48 +90,49 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
       = Teuchos::rcp(new Teuchos::MpiComm<int>(mesh->mpi_comm()));
 
   dolfinx::common::Timer tcre("Trilinos: create sparsity");
-  const std::vector<std::int64_t> global_indices0
+  const std::vector<std::int64_t> global_indices
       = V->dofmap()->index_map->global_indices();
-  // Dumb copy (long and int64_t should be the same, but compiler
-  // complains)
-  const std::vector<long> global_indices(global_indices0.begin(),
-                                              global_indices0.end());
 
-  const Teuchos::ArrayView<const long> global_index_view(
-      global_indices.data(), global_indices.size());
+  const Teuchos::ArrayView<const long> global_index_view(global_indices.data(),
+                                                         global_indices.size());
   //  Teuchos::RCP<const Tpetra::Map<>> rowMap = Teuchos::rcp(new Tpetra::Map<>(
   //      V->dofmap()->index_map->size_global(), global_index_view, 0, comm));
-  Teuchos::RCP<const Tpetra::Map<>> colMap = Teuchos::rcp(new Tpetra::Map<>(
-      V->dofmap()->index_map->size_global(), global_index_view, 0, comm));
+  Teuchos::RCP<const Tpetra::Map<std::int32_t, std::int64_t>> colMap
+      = Teuchos::rcp(new Tpetra::Map<std::int32_t, std::int64_t>(
+          V->dofmap()->index_map->size_global(), global_index_view, 0, comm));
 
-  const Teuchos::ArrayView<const long> global_index_vec_view(
+  const Teuchos::ArrayView<const std::int64_t> global_index_vec_view(
       global_indices.data(), V->dofmap()->index_map->size_local());
-  Teuchos::RCP<const Tpetra::Map<>> vecMap = Teuchos::rcp(new Tpetra::Map<>(
-      V->dofmap()->index_map->size_global(), global_index_vec_view, 0, comm));
+  Teuchos::RCP<const Tpetra::Map<std::int32_t, std::int64_t>> vecMap
+      = Teuchos::rcp(new Tpetra::Map<std::int32_t, std::int64_t>(
+          V->dofmap()->index_map->size_global(), global_index_vec_view, 0,
+          comm));
 
   Teuchos::ArrayView<std::size_t> _nnz(nnz.data(), nnz.size());
-  Teuchos::RCP<Tpetra::CrsGraph<>> crs_graph(
-      new Tpetra::CrsGraph<>(vecMap, _nnz));
+  Teuchos::RCP<Tpetra::CrsGraph<std::int32_t, std::int64_t>> crs_graph(
+      new Tpetra::CrsGraph<std::int32_t, std::int64_t>(vecMap, _nnz));
 
   const std::int64_t r0 = V->dofmap()->index_map->local_range()[0];
   for (std::size_t i = 0; i != diagonal_pattern.num_nodes(); ++i)
   {
-    std::vector<long> indices(diagonal_pattern.links(i).begin(),
-                                   diagonal_pattern.links(i).end());
-    for (long& q : indices)
+    std::vector<std::int64_t> indices(diagonal_pattern.links(i).begin(),
+                                      diagonal_pattern.links(i).end());
+    for (std::int64_t& q : indices)
       q += r0;
     indices.insert(indices.end(), off_diagonal_pattern.links(i).begin(),
                    off_diagonal_pattern.links(i).end());
-    Teuchos::ArrayView<long> _indices(indices.data(), indices.size());
+    Teuchos::ArrayView<std::int64_t> _indices(indices.data(), indices.size());
     crs_graph->insertGlobalIndices(global_indices[i], _indices);
   }
 
   crs_graph->fillComplete(vecMap, vecMap);
   tcre.stop();
 
-  Teuchos::RCP<Tpetra::CrsMatrix<PetscScalar>> A_Tpetra
-      = Teuchos::rcp(new Tpetra::CrsMatrix<PetscScalar>(crs_graph));
-  std::vector<long> global_cols;
+  Teuchos::RCP<Tpetra::CrsMatrix<PetscScalar, std::int32_t, std::int64_t>>
+      A_Tpetra = Teuchos::rcp(
+          new Tpetra::CrsMatrix<PetscScalar, std::int32_t, std::int64_t>(
+              crs_graph));
+  std::vector<std::int64_t> global_cols;
   std::function<int(std::int32_t, const std::int32_t*, std::int32_t,
                     const std::int32_t*, const PetscScalar*)>
       tpetra_insert = [&A_Tpetra, &global_indices, &global_cols](
@@ -164,29 +165,31 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
     s << "NormA(Tpetra) = " << Tpetra_norm << "\n";
 
+  using MV = Tpetra::MultiVector<PetscScalar, std::int32_t, std::int64_t>;
+  using OP = Tpetra::Operator<PetscScalar, std::int32_t, std::int64_t>;
+
   dolfinx::common::Timer tassv("Trilinos: assemble vector");
-  Teuchos::RCP<Tpetra::MultiVector<PetscScalar>> b_Tpetra(
-      new Tpetra::MultiVector<PetscScalar>(vecMap, 1));
-  Teuchos::RCP<Tpetra::MultiVector<PetscScalar>> x_Tpetra(
-      new Tpetra::MultiVector<PetscScalar>(vecMap, 1));
+  Teuchos::RCP<MV> b_Tpetra(new MV(vecMap, 1));
+  Teuchos::RCP<MV> x_Tpetra(new MV(vecMap, 1));
 
   {
     // Assemble RHS and gather ghost entries
-    Teuchos::RCP<Tpetra::MultiVector<PetscScalar>> bdist_Tpetra(
-        new Tpetra::MultiVector<PetscScalar>(colMap, 1));
+    Teuchos::RCP<MV> bdist_Tpetra(new MV(colMap, 1));
     Teuchos::ArrayRCP<PetscScalar> bdist_view
         = bdist_Tpetra->getDataNonConst(0);
     tcb::span b_(bdist_view.get(), bdist_view.size());
-    for (PetscScalar &v : bdist_view)
-      v =0;
+    for (PetscScalar& v : bdist_view)
+      v = 0.0;
 
     dolfinx::fem::assemble_vector(b_, *L);
-    dolfinx::fem::apply_lifting(b_, {a},
-                                {{bc}}, {}, 1.0);
-    dolfinx::fem::set_bc(b_, {bc});
+    dolfinx::fem::apply_lifting(b_, {a}, {{bc}}, {}, 1.0);
 
     Tpetra::Export vec_export(colMap, vecMap);
     b_Tpetra->doExport(*bdist_Tpetra, vec_export, Tpetra::CombineMode::ADD);
+
+    Teuchos::ArrayRCP<PetscScalar> bdist_viewt = b_Tpetra->getDataNonConst(0);
+    tcb::span bt_(bdist_viewt.get(), bdist_viewt.size());
+    dolfinx::fem::set_bc(bt_, {bc});
   }
   tassv.stop();
 
@@ -203,32 +206,28 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   Teuchos::RCP<Teuchos::ParameterList> muelu_paramList(
       new Teuchos::ParameterList);
   muelu_paramList->set("problem: type", "Poisson-3D");
-  Teuchos::RCP<MueLu::TpetraOperator<PetscScalar>> muelu_prec
-      = MueLu::CreateTpetraPreconditioner(
-          Teuchos::rcp_dynamic_cast<Tpetra::Operator<PetscScalar>>(A_Tpetra),
+  Teuchos::RCP<MueLu::TpetraOperator<PetscScalar, std::int32_t, std::int64_t>>
+      muelu_prec = MueLu::CreateTpetraPreconditioner(
+          Teuchos::rcp_dynamic_cast<
+              Tpetra::Operator<PetscScalar, std::int32_t, std::int64_t>>(
+              A_Tpetra),
           *muelu_paramList);
 
   Teuchos::RCP<Teuchos::ParameterList> solver_paramList(
       new Teuchos::ParameterList);
-  solver_paramList->set("Convergence Tolerance", 1e-8);
+  solver_paramList->set("Convergence Tolerance", 1e-10);
   solver_paramList->set("Verbosity", Belos::Warnings | Belos::IterationDetails
                                          | Belos::StatusTestDetails
                                          | Belos::TimingDetails
                                          | Belos::FinalSummary);
   solver_paramList->set("Output Style", (int)Belos::Brief);
   solver_paramList->set("Output Frequency", 1);
-  Belos::SolverFactory<PetscScalar, Tpetra::MultiVector<PetscScalar>,
-                       Tpetra::Operator<PetscScalar>>
-      factory;
-  Teuchos::RCP<
-      Belos::SolverManager<PetscScalar, Tpetra::MultiVector<PetscScalar>,
-                           Tpetra::Operator<PetscScalar>>>
-      belos_solver = factory.create("CG", solver_paramList);
+  Belos::SolverFactory<PetscScalar, MV, OP> factory;
+  Teuchos::RCP<Belos::SolverManager<PetscScalar, MV, OP>> belos_solver
+      = factory.create("CG", solver_paramList);
 
-  Teuchos::RCP<Belos::LinearProblem<double, Tpetra::MultiVector<PetscScalar>,
-                                    Tpetra::Operator<PetscScalar>>>
-      problem(new Belos::LinearProblem<double, Tpetra::MultiVector<PetscScalar>,
-                                       Tpetra::Operator<PetscScalar>>);
+  Teuchos::RCP<Belos::LinearProblem<double, MV, OP>> problem(
+      new Belos::LinearProblem<double, MV, OP>);
   problem->setOperator(A_Tpetra);
   problem->setLeftPrec(muelu_prec);
   problem->setProblem(x_Tpetra, b_Tpetra);

@@ -47,6 +47,6 @@ set(Boost_VERBOSE TRUE)
 find_package(Boost 1.70 REQUIRED program_options)
 
 # Target libraries
-target_link_libraries(${PROJECT_NAME} dolfinx Boost::program_options belos belostpetra tpetra teuchoscomm teuchosparameterlist teuchoscore kokkoscore muelu muelu-interface muelu-adapters xpetra xpetra-sup)
+target_link_libraries(${PROJECT_NAME} dolfinx Boost::program_options ${Trilinos_LIBRARIES})
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)

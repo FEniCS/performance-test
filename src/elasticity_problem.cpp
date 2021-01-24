@@ -163,46 +163,45 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   Teuchos::RCP<const Teuchos::Comm<int>> comm
       = Teuchos::rcp(new Teuchos::MpiComm<int>(mesh->mpi_comm()));
-  const std::vector<std::int64_t> global_indices0
+  const std::vector<std::int64_t> global_indices
       = V->dofmap()->index_map->global_indices();
-  // Dumb copy (long long and int64_t should be the same, but compiler
-  // complains)
-  const std::vector<long long> global_indices(global_indices0.begin(),
-                                              global_indices0.end());
 
-  const Teuchos::ArrayView<const long long> global_index_view(
+  const Teuchos::ArrayView<const std::int64_t> global_index_view(
       global_indices.data(), global_indices.size());
-  //  Teuchos::RCP<const Tpetra::Map<>> rowMap = Teuchos::rcp(new Tpetra::Map<>(
-  //      V->dofmap()->index_map->size_global(), global_index_view, 0, comm));
-  Teuchos::RCP<const Tpetra::Map<>> colMap = Teuchos::rcp(new Tpetra::Map<>(
-      V->dofmap()->index_map->size_global(), global_index_view, 0, comm));
+  Teuchos::RCP<const Tpetra::Map<std::int32_t, std::int64_t>> colMap
+      = Teuchos::rcp(new Tpetra::Map<std::int32_t, std::int64_t>(
+          V->dofmap()->index_map->size_global(), global_index_view, 0, comm));
 
-  const Teuchos::ArrayView<const long long> global_index_vec_view(
+  const Teuchos::ArrayView<const std::int64_t> global_index_vec_view(
       global_indices.data(), V->dofmap()->index_map->size_local());
-  Teuchos::RCP<const Tpetra::Map<>> vecMap = Teuchos::rcp(new Tpetra::Map<>(
-      V->dofmap()->index_map->size_global(), global_index_vec_view, 0, comm));
+  Teuchos::RCP<const Tpetra::Map<std::int32_t, std::int64_t>> vecMap
+      = Teuchos::rcp(new Tpetra::Map<std::int32_t, std::int64_t>(
+          V->dofmap()->index_map->size_global(), global_index_vec_view, 0,
+          comm));
 
   Teuchos::ArrayView<std::size_t> _nnz(nnz.data(), nnz.size());
-  Teuchos::RCP<Tpetra::CrsGraph<>> crs_graph(
-      new Tpetra::CrsGraph<>(vecMap, _nnz));
+  Teuchos::RCP<Tpetra::CrsGraph<std::int32_t, std::int64_t>> crs_graph(
+      new Tpetra::CrsGraph<std::int32_t, std::int64_t>(vecMap, _nnz));
 
   const std::int64_t r0 = V->dofmap()->index_map->local_range()[0];
   for (std::size_t i = 0; i != diagonal_pattern.num_nodes(); ++i)
   {
-    std::vector<long long> indices(diagonal_pattern.links(i).begin(),
-                                   diagonal_pattern.links(i).end());
-    for (long long& q : indices)
+    std::vector<std::int64_t> indices(diagonal_pattern.links(i).begin(),
+                                      diagonal_pattern.links(i).end());
+    for (std::int64_t& q : indices)
       q += r0;
     indices.insert(indices.end(), off_diagonal_pattern.links(i).begin(),
                    off_diagonal_pattern.links(i).end());
-    Teuchos::ArrayView<long long> _indices(indices.data(), indices.size());
+    Teuchos::ArrayView<std::int64_t> _indices(indices.data(), indices.size());
     crs_graph->insertGlobalIndices(global_indices[i], _indices);
   }
 
   crs_graph->fillComplete(vecMap, vecMap);
   tcre.stop();
-  Teuchos::RCP<Tpetra::BlockCrsMatrix<PetscScalar>> A_Tpetra
-      = Teuchos::rcp(new Tpetra::BlockCrsMatrix<PetscScalar>(*crs_graph, 3));
+  Teuchos::RCP<Tpetra::BlockCrsMatrix<PetscScalar, std::int32_t, std::int64_t>>
+      A_Tpetra = Teuchos::rcp(
+          new Tpetra::BlockCrsMatrix<PetscScalar, std::int32_t, std::int64_t>(
+              *crs_graph, 3));
 
   // Create matrices and vector, and assemble system
   dolfinx::la::PETScMatrix A(dolfinx::fem::create_matrix(*a), false);
