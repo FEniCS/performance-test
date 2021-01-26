@@ -3,7 +3,7 @@ name: FEniCS Performance Test CI
 on:
   push:
     branches:
-      - "*"
+      - '*'
   pull_request:
     branches:
       - master
