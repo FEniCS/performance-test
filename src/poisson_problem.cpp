@@ -74,6 +74,9 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   auto a = dolfinx::fem::create_form<PetscScalar>(create_form_Poisson_a, {V, V},
                                                   {}, {}, {});
 
+  Teuchos::RCP<const Teuchos::Comm<int>> comm
+      = Teuchos::rcp(new Teuchos::MpiComm<int>(mesh->mpi_comm()));
+
   dolfinx::la::SparsityPattern pattern
       = dolfinx::fem::create_sparsity_pattern(*a);
   pattern.assemble();
@@ -86,15 +89,27 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   for (int i = 0; i < diagonal_pattern.num_nodes(); ++i)
     nnz[i] = diagonal_pattern.num_links(i) + off_diagonal_pattern.num_links(i);
 
-  Teuchos::RCP<const Teuchos::Comm<int>> comm
-      = Teuchos::rcp(new Teuchos::MpiComm<int>(mesh->mpi_comm()));
-
   dolfinx::common::Timer tcre("Trilinos: create sparsity");
-  const std::vector<std::int64_t> global_indices
-      = V->dofmap()->index_map->global_indices();
+  std::vector<std::int64_t> global_indices
+      = pattern.index_map(1)->global_indices();
 
-  const Teuchos::ArrayView<const long> global_index_view(global_indices.data(),
-                                                         global_indices.size());
+  std::vector<std::int32_t> wlocal
+      = V->dofmap()->index_map->global_to_local(off_diagonal_pattern.array());
+  const std::int32_t max_w = global_indices.size();
+  for (std::size_t i = 0; i < wlocal.size(); ++i)
+  {
+    if (wlocal[i] == -1)
+    {
+      std::int64_t val = off_diagonal_pattern.array()[i];
+      auto it = std::find(std::next(global_indices.begin(), max_w),
+                          global_indices.end(), val);
+      if (it == global_indices.end())
+        global_indices.push_back(val);
+    }
+  }
+
+  const Teuchos::ArrayView<const std::int64_t> global_index_view(
+      global_indices.data(), global_indices.size());
   //  Teuchos::RCP<const Tpetra::Map<>> rowMap = Teuchos::rcp(new Tpetra::Map<>(
   //      V->dofmap()->index_map->size_global(), global_index_view, 0, comm));
   Teuchos::RCP<const Tpetra::Map<std::int32_t, std::int64_t>> colMap
@@ -110,22 +125,20 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   Teuchos::ArrayView<std::size_t> _nnz(nnz.data(), nnz.size());
   Teuchos::RCP<Tpetra::CrsGraph<std::int32_t, std::int64_t>> crs_graph(
-      new Tpetra::CrsGraph<std::int32_t, std::int64_t>(vecMap, _nnz));
+      new Tpetra::CrsGraph<std::int32_t, std::int64_t>(vecMap, colMap, _nnz));
 
-  const std::int64_t r0 = V->dofmap()->index_map->local_range()[0];
+  const std::int64_t nlocalrows = V->dofmap()->index_map->size_local();
   for (std::size_t i = 0; i != diagonal_pattern.num_nodes(); ++i)
   {
-    std::vector<std::int64_t> indices(diagonal_pattern.links(i).begin(),
+    std::vector<std::int32_t> indices(diagonal_pattern.links(i).begin(),
                                       diagonal_pattern.links(i).end());
-    for (std::int64_t& q : indices)
-      q += r0;
-    indices.insert(indices.end(), off_diagonal_pattern.links(i).begin(),
-                   off_diagonal_pattern.links(i).end());
-    Teuchos::ArrayView<std::int64_t> _indices(indices.data(), indices.size());
-    crs_graph->insertGlobalIndices(global_indices[i], _indices);
+    for (std::int64_t q : off_diagonal_pattern.links(i))
+      indices.push_back(colMap->getLocalElement(q));
+    Teuchos::ArrayView<std::int32_t> _indices(indices.data(), indices.size());
+    crs_graph->insertLocalIndices(i, _indices);
   }
 
-  crs_graph->fillComplete(vecMap, vecMap);
+  crs_graph->fillComplete();
   tcre.stop();
 
   Teuchos::RCP<Tpetra::CrsMatrix<PetscScalar, std::int32_t, std::int64_t>>
@@ -135,25 +148,42 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   std::vector<std::int64_t> global_cols;
   std::function<int(std::int32_t, const std::int32_t*, std::int32_t,
                     const std::int32_t*, const PetscScalar*)>
-      tpetra_insert = [&A_Tpetra, &global_indices, &global_cols](
-                          std::int32_t nr, const std::int32_t* rows,
-                          const std::int32_t nc, const std::int32_t* cols,
-                          const PetscScalar* data) {
-        global_cols.resize(nc);
-        for (std::int32_t i = 0; i < nc; ++i)
-          global_cols[i] = global_indices[cols[i]];
-        Teuchos::ArrayView<const long> col_view(global_cols.data(), nc);
-        for (std::int32_t i = 0; i < nr; ++i)
-        {
-          Teuchos::ArrayView<const double> data_view(data + i * nc, nc);
-          int nvalid = A_Tpetra->sumIntoGlobalValues(global_indices[rows[i]],
-                                                     col_view, data_view);
-          if (nvalid != nc)
-            throw std::runtime_error("Could not insert on row "
-                                     + std::to_string(global_indices[rows[i]]));
-        }
-        return 0;
-      };
+      tpetra_insert
+      = [&A_Tpetra, &global_indices, &global_cols, &nlocalrows](
+            std::int32_t nr, const std::int32_t* rows, const std::int32_t nc,
+            const std::int32_t* cols, const PetscScalar* data) {
+          for (std::int32_t i = 0; i < nr; ++i)
+          {
+            Teuchos::ArrayView<const double> data_view(data + i * nc, nc);
+            if (rows[i] < nlocalrows)
+            {
+              Teuchos::ArrayView<const int> col_view(cols, nc);
+              int nvalid
+                  = A_Tpetra->sumIntoLocalValues(rows[i], col_view, data_view);
+              if (nvalid != nc)
+                throw std::runtime_error(
+                    "Inserted " + std::to_string(nvalid) + "/"
+                    + std::to_string(nc)
+                    + " on row:" + std::to_string(global_indices[rows[i]]));
+            }
+            else
+            {
+              global_cols.resize(nc);
+              for (std::int32_t i = 0; i < nc; ++i)
+                global_cols[i] = global_indices[cols[i]];
+              Teuchos::ArrayView<const long> global_col_view(global_cols.data(),
+                                                             nc);
+              int nvalid = A_Tpetra->sumIntoGlobalValues(
+                  global_indices[rows[i]], global_col_view, data_view);
+              if (nvalid != nc)
+                throw std::runtime_error(
+                    "Inserted " + std::to_string(nvalid) + "/"
+                    + std::to_string(nc)
+                    + " on row:" + std::to_string(global_indices[rows[i]]));
+            }
+          }
+          return 0;
+        };
 
   dolfinx::common::Timer tassm("Trilinos: assemble matrix");
   dolfinx::fem::assemble_matrix(tpetra_insert, *a, {bc});
@@ -177,18 +207,18 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
     Teuchos::RCP<MV> bdist_Tpetra(new MV(colMap, 1));
     Teuchos::ArrayRCP<PetscScalar> bdist_view
         = bdist_Tpetra->getDataNonConst(0);
-    tcb::span b_(bdist_view.get(), bdist_view.size());
+    tcb::span<PetscScalar> b_(bdist_view.get(), bdist_view.size());
     for (PetscScalar& v : bdist_view)
       v = 0.0;
 
     dolfinx::fem::assemble_vector(b_, *L);
     dolfinx::fem::apply_lifting(b_, {a}, {{bc}}, {}, 1.0);
 
-    Tpetra::Export vec_export(colMap, vecMap);
+    Tpetra::Export<std::int32_t, std::int64_t> vec_export(colMap, vecMap);
     b_Tpetra->doExport(*bdist_Tpetra, vec_export, Tpetra::CombineMode::ADD);
 
     Teuchos::ArrayRCP<PetscScalar> bdist_viewt = b_Tpetra->getDataNonConst(0);
-    tcb::span bt_(bdist_viewt.get(), bdist_viewt.size());
+    tcb::span<PetscScalar> bt_(bdist_viewt.get(), bdist_viewt.size());
     dolfinx::fem::set_bc(bt_, {bc});
   }
   tassv.stop();

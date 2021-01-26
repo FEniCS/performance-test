@@ -12,6 +12,8 @@ WORKDIR /tmp
 
 # Environment variables
 ENV OPENBLAS_NUM_THREADS=1
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TERM=linux
 
 # Non-Python utilities and libraries
 RUN apt-get -qq update && \
@@ -45,6 +47,22 @@ RUN apt-get -qq update && \
     wget && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+RUN git clone --branch trilinos-release-13-0-1 https://github.com/trilinos/trilinos && \
+    mkdir -p trilinos/build && cd trilinos/build && \
+    cmake -DTPL_ENABLE_MPI=ON \
+    -DMPI_BASE_DIR=/usr/x86_64-linux \
+    -DTrilinos_ENABLE_COMPLEX_DOUBLE=ON \
+    -DTrilinos_ENABLE_MueLu=ON \
+    -DTpetra_INST_INT_LONG=ON \
+    -DTpetra_INST_INT_LONG_LONG=OFF \
+    -DBUILD_SHARED_LIBS=ON \
+    -DTrilinos_ENABLE_PyTrilinos=OFF \
+    -DTrilinos_ENABLE_Teko=OFF \
+    -DTPL_ENABLE_Netcdf=OFF \
+    .. && \
+    make install && \
+    cd ../.. && rm -r trilinos
 
 # Install PETSc from source
 ARG PETSC_VERSION
