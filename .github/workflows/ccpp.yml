@@ -47,7 +47,7 @@ jobs:
           mkdir build
           cd build
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Release  ../src
-          ninja
+          ninja -j 1
       - name: Run Poisson test (BoomerAMG, serial)
         run: |
           cd build/
