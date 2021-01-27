@@ -13,8 +13,6 @@
 #include <memory>
 #include <utility>
 
-#include <spmv.h>
-
 namespace poisson
 {
 

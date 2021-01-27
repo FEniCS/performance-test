@@ -25,8 +25,6 @@
 #include <string>
 #include <utility>
 
-#include <spmv.h>
-
 namespace po = boost::program_options;
 
 void solve(int argc, char* argv[])

@@ -19,6 +19,7 @@
 #include <dolfinx/la/PETScVector.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <memory>
+#include <spmv.h>
 #include <utility>
 
 std::tuple<dolfinx::la::PETScMatrix, dolfinx::la::PETScVector,
