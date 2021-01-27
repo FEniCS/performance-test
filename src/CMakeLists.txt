@@ -3,6 +3,11 @@ cmake_minimum_required(VERSION 3.10)
 set(PROJECT_NAME dolfinx-scaling-test)
 project(${PROJECT_NAME})
 
+# Use C++17
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 # Get DOLFIN configuration data (DOLFINConfig.cmake must be in
 # DOLFIN_CMAKE_CONFIG_PATH)
 find_package(DOLFINX REQUIRED)
@@ -25,20 +30,25 @@ add_custom_command(
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 # Executable
-add_executable(${PROJECT_NAME} main.cpp mesh.cpp
+add_executable(${PROJECT_NAME} main.cpp mesh.cpp elasticity_problem.cpp poisson_problem.cpp
   ${CMAKE_CURRENT_BINARY_DIR}/Elasticity.c
   ${CMAKE_CURRENT_BINARY_DIR}/Poisson.c)
 
+
 # Target libraries
-target_link_libraries(${PROJECT_NAME} PUBLIC dolfinx ${Boost_PROGRAM_OPTIONS_LIBRARY})
 target_link_libraries(${PROJECT_NAME} PUBLIC spmv::spmv)
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
-# target_compile_options(${PROJECT_NAME} PRIVATE -Wall -pedantic -Werror)
-
 set_source_files_properties(main.cpp PROPERTIES COMPILE_FLAGS "-march=native -Wall -Wextra -pedantic -Werror -Ofast")
 
-set_source_files_properties(Poisson.c PROPERTIES COMPILE_FLAGS "-march=native -Ofast")
+# Find Boost program_options
+if(DEFINED ENV{BOOST_ROOT} OR DEFINED BOOST_ROOT)
+  set(Boost_NO_SYSTEM_PATHS on)
+endif()
+set(Boost_USE_MULTITHREADED $ENV{BOOST_USE_MULTITHREADED})
+set(Boost_VERBOSE TRUE)
+find_package(Boost 1.70 REQUIRED program_options)
 
-set_source_files_properties(Elasticity.c PROPERTIES COMPILE_FLAGS "-march=native -Ofast")
+# Target libraries
+target_link_libraries(${PROJECT_NAME} dolfinx Boost::program_options)
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)

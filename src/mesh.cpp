@@ -6,13 +6,12 @@
 #include <dolfinx/common/MPI.h>
 #include <dolfinx/common/log.h>
 #include <dolfinx/common/types.h>
+#include <dolfinx/fem/CoordinateElement.h>
 #include <dolfinx/fem/ElementDofLayout.h>
 #include <dolfinx/generation/BoxMesh.h>
 #include <dolfinx/graph/AdjacencyList.h>
-#include <dolfinx/mesh/DistributedMeshTools.h>
 #include <dolfinx/mesh/Mesh.h>
-#include <dolfinx/mesh/MeshFunction.h>
-#include <dolfinx/mesh/Partitioning.h>
+#include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx/mesh/cell_types.h>
 #include <dolfinx/refinement/refine.h>
 #include <memory>
@@ -37,10 +36,10 @@ std::int64_t nvertices(int i, int j, int k, int nrefine)
 }
 } // namespace
 
-std::shared_ptr<dolfinx::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
-                                                      std::size_t target_dofs,
-                                                      bool target_dofs_total,
-                                                      std::size_t dofs_per_node)
+std::shared_ptr<dolfinx::mesh::Mesh>
+create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
+                 std::size_t dofs_per_node,
+                 const dolfinx::fem::CoordinateElement& element)
 {
   // Get number of processes
   const std::size_t num_processes = dolfinx::MPI::size(comm);
@@ -96,8 +95,7 @@ std::shared_ptr<dolfinx::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
       dolfinx::generation::BoxMesh::create(
           comm,
           {Eigen::Vector3d(0.0, 0.0, 0.0), Eigen::Vector3d(1.0, 1.0, 1.0)},
-          {Nx, Ny, Nz}, dolfinx::mesh::CellType::tetrahedron,
-          dolfinx::mesh::GhostMode::none));
+          {Nx, Ny, Nz}, element, dolfinx::mesh::GhostMode::none));
 
   if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
   {
@@ -107,7 +105,7 @@ std::shared_ptr<dolfinx::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
 
   for (int i = 0; i < r; ++i)
   {
-    mesh->create_connectivity(3, 1);
+    mesh->topology_mutable().create_connectivity(3, 1);
     mesh = std::make_shared<dolfinx::mesh::Mesh>(
         dolfinx::refinement::refine(*mesh, false));
   }
@@ -117,7 +115,8 @@ std::shared_ptr<dolfinx::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
 //-----------------------------------------------------------------------------
 std::shared_ptr<dolfinx::mesh::Mesh>
 create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
-                  bool target_dofs_total, std::size_t dofs_per_node)
+                  bool target_dofs_total, std::size_t dofs_per_node,
+                  const dolfinx::fem::CoordinateElement& element)
 {
   int target = target_dofs / dofs_per_node;
   int mpi_size = dolfinx::MPI::size(comm);
@@ -153,8 +152,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   }
 
   Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor> geom(npoints, 3);
-  Eigen::Array<std::int64_t, Eigen::Dynamic, 4, Eigen::RowMajor> topo(ncells,
-                                                                      4);
+  std::vector<std::int64_t> topo(4 * ncells);
   if (mpi_rank == 0)
   {
     int p = 0;
@@ -163,6 +161,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     // Add n 'cubes' to make a joined up ring.
     for (int i = 0; i < n; ++i)
     {
+      std::cout << "Adding cube " << i << "\n";
       // Get the points for current cube
       Eigen::Array<int, 8, 1> pts;
       for (int j = 0; j < 8; ++j)
@@ -172,7 +171,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
       for (int k = 0; k < 6; ++k)
       {
         for (int j = 0; j < 4; ++j)
-          topo(c, j) = pts[cube[k][j]];
+          topo[4 * c + j] = pts[cube[k][j]];
         ++c;
       }
 
@@ -191,6 +190,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     // Add spurs to ring
     for (int i = 0; i < n; ++i)
     {
+      std::cout << "Adding spur " << i << "\n";
       // Intermediate angle between two faces
       double th0 = 2 * M_PI * (i + .5) / n;
 
@@ -217,7 +217,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
         for (int m = 0; m < 6; ++m)
         {
           for (int j = 0; j < 4; ++j)
-            topo(c, j) = pts[cube[m][j]];
+            topo[4 * c + j] = pts[cube[m][j]];
           ++c;
         }
 
@@ -240,15 +240,16 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   }
 
   // New Mesh
-  const dolfinx::fem::ElementDofLayout layout = dolfinx::fem::geometry_layout(
-      dolfinx::mesh::CellType::tetrahedron, topo.cols());
-  auto mesh = std::make_shared<dolfinx::mesh::Mesh>(dolfinx::mesh::create(
-      comm, dolfinx::graph::AdjacencyList<std::int64_t>(topo), layout, geom,
-      dolfinx::mesh::GhostMode::none));
+  std::vector<std::int32_t> offsets(ncells + 1, 0);
+  for (std::size_t i = 0; i < offsets.size() - 1; ++i)
+    offsets[i + 1] = offsets[i] + 4;
+  auto mesh = std::make_shared<dolfinx::mesh::Mesh>(dolfinx::mesh::create_mesh(
+      comm,
+      dolfinx::graph::AdjacencyList<std::int64_t>(std::move(topo),
+                                                  std::move(offsets)),
+      element, geom, dolfinx::mesh::GhostMode::none));
 
-  mesh->create_entities(1);
-
-  LOG(INFO) << "target:" << target << "\n";
+  mesh->topology_mutable().create_entities(1);
 
   while (mesh->topology().index_map(0)->size_global()
              + mesh->topology().index_map(1)->size_global()
@@ -256,8 +257,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   {
     mesh = std::make_shared<dolfinx::mesh::Mesh>(
         dolfinx::refinement::refine(*mesh, false));
-
-    mesh->create_entities(1);
+    mesh->topology_mutable().create_entities(1);
   }
 
   double fraction
@@ -266,7 +266,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
 
   if (mpi_rank == 0)
   {
-    LOG(INFO) << "Create unstructured mesh: desired fraction=" << fraction
+    std::cout << "Create unstructured mesh: desired fraction=" << fraction
               << std::endl;
   }
 
@@ -280,16 +280,25 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   int umark = 2000;
 
   std::shared_ptr<dolfinx::mesh::Mesh> meshi;
-
   for (int k = 0; k < 5; ++k)
   {
     // Trial step
-    dolfinx::mesh::MeshFunction<int> marker(mesh, 1, false);
-    auto marker_array = marker.values();
-    for (int i = 0; i < mesh->num_entities(1); ++i)
-      marker_array[i] = (i % 2000 < nmarked);
+    mesh->topology_mutable().create_entities(1);
+    const std::int32_t num_edges = mesh->topology().index_map(1)->size_local();
+    std::vector<std::int32_t> mesh_indices;
+    std::vector<std::int8_t> mesh_tags;
+    for (int i = 0; i < num_edges; ++i)
+    {
+      if (i % 2000 < nmarked)
+      {
+        mesh_indices.push_back(i);
+        mesh_tags.push_back(1);
+      }
+    }
+    dolfinx::mesh::MeshTags<std::int8_t> marker(mesh, 1, mesh_indices,
+                                                mesh_tags);
 
-    mesh->create_connectivity(1, 1);
+    mesh->topology_mutable().create_connectivity(1, 1);
     meshi = std::make_shared<dolfinx::mesh::Mesh>(
         dolfinx::refinement::refine(*mesh, marker, false));
 
@@ -300,8 +309,8 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
 
     if (mpi_rank == 0)
     {
-      LOG(INFO) << "Edges marked = " << nmarked << "/2000\n";
-      LOG(INFO) << "Step " << k
+      std::cout << "Edges marked = " << nmarked << "/2000\n";
+      std::cout << "Step " << k
                 << " achieved actual fraction = " << actual_fraction << "\n";
     }
 

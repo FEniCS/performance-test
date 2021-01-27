@@ -4,16 +4,20 @@
 //
 // SPDX-License-Identifier:    MIT
 
+#include "Elasticity.h"
+#include "Poisson.h"
 #include "elasticity_problem.h"
 #include "mesh.h"
 #include "poisson_problem.h"
 #include <boost/program_options.hpp>
-#include <dolfinx/common/SubSystemsManager.h>
 #include <dolfinx/common/Timer.h>
+#include <dolfinx/common/subsystem.h>
 #include <dolfinx/common/timing.h>
+#include <dolfinx/common/version.h>
 #include <dolfinx/fem/Form.h>
-#include <dolfinx/function/Function.h>
-#include <dolfinx/function/FunctionSpace.h>
+#include <dolfinx/fem/Function.h>
+#include <dolfinx/fem/FunctionSpace.h>
+#include <dolfinx/fem/utils.h>
 #include <dolfinx/io/XDMFFile.h>
 #include <dolfinx/la/PETScKrylovSolver.h>
 #include <dolfinx/la/PETScMatrix.h>
@@ -25,12 +29,8 @@
 
 namespace po = boost::program_options;
 
-int main(int argc, char* argv[])
+void solve(int argc, char* argv[])
 {
-  dolfinx::common::SubSystemsManager::init_logging(argc, argv);
-  dolfinx::common::SubSystemsManager::init_mpi();
-  dolfinx::common::SubSystemsManager::init_petsc(argc, argv);
-
   po::options_description desc("Allowed options");
   desc.add_options()("help,h", "print usage message")(
       "problem_type", po::value<std::string>()->default_value("poisson"),
@@ -55,7 +55,7 @@ int main(int argc, char* argv[])
   if (vm.count("help"))
   {
     std::cout << desc << "\n";
-    return 0;
+    return;
   }
 
   const std::string problem_type = vm["problem_type"].as<std::string>();
@@ -77,23 +77,24 @@ int main(int argc, char* argv[])
   const std::size_t num_processes = dolfinx::MPI::size(MPI_COMM_WORLD);
 
   // Assemble problem
+  std::shared_ptr<dolfinx::mesh::Mesh> mesh;
   std::shared_ptr<dolfinx::la::PETScMatrix> A;
   std::shared_ptr<dolfinx::la::PETScVector> b;
-  std::shared_ptr<dolfinx::function::Function> u;
+  std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u;
   if (problem_type == "poisson")
   {
     dolfinx::common::Timer t0("ZZZ Create Mesh");
-
-    std::shared_ptr<dolfinx::mesh::Mesh> mesh;
+    auto cmap
+        = dolfinx::fem::create_coordinate_map(create_coordinate_map_Poisson);
     if (mesh_type == "cube")
-      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1);
+      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1, cmap);
     else
-      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1);
+      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1, cmap);
     t0.stop();
 
     // Create mesh entity permutations outside of the assembler
     dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
-    mesh->create_entity_permutations();
+    mesh->topology_mutable().create_entity_permutations();
     tperm.stop();
 
     // Create Poisson problem
@@ -107,16 +108,17 @@ int main(int argc, char* argv[])
   else if (problem_type == "elasticity")
   {
     dolfinx::common::Timer t0("ZZZ Create Mesh");
-    std::shared_ptr<dolfinx::mesh::Mesh> mesh;
+    auto cmap
+        = dolfinx::fem::create_coordinate_map(create_coordinate_map_Elasticity);
     if (mesh_type == "cube")
-      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3);
+      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3, cmap);
     else
-      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3);
+      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3, cmap);
     t0.stop();
 
     // Create mesh entity permutations outside of the assembler
     dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
-    mesh->create_entity_permutations();
+    mesh->topology_mutable().create_entity_permutations();
     tperm.stop();
 
     // Create elasticity problem. Near-nullspace will be attached to the
@@ -134,18 +136,31 @@ int main(int argc, char* argv[])
   // Print simulation summary
   if (dolfinx::MPI::rank(MPI_COMM_WORLD) == 0)
   {
+    char petsc_version[256];
+    PetscGetVersion(petsc_version, 256);
+
+    const std::int64_t num_dofs
+        = u->function_space()->dofmap()->index_map->size_global()
+          * u->function_space()->dofmap()->index_map_bs();
+    const int tdim = mesh->topology().dim();
+    const std::int64_t num_cells
+        = mesh->topology().index_map(tdim)->size_global();
     std::cout
         << "----------------------------------------------------------------"
         << std::endl;
     std::cout << "Test problem summary" << std::endl;
-    std::cout << "  Problem type:   " << problem_type << std::endl;
-    std::cout << "  Scaling type:   " << scaling_type << std::endl;
-    std::cout << "  Num processes:  " << num_processes << std::endl;
-    std::cout << "  Total degrees of freedom:               "
-              << u->function_space()->dim() << std::endl;
-    std::cout << "  Average degrees of freedom per process: "
-              << u->function_space()->dim() / dolfinx::MPI::size(MPI_COMM_WORLD)
+    std::cout << "  dolfinx version: " << DOLFINX_VERSION_STRING << std::endl;
+    std::cout << "  dolfinx hash:    " << DOLFINX_VERSION_GIT << std::endl;
+    std::cout << "  ufl hash:        " << UFC_SIGNATURE << std::endl;
+    std::cout << "  petsc version:   " << petsc_version << std::endl;
+    std::cout << "  Problem type:    " << problem_type << std::endl;
+    std::cout << "  Scaling type:    " << scaling_type << std::endl;
+    std::cout << "  Num processes:   " << num_processes << std::endl;
+    std::cout << "  Num cells        " << num_cells << std::endl;
+    std::cout << "  Total degrees of freedom:               " << num_dofs
               << std::endl;
+    std::cout << "  Average degrees of freedom per process: "
+              << num_dofs / dolfinx::MPI::size(MPI_COMM_WORLD) << std::endl;
     std::cout
         << "----------------------------------------------------------------"
         << std::endl;
@@ -158,7 +173,7 @@ int main(int argc, char* argv[])
 
   // Solve
   dolfinx::common::Timer t5("ZZZ Solve");
-  int num_iter = solver.solve(u->vector().vec(), b->vec());
+  int num_iter = solver.solve(u->vector(), b->vec());
 
   t5.stop();
 
@@ -167,21 +182,34 @@ int main(int argc, char* argv[])
     dolfinx::common::Timer t6("ZZZ Output");
     std::string filename
         = output_dir + "/solution-" + std::to_string(num_processes) + ".xdmf";
-    dolfinx::io::XDMFFile file(MPI_COMM_WORLD, filename);
-    file.write(*u, 0.0);
+    dolfinx::io::XDMFFile file(MPI_COMM_WORLD, filename, "w");
+    file.write_mesh(*mesh);
+    file.write_function(*u, 0.0);
     t6.stop();
   }
 
   // Display timings
   dolfinx::list_timings(MPI_COMM_WORLD, {dolfinx::TimingType::wall});
 
-  double norm = u->vector().norm(dolfinx::la::Norm::l2);
+  PetscReal norm = 0.0;
+  VecNorm(u->vector(), NORM_2, &norm);
   // Report number of Krylov iterations
   if (dolfinx::MPI::rank(MPI_COMM_WORLD) == 0)
   {
     std::cout << "*** Number of Krylov iterations: " << num_iter << std::endl;
     std::cout << "*** Solution norm:  " << norm << std::endl;
   }
+}
 
+int main(int argc, char* argv[])
+{
+  dolfinx::common::subsystem::init_logging(argc, argv);
+  dolfinx::common::subsystem::init_mpi();
+  dolfinx::common::subsystem::init_petsc(argc, argv);
+
+  solve(argc, argv);
+
+  dolfinx::common::subsystem::finalize_petsc();
+  dolfinx::common::subsystem::finalize_mpi();
   return 0;
 }
