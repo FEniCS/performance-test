@@ -137,15 +137,20 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   VecGetValues(b.vec(), Aspmv.mat().rows(), rows.data(), bspmv.data());
 
   double rtol = 1e-8;
-  int max_its = 1000;
+  int max_its = 10000;
+  dolfinx::common::Timer tspmv("SPMV: solve");
   auto [result, its] = spmv::cg(MPI_COMM_WORLD, Aspmv, bspmv, max_its, rtol);
+  tspmv.stop();
 
   double rnorm = result.head(Aspmv.row_map()->local_size()).squaredNorm();
   double rnorm_sum;
   MPI_Allreduce(&rnorm, &rnorm_sum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-  std::cout << "SPMV: Got result: " << std::sqrt(rnorm_sum) << " in " << its
-            << " iterations\n";
+  if (dolfinx::MPI::rank(MPI_COMM_WORLD) == 0)
+  {
+    std::cout << "SPMV: Got result: " << std::sqrt(rnorm_sum) << " in " << its
+              << " iterations\n";
+  }
 
   t1.stop();
 
