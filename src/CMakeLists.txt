@@ -36,7 +36,6 @@ add_executable(${PROJECT_NAME} main.cpp mesh.cpp elasticity_problem.cpp poisson_
 
 
 # Target libraries
-target_link_libraries(${PROJECT_NAME} PUBLIC spmv::spmv)
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 set_source_files_properties(main.cpp PROPERTIES COMPILE_FLAGS "-march=native -Wall -Wextra -pedantic -Werror -Ofast")
 
@@ -49,6 +48,6 @@ set(Boost_VERBOSE TRUE)
 find_package(Boost 1.70 REQUIRED program_options)
 
 # Target libraries
-target_link_libraries(${PROJECT_NAME} dolfinx Boost::program_options)
+target_link_libraries(${PROJECT_NAME} dolfinx Boost::program_options spmv::spmv)
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)

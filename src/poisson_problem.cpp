@@ -81,6 +81,40 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   MatAssemblyEnd(A.mat(), MAT_FINAL_ASSEMBLY);
   t2.stop();
 
+  // Assembly into Eigen::SparseMatrix
+  //-------------------------------------------------------
+
+  auto im = V->dofmap()->index_map;
+  int m = im->size_local() + im->num_ghosts();
+  Eigen::SparseMatrix<PetscScalar> spmat(m, m);
+  {
+    std::vector<Eigen::Triplet<PetscScalar>> mat_data;
+    std::function<int(std::int32_t, const std::int32_t*, std::int32_t,
+                      const std::int32_t*, const PetscScalar*)>
+        mat_add = [&mat_data](std::int32_t nr, const std::int32_t* rows,
+                              const std::int32_t nc, const std::int32_t* cols,
+                              const PetscScalar* data) {
+          for (int i = 0; i < nr; ++i)
+            for (int j = 0; j < nc; ++j)
+              mat_data.push_back(Eigen::Triplet<PetscScalar>(rows[i], cols[j],
+                                                             data[i * nc + j]));
+
+          return 0;
+        };
+
+    dolfinx::fem::assemble_matrix(mat_add, *a, {bc});
+    assert(bc);
+    dolfinx::fem::add_diagonal(mat_add, *V, {bc});
+    spmat.setFromTriplets(mat_data.begin(), mat_data.end());
+  }
+  std::int64_t local_size = im->size_local();
+  std::vector<std::int64_t> ghosts(im->ghosts().data(),
+                                   im->ghosts().data() + im->num_ghosts());
+  auto Aspmv = spmv::Matrix<PetscScalar>::create_matrix(
+      mesh->mpi_comm(), spmat, local_size, local_size, ghosts, ghosts);
+
+  //-------------------------------------------------------
+
   VecSet(b.vec(), 0.0);
   VecGhostUpdateBegin(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
   VecGhostUpdateEnd(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
@@ -92,6 +126,25 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   VecGhostUpdateEnd(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   dolfinx::fem::set_bc_petsc(b.vec(), {bc}, nullptr);
   t3.stop();
+
+  // Empty RHS
+  Eigen::VectorXd bspmv(Aspmv.mat().rows());
+  std::vector<int> rows(Aspmv.mat().rows());
+  std::iota(rows.begin(), rows.end(), Aspmv.row_map()->global_offset());
+  VecAssemblyBegin(b.vec());
+  VecAssemblyEnd(b.vec());
+  VecGetValues(b.vec(), Aspmv.mat().rows(), rows.data(), bspmv.data());
+
+  double rtol = 1e-8;
+  int max_its = 1000;
+  auto [result, its] = spmv::cg(MPI_COMM_WORLD, Aspmv, bspmv, max_its, rtol);
+
+  double rnorm = result.head(Aspmv.row_map()->local_size()).squaredNorm();
+  double rnorm_sum;
+  MPI_Allreduce(&rnorm, &rnorm_sum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
+  std::cout << "SPMV: Got result: " << std::sqrt(rnorm_sum) << " in " << its
+            << " iterations\n";
 
   t1.stop();
 
