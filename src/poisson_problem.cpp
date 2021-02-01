@@ -227,10 +227,12 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   dolfinx::common::Timer tnbr4("Assembly: collect data");
 
+  std::shared_ptr<const dolfinx::common::IndexMap> p1 = pattern.index_map(1);
+  const std::int64_t col_max = p1->local_range()[1];
+  const std::int64_t col_min = p1->local_range()[0];
   std::map<std::int64_t, std::int32_t> column_global_to_local;
-  for (int i = 0; i < pattern.index_map(1)->num_ghosts(); ++i)
-    column_global_to_local.insert({pattern.index_map(1)->ghosts()[i],
-                                   i + pattern.index_map(1)->local_range()[1]});
+  for (std::size_t i = 0; i < p1->ghosts().size(); ++i)
+    column_global_to_local.insert({p1->ghosts()[i], i + (col_max - col_min)});
 
   for (int p = 0; p < recv_data_int.num_nodes(); ++p)
   {
@@ -253,11 +255,15 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
       Teuchos::ArrayView<const PetscScalar> data_view(
           recv_data_scalar.links(p).data() + d, num_col);
-      std::vector<std::int64_t> col_view(recv_data_int.links(p).data() + c + 2,
-                                         recv_data_int.links(p).data() + c + 2
-                                             + num_col);
-      std::vector<std::int32_t> col_local
-          = pattern.index_map(1)->global_to_local(col_view);
+      std::vector<std::int32_t> col_local(num_col);
+      for (int j = 0; j < num_col; ++j)
+      {
+        std::int64_t gi = recv_data_int.links(p)[c + 2 + j];
+        if (gi >= col_min and gi < col_max)
+          col_local[j] = gi - col_min;
+        else
+          col_local[j] = column_global_to_local[gi];
+      }
       int nvalid
           = A_Tpetra->sumIntoLocalValues(local_rows[i], col_local, data_view);
       c += (num_col + 2);
