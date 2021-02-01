@@ -170,6 +170,10 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::fem::assemble_matrix(tpetra_insert, *a, {bc});
   dolfinx::fem::add_diagonal(tpetra_insert, *V, {bc});
 
+  // SEND CACHED ROWS TO OWNING PROCESS
+  // Should use neighbor comms for this
+
+  dolfinx::common::Timer tnbr("Assembly: Send off-process rows");
   // Condense cache (sort and sum values on each row)
   int mpi_size = dolfinx::MPI::size(MPI_COMM_WORLD);
   const std::vector<int> ghost_owners
@@ -181,7 +185,6 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   std::map<std::int64_t, PetscScalar> row_sum;
   for (std::size_t i = 0; i < ghost_row.size(); ++i)
   {
-
     std::vector<std::pair<std::int64_t, PetscScalar>>& row = remote_rows[i];
     row_sum.clear();
     for (const std::pair<std::int64_t, PetscScalar>& q : row)
@@ -190,9 +193,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
     std::vector<PetscScalar>& ss = send_data_scalar[ghost_owners[i]];
 
     sd.push_back(ghost_row[i]);
-    ss.push_back(0.0);
     sd.push_back(row_sum.size());
-    ss.push_back(0.0);
     for (const std::pair<std::int64_t, PetscScalar>& q : row_sum)
     {
       sd.push_back(q.first);
@@ -221,12 +222,13 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
         = V->dofmap()->index_map->global_to_local(global_rows);
 
     int c = 0;
+    int d = 0;
     for (std::size_t i = 0; i < local_rows.size(); ++i)
     {
       const int num_col = num_cols[i];
 
       Teuchos::ArrayView<const PetscScalar> data_view(
-          recv_data_scalar.links(p).data() + c + 2, num_col);
+          recv_data_scalar.links(p).data() + d, num_col);
       std::vector<std::int64_t> col_view(recv_data_int.links(p).data() + c + 2,
                                          recv_data_int.links(p).data() + c + 2
                                              + num_col);
@@ -235,8 +237,10 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
       int nvalid
           = A_Tpetra->sumIntoLocalValues(local_rows[i], col_local, data_view);
       c += (num_col + 2);
+      d += num_col;
     }
   }
+  tnbr.stop();
 
   A_Tpetra->fillComplete(vecMap, vecMap);
   tassm.stop();
