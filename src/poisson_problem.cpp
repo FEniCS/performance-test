@@ -174,14 +174,24 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   // Should use neighbor comms for this
 
   dolfinx::common::Timer tnbr("Assembly: Send off-process rows");
+  dolfinx::common::Timer tnbr2("Assembly: Create send data");
+
   // Condense cache (sort and sum values on each row)
   int mpi_size = dolfinx::MPI::size(MPI_COMM_WORLD);
   const std::vector<int> ghost_owners
       = V->dofmap()->index_map->ghost_owner_rank();
   const std::vector<std::int64_t>& ghost_row = V->dofmap()->index_map->ghosts();
 
-  std::vector<std::vector<std::int64_t>> send_data_int(mpi_size);
-  std::vector<std::vector<PetscScalar>> send_data_scalar(mpi_size);
+  MPI_Comm neighbor_comm = V->dofmap()->index_map->comm(
+      dolfinx::common::IndexMap::Direction::reverse);
+  auto [src_nbr, dest_nbr] = dolfinx::MPI::neighbors(neighbor_comm);
+  int nnbr = dest_nbr.size();
+  std::map<int, int> nbrmap;
+  for (std::size_t i = 0; i < dest_nbr.size(); ++i)
+    nbrmap.insert({dest_nbr[i], i});
+
+  std::vector<std::vector<std::int64_t>> send_data_int(nnbr);
+  std::vector<std::vector<PetscScalar>> send_data_scalar(nnbr);
   std::map<std::int64_t, PetscScalar> row_sum;
   for (std::size_t i = 0; i < ghost_row.size(); ++i)
   {
@@ -189,8 +199,8 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
     row_sum.clear();
     for (const std::pair<std::int64_t, PetscScalar>& q : row)
       row_sum[q.first] += q.second;
-    std::vector<std::int64_t>& sd = send_data_int[ghost_owners[i]];
-    std::vector<PetscScalar>& ss = send_data_scalar[ghost_owners[i]];
+    std::vector<std::int64_t>& sd = send_data_int[nbrmap[ghost_owners[i]]];
+    std::vector<PetscScalar>& ss = send_data_scalar[nbrmap[ghost_owners[i]]];
 
     sd.push_back(ghost_row[i]);
     sd.push_back(row_sum.size());
@@ -201,12 +211,26 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
     }
   }
 
-  auto recv_data_int = dolfinx::MPI::all_to_all(
-      MPI_COMM_WORLD,
-      dolfinx::graph::AdjacencyList<std::int64_t>(send_data_int));
-  auto recv_data_scalar = dolfinx::MPI::all_to_all(
-      MPI_COMM_WORLD,
-      dolfinx::graph::AdjacencyList<PetscScalar>(send_data_scalar));
+  auto send_int = dolfinx::graph::AdjacencyList<std::int64_t>(send_data_int);
+  auto send_scalar
+      = dolfinx::graph::AdjacencyList<PetscScalar>(send_data_scalar);
+
+  tnbr2.stop();
+  dolfinx::common::Timer tnbr3("Assembly: alltoall");
+
+  auto recv_data_int = dolfinx::MPI::neighbor_all_to_all(
+      neighbor_comm, send_int.offsets(), send_int.array());
+  auto recv_data_scalar = dolfinx::MPI::neighbor_all_to_all(
+      neighbor_comm, send_scalar.offsets(), send_scalar.array());
+  MPI_Barrier(MPI_COMM_WORLD);
+  tnbr3.stop();
+
+  dolfinx::common::Timer tnbr4("Assembly: collect data");
+
+  std::map<std::int64_t, std::int32_t> column_global_to_local;
+  for (int i = 0; i < pattern.index_map(1)->num_ghosts(); ++i)
+    column_global_to_local.insert({pattern.index_map(1)->ghosts()[i],
+                                   i + pattern.index_map(1)->local_range()[1]});
 
   for (int p = 0; p < recv_data_int.num_nodes(); ++p)
   {
@@ -240,6 +264,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
       d += num_col;
     }
   }
+  tnbr4.stop();
   tnbr.stop();
 
   A_Tpetra->fillComplete(vecMap, vecMap);
