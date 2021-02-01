@@ -164,14 +164,16 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   Teuchos::RCP<const Teuchos::Comm<int>> comm
       = Teuchos::rcp(new Teuchos::MpiComm<int>(mesh->mpi_comm()));
   const std::vector<std::int64_t> global_indices
-      = V->dofmap()->index_map->global_indices();
+      = pattern.index_map(1)->global_indices();
 
+  // Column Map over all column indices (including ghosts)
   const Teuchos::ArrayView<const std::int64_t> global_index_view(
       global_indices.data(), global_indices.size());
   Teuchos::RCP<const Tpetra::Map<std::int32_t, std::int64_t>> colMap
       = Teuchos::rcp(new Tpetra::Map<std::int32_t, std::int64_t>(
           V->dofmap()->index_map->size_global(), global_index_view, 0, comm));
 
+  // Vector Map view over local indices only
   const Teuchos::ArrayView<const std::int64_t> global_index_vec_view(
       global_indices.data(), V->dofmap()->index_map->size_local());
   Teuchos::RCP<const Tpetra::Map<std::int32_t, std::int64_t>> vecMap
@@ -181,27 +183,82 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   Teuchos::ArrayView<std::size_t> _nnz(nnz.data(), nnz.size());
   Teuchos::RCP<Tpetra::CrsGraph<std::int32_t, std::int64_t>> crs_graph(
-      new Tpetra::CrsGraph<std::int32_t, std::int64_t>(vecMap, _nnz));
+      new Tpetra::CrsGraph<std::int32_t, std::int64_t>(vecMap, colMap, _nnz));
 
   const std::int64_t r0 = V->dofmap()->index_map->local_range()[0];
   for (std::size_t i = 0; i != diagonal_pattern.num_nodes(); ++i)
   {
-    std::vector<std::int64_t> indices(diagonal_pattern.links(i).begin(),
+    std::vector<std::int32_t> indices(diagonal_pattern.links(i).begin(),
                                       diagonal_pattern.links(i).end());
-    for (std::int64_t& q : indices)
-      q += r0;
     indices.insert(indices.end(), off_diagonal_pattern.links(i).begin(),
                    off_diagonal_pattern.links(i).end());
-    Teuchos::ArrayView<std::int64_t> _indices(indices.data(), indices.size());
-    crs_graph->insertGlobalIndices(global_indices[i], _indices);
+    Teuchos::ArrayView<std::int32_t> _indices(indices.data(), indices.size());
+    crs_graph->insertLocalIndices(global_indices[i], _indices);
   }
 
   crs_graph->fillComplete(vecMap, vecMap);
   tcre.stop();
+
+  // Block matrix (bs=3) for 3D Elasticity
+  const int bs = 3;
   Teuchos::RCP<Tpetra::BlockCrsMatrix<PetscScalar, std::int32_t, std::int64_t>>
       A_Tpetra = Teuchos::rcp(
           new Tpetra::BlockCrsMatrix<PetscScalar, std::int32_t, std::int64_t>(
-              *crs_graph, 3));
+              *crs_graph, bs));
+
+  // Insert block
+  std::function<int(std::int32_t, const std::int32_t*, std::int32_t,
+                    const std::int32_t*, const PetscScalar*)>
+      tpetra_insert_block
+      = [&A_Tpetra, &bs](std::int32_t nr, const std::int32_t* rows,
+                         const std::int32_t nc, const std::int32_t* cols,
+                         const PetscScalar* data) {
+          for (std::int32_t i = 0; i < nr; ++i)
+          {
+            int nvalid = A_Tpetra->sumIntoLocalValues(
+                rows[i], cols, data + i * nc * bs * bs, nc);
+            if (nvalid != nc)
+              throw std::runtime_error("Inserted " + std::to_string(nvalid)
+                                       + "/" + std::to_string(nc)
+                                       + " on row:" + std::to_string(rows[i]));
+          }
+          return 0;
+        };
+
+  // Insert individual values (for diagonal)
+  std::function<int(std::int32_t, const std::int32_t*, std::int32_t,
+                    const std::int32_t*, const PetscScalar*)>
+      tpetra_insert
+      = [&A_Tpetra, &bs](std::int32_t nr, const std::int32_t* rows,
+                         const std::int32_t nc, const std::int32_t* cols,
+                         const PetscScalar* data) {
+          std::vector<PetscScalar> block_data(bs * bs, 0.0);
+          for (std::int32_t i = 0; i < nr; ++i)
+          {
+            int row = rows[i] / bs;
+            int rdiv = rows[i] % bs;
+            for (std::int32_t j = 0; j < nc; ++j)
+            {
+              int col = cols[j] / bs;
+              int cdiv = cols[j] % bs;
+              std::fill(block_data.begin(), block_data.end(), 0.0);
+              block_data[rdiv * bs + cdiv] = data[i * nc + j];
+
+              int nvalid = A_Tpetra->sumIntoLocalValues(row, &col,
+                                                        block_data.data(), 1);
+              block_data[rdiv * bs + cdiv] = 0.0;
+              if (nvalid != 1)
+                throw std::runtime_error("Inserted " + std::to_string(nvalid)
+                                         + "/" + std::to_string(nc) + " on row:"
+                                         + std::to_string(rows[i]));
+            }
+          }
+          return 0;
+        };
+
+  dolfinx::common::Timer tassm("Trilinos: assemble matrix");
+  dolfinx::fem::assemble_matrix(tpetra_insert_block, *a, {bc});
+  dolfinx::fem::add_diagonal(tpetra_insert, *V, {bc});
 
   // Create matrices and vector, and assemble system
   dolfinx::la::PETScMatrix A(dolfinx::fem::create_matrix(*a), false);

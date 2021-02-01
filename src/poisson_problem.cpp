@@ -171,7 +171,6 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::fem::add_diagonal(tpetra_insert, *V, {bc});
 
   // SEND CACHED ROWS TO OWNING PROCESS
-  // Should use neighbor comms for this
 
   dolfinx::common::Timer tnbr("Assembly: Send off-process rows");
   dolfinx::common::Timer tnbr2("Assembly: Create send data");
@@ -247,7 +246,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
     std::vector<std::int32_t> local_rows
         = V->dofmap()->index_map->global_to_local(global_rows);
 
-    int c = 0;
+    int c = 2;
     int d = 0;
     for (std::size_t i = 0; i < local_rows.size(); ++i)
     {
@@ -258,7 +257,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
       std::vector<std::int32_t> col_local(num_col);
       for (int j = 0; j < num_col; ++j)
       {
-        std::int64_t gi = recv_data_int.links(p)[c + 2 + j];
+        const std::int64_t gi = recv_data_int.links(p)[c + j];
         if (gi >= col_min and gi < col_max)
           col_local[j] = gi - col_min;
         else
