@@ -154,7 +154,7 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   pattern.assemble();
   const dolfinx::graph::AdjacencyList<std::int32_t>& diagonal_pattern
       = pattern.diagonal_pattern();
-  const dolfinx::graph::AdjacencyList<std::int64_t>& off_diagonal_pattern
+  const dolfinx::graph::AdjacencyList<std::int32_t>& off_diagonal_pattern
       = pattern.off_diagonal_pattern();
 
   std::vector<std::size_t> nnz(diagonal_pattern.num_nodes());

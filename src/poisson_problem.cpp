@@ -82,7 +82,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   pattern.assemble();
   const dolfinx::graph::AdjacencyList<std::int32_t>& diagonal_pattern
       = pattern.diagonal_pattern();
-  const dolfinx::graph::AdjacencyList<std::int64_t>& off_diagonal_pattern
+  const dolfinx::graph::AdjacencyList<std::int32_t>& off_diagonal_pattern
       = pattern.off_diagonal_pattern();
 
   std::vector<std::size_t> nnz(diagonal_pattern.num_nodes());
@@ -93,25 +93,8 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   std::vector<std::int64_t> global_indices
       = pattern.index_map(1)->global_indices();
 
-  std::vector<std::int32_t> wlocal
-      = V->dofmap()->index_map->global_to_local(off_diagonal_pattern.array());
-  const std::int32_t max_w = global_indices.size();
-  for (std::size_t i = 0; i < wlocal.size(); ++i)
-  {
-    if (wlocal[i] == -1)
-    {
-      std::int64_t val = off_diagonal_pattern.array()[i];
-      auto it = std::find(std::next(global_indices.begin(), max_w),
-                          global_indices.end(), val);
-      if (it == global_indices.end())
-        global_indices.push_back(val);
-    }
-  }
-
   const Teuchos::ArrayView<const std::int64_t> global_index_view(
       global_indices.data(), global_indices.size());
-  //  Teuchos::RCP<const Tpetra::Map<>> rowMap = Teuchos::rcp(new Tpetra::Map<>(
-  //      V->dofmap()->index_map->size_global(), global_index_view, 0, comm));
   Teuchos::RCP<const Tpetra::Map<std::int32_t, std::int64_t>> colMap
       = Teuchos::rcp(new Tpetra::Map<std::int32_t, std::int64_t>(
           V->dofmap()->index_map->size_global(), global_index_view, 0, comm));
@@ -132,14 +115,17 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   {
     std::vector<std::int32_t> indices(diagonal_pattern.links(i).begin(),
                                       diagonal_pattern.links(i).end());
-    for (std::int64_t q : off_diagonal_pattern.links(i))
-      indices.push_back(colMap->getLocalElement(q));
+    for (std::int32_t q : off_diagonal_pattern.links(i))
+      indices.push_back(q);
     Teuchos::ArrayView<std::int32_t> _indices(indices.data(), indices.size());
     crs_graph->insertLocalIndices(i, _indices);
   }
 
   crs_graph->fillComplete();
   tcre.stop();
+
+  std::vector<std::vector<std::pair<std::int64_t, PetscScalar>>> remote_rows(
+      V->dofmap()->index_map->num_ghosts());
 
   Teuchos::RCP<Tpetra::CrsMatrix<PetscScalar, std::int32_t, std::int64_t>>
       A_Tpetra = Teuchos::rcp(
@@ -149,7 +135,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   std::function<int(std::int32_t, const std::int32_t*, std::int32_t,
                     const std::int32_t*, const PetscScalar*)>
       tpetra_insert
-      = [&A_Tpetra, &global_indices, &global_cols, &nlocalrows](
+      = [&A_Tpetra, &global_indices, &global_cols, &nlocalrows, &remote_rows](
             std::int32_t nr, const std::int32_t* rows, const std::int32_t nc,
             const std::int32_t* cols, const PetscScalar* data) {
           for (std::int32_t i = 0; i < nr; ++i)
@@ -169,17 +155,12 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
             else
             {
               global_cols.resize(nc);
-              for (std::int32_t i = 0; i < nc; ++i)
-                global_cols[i] = global_indices[cols[i]];
-              Teuchos::ArrayView<const long> global_col_view(global_cols.data(),
-                                                             nc);
-              int nvalid = A_Tpetra->sumIntoGlobalValues(
-                  global_indices[rows[i]], global_col_view, data_view);
-              if (nvalid != nc)
-                throw std::runtime_error(
-                    "Inserted " + std::to_string(nvalid) + "/"
-                    + std::to_string(nc)
-                    + " on row:" + std::to_string(global_indices[rows[i]]));
+              for (std::int32_t j = 0; j < nc; ++j)
+              {
+                global_cols[j] = global_indices[cols[j]];
+                remote_rows[rows[i] - nlocalrows].push_back(
+                    {global_cols[j], data[i * nc + j]});
+              }
             }
           }
           return 0;
@@ -188,6 +169,75 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::common::Timer tassm("Trilinos: assemble matrix");
   dolfinx::fem::assemble_matrix(tpetra_insert, *a, {bc});
   dolfinx::fem::add_diagonal(tpetra_insert, *V, {bc});
+
+  // Condense cache (sort and sum values on each row)
+  int mpi_size = dolfinx::MPI::size(MPI_COMM_WORLD);
+  const std::vector<int> ghost_owners
+      = V->dofmap()->index_map->ghost_owner_rank();
+  const std::vector<std::int64_t>& ghost_row = V->dofmap()->index_map->ghosts();
+
+  std::vector<std::vector<std::int64_t>> send_data_int(mpi_size);
+  std::vector<std::vector<PetscScalar>> send_data_scalar(mpi_size);
+  std::map<std::int64_t, PetscScalar> row_sum;
+  for (std::size_t i = 0; i < ghost_row.size(); ++i)
+  {
+
+    std::vector<std::pair<std::int64_t, PetscScalar>>& row = remote_rows[i];
+    row_sum.clear();
+    for (const std::pair<std::int64_t, PetscScalar>& q : row)
+      row_sum[q.first] += q.second;
+    std::vector<std::int64_t>& sd = send_data_int[ghost_owners[i]];
+    std::vector<PetscScalar>& ss = send_data_scalar[ghost_owners[i]];
+
+    sd.push_back(ghost_row[i]);
+    ss.push_back(0.0);
+    sd.push_back(row_sum.size());
+    ss.push_back(0.0);
+    for (const std::pair<std::int64_t, PetscScalar>& q : row_sum)
+    {
+      sd.push_back(q.first);
+      ss.push_back(q.second);
+    }
+  }
+
+  auto recv_data_int = dolfinx::MPI::all_to_all(
+      MPI_COMM_WORLD,
+      dolfinx::graph::AdjacencyList<std::int64_t>(send_data_int));
+  auto recv_data_scalar = dolfinx::MPI::all_to_all(
+      MPI_COMM_WORLD,
+      dolfinx::graph::AdjacencyList<PetscScalar>(send_data_scalar));
+
+  for (int p = 0; p < recv_data_int.num_nodes(); ++p)
+  {
+    auto pdata = recv_data_int.links(p);
+    std::vector<std::int64_t> global_rows;
+    std::vector<int> num_cols;
+    for (int i = 0; i < recv_data_int.num_links(p); i += (pdata[i + 1] + 2))
+    {
+      global_rows.push_back(pdata[i]);
+      num_cols.push_back(pdata[i + 1]);
+    }
+    std::vector<std::int32_t> local_rows
+        = V->dofmap()->index_map->global_to_local(global_rows);
+
+    int c = 0;
+    for (std::size_t i = 0; i < local_rows.size(); ++i)
+    {
+      const int num_col = num_cols[i];
+
+      Teuchos::ArrayView<const PetscScalar> data_view(
+          recv_data_scalar.links(p).data() + c + 2, num_col);
+      std::vector<std::int64_t> col_view(recv_data_int.links(p).data() + c + 2,
+                                         recv_data_int.links(p).data() + c + 2
+                                             + num_col);
+      std::vector<std::int32_t> col_local
+          = pattern.index_map(1)->global_to_local(col_view);
+      int nvalid
+          = A_Tpetra->sumIntoLocalValues(local_rows[i], col_local, data_view);
+      c += (num_col + 2);
+    }
+  }
+
   A_Tpetra->fillComplete(vecMap, vecMap);
   tassm.stop();
 
@@ -245,7 +295,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   Teuchos::RCP<Teuchos::ParameterList> solver_paramList(
       new Teuchos::ParameterList);
-  solver_paramList->set("Convergence Tolerance", 1e-10);
+  solver_paramList->set("Convergence Tolerance", 1e-8);
   solver_paramList->set("Verbosity", Belos::Warnings | Belos::IterationDetails
                                          | Belos::StatusTestDetails
                                          | Belos::TimingDetails
