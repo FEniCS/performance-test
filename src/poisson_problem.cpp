@@ -210,17 +210,15 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
     }
   }
 
-  auto send_int = dolfinx::graph::AdjacencyList<std::int64_t>(send_data_int);
-  auto send_scalar
-      = dolfinx::graph::AdjacencyList<PetscScalar>(send_data_scalar);
-
   tnbr2.stop();
   dolfinx::common::Timer tnbr3("Assembly: alltoall");
 
   auto recv_data_int = dolfinx::MPI::neighbor_all_to_all(
-      neighbor_comm, send_int.offsets(), send_int.array());
+      neighbor_comm,
+      dolfinx::graph::AdjacencyList<std::int64_t>(send_data_int));
   auto recv_data_scalar = dolfinx::MPI::neighbor_all_to_all(
-      neighbor_comm, send_scalar.offsets(), send_scalar.array());
+      neighbor_comm,
+      dolfinx::graph::AdjacencyList<PetscScalar>(send_data_scalar));
   MPI_Barrier(MPI_COMM_WORLD);
   tnbr3.stop();
 
