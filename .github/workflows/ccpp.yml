@@ -68,7 +68,7 @@ jobs:
           mpirun -np 2 ./dolfinx-scaling-test \
           --problem_type poisson \
           --scaling_type weak \
-          --ndofs 50000 \
+          --ndofs 5000 \
           -log_view \
           -ksp_view \
           -ksp_type cg \
@@ -83,7 +83,7 @@ jobs:
           --problem_type poisson \
           --mesh_type unstructured \
           --scaling_type weak \
-          --ndofs 50000 \
+          --ndofs 5000 \
           -log_view \
           -ksp_view \
           -ksp_type cg \
@@ -97,7 +97,7 @@ jobs:
           mpirun -np 2 ./dolfinx-scaling-test \
           --problem_type poisson \
           --scaling_type strong \
-          --ndofs 1000000 \
+          --ndofs 100000 \
           -log_view \
           -ksp_view \
           -ksp_type cg \
@@ -111,7 +111,7 @@ jobs:
           ./dolfinx-scaling-test \
           --problem_type elasticity \
           --scaling_type weak \
-          --ndofs 100000 \
+          --ndofs 10000 \
           -log_view \
           -ksp_view \
           -ksp_type cg \
@@ -128,7 +128,7 @@ jobs:
           mpirun -np 2 ./dolfinx-scaling-test \
           --problem_type elasticity \
           --scaling_type weak \
-          --ndofs 100000 \
+          --ndofs 10000 \
           -log_view \
           -ksp_view \
           -ksp_type cg \
@@ -145,7 +145,7 @@ jobs:
           mpirun -np 2 ./dolfinx-scaling-test \
           --problem_type elasticity \
           --scaling_type strong \
-          --ndofs 500000 \
+          --ndofs 50000 \
           -log_view \
           -ksp_view \
           -ksp_type cg \
