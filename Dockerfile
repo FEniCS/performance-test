@@ -51,15 +51,26 @@ RUN apt-get -qq update && \
 RUN git clone --branch trilinos-release-13-0-1 https://github.com/trilinos/trilinos && \
     mkdir -p trilinos/build && cd trilinos/build && \
     cmake -DTPL_ENABLE_MPI=ON \
-    -DMPI_BASE_DIR=/usr/x86_64-linux \
-    -DTrilinos_ENABLE_COMPLEX_DOUBLE=ON \
-    -DTrilinos_ENABLE_MueLu=ON \
-    -DTpetra_INST_INT_LONG=ON \
-    -DTpetra_INST_INT_LONG_LONG=OFF \
-    -DBUILD_SHARED_LIBS=ON \
-    -DTrilinos_ENABLE_PyTrilinos=OFF \
-    -DTrilinos_ENABLE_Teko=OFF \
-    -DTPL_ENABLE_Netcdf=OFF \
+-D MPI_BASE_DIR=/usr/x86_64-linux \
+-D BUILD_SHARED_LIBS:BOOL=ON \
+-D CMAKE_BUILD_TYPE:STRING="RELEASE" \
+-D CMAKE_CXX_FLAGS:STRING="-O3" \
+-D Trilinos_ENABLE_EXPLICIT_INSTANTIATION:BOOL=ON \
+-D Trilinos_ENABLE_TESTS:BOOL=OFF \
+-D Trilinos_ENABLE_EXAMPLES:BOOL=OFF \
+-D Trilinos_ENABLE_MueLu:BOOL=ON \
+-D MueLu_ENABLE_TESTS:STRING=OFF \
+-D MueLu_ENABLE_EXAMPLES:STRING=OFF \
+-D MueLu_ENABLE_Kokkos_Refactor:STRING=ON \
+-D MueLu_ENABLE_Kokkos_Refactor_Use_By_Default:STRING=ON \
+-D TPL_ENABLE_BLAS:BOOL=ON \
+-D TPL_ENABLE_MPI:BOOL=ON \
+-D Trilinos_ENABLE_COMPLEX_DOUBLE=ON \
+-D Tpetra_INST_INT_LONG=ON \
+-D Tpetra_INST_INT_LONG_LONG=OFF \
+-D Trilinos_ENABLE_PyTrilinos=OFF \
+-D Trilinos_ENABLE_Teko=OFF \
+-D TPL_ENABLE_Netcdf=OFF \
     .. && \
     make install && \
     cd ../.. && rm -r trilinos
