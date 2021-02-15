@@ -134,7 +134,7 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
       double r = dx * dx + dz * dz;
       values(0, i) = -dz * std::sqrt(r) * x(1, i);
       values(1, i) = 1.0;
-      values(1, i) = dx * std::sqrt(r) * x(1, i);
+      values(2, i) = dx * std::sqrt(r) * x(1, i);
     }
     return values;
   });

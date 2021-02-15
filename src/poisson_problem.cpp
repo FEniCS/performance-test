@@ -8,6 +8,7 @@
 #include "Poisson.h"
 #include <Eigen/Dense>
 #include <cfloat>
+#include <cmath>
 #include <dolfinx/common/Timer.h>
 #include <dolfinx/fem/DirichletBC.h>
 #include <dolfinx/fem/Function.h>
@@ -49,6 +50,8 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
           return marked;
         });
 
+  std::cout << "\n " << bdofs.size();
+
   auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0, bdofs);
 
   // Define coefficients
@@ -60,7 +63,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
                    f.begin(), [](double x0, double x1) {
                      double dx
                          = (x0 - 0.5) * (x0 - 0.5) + (x1 - 0.5) * (x1 - 0.5);
-                     return 10.0 * std::exp(-(dx)) / 0.02;
+                     return 10.0 * std::exp(-(dx) / 0.02);
                    });
     return f;
   });
