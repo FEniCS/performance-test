@@ -50,8 +50,6 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
           return marked;
         });
 
-  std::cout << "\n " << bdofs.size();
-
   auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0, bdofs);
 
   // Define coefficients
