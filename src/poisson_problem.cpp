@@ -41,7 +41,12 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   const std::vector<std::int32_t> bdofs
       = dolfinx::fem::locate_dofs_geometrical({*V}, [](auto& x) {
-          return (x.row(0) < DBL_EPSILON or x.row(0) > 1.0 - DBL_EPSILON);
+          constexpr double eps = 10.0 * std::numeric_limits<double>::epsilon();
+          std::vector<bool> marked(x.shape[1]);
+          std::transform(
+              x.row(0).begin(), x.row(0).end(), marked.begin(),
+              [](double x0) { return x0 < eps or std::abs(x0 - 1) < eps; });
+          return marked;
         });
 
   auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0, bdofs);
@@ -50,14 +55,21 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   auto f = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   auto g = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   f->interpolate([](auto& x) {
-    auto dx = x.row(0) - 0.5;
-    auto dy = x.row(1) - 0.5;
-    return 10 * (-(dx * dx + dy * dy).exp() / 0.02);
+    std::vector<PetscScalar> f(x.shape[1]);
+    std::transform(x.row(0).begin(), x.row(0).end(), x.row(1).begin(),
+                   f.begin(), [](double x0, double x1) {
+                     double dx
+                         = (x0 - 0.5) * (x0 - 0.5) + (x1 - 0.5) * (x1 - 0.5);
+                     return 10.0 * std::exp(-(dx)) / 0.02;
+                   });
+    return f;
   });
+
   g->interpolate([](auto& x) {
-    {
-      return (5.0 * x.row(0)).sin();
-    }
+    std::vector<PetscScalar> f(x.shape[1]);
+    std::transform(x.row(0).begin(), x.row(0).end(), f.begin(),
+                   [](double x0) { return std::sin(5 * x0); });
+    return f;
   });
 
   // Define variational forms
