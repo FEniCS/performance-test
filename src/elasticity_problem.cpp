@@ -8,6 +8,7 @@
 #include "Elasticity.h"
 #include <Eigen/Dense>
 #include <dolfinx/common/Timer.h>
+#include <dolfinx/common/array2d.h>
 #include <dolfinx/fem/DirichletBC.h>
 #include <dolfinx/fem/DofMap.h>
 #include <dolfinx/fem/Form.h>
@@ -51,19 +52,18 @@ build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
   }
 
   // Rotations
-  const Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor> x
-      = V.tabulate_dof_coordinates();
+  const dolfinx::common::array2d<double> x = V.tabulate_dof_coordinates(false);
   auto& dofs = V.dofmap()->list().array();
   for (int i = 0; i < dofs.size(); ++i)
   {
-    basis.col(3)(bs * dofs[i] + 0) = -x(dofs[i], 1);
-    basis.col(3)(bs * dofs[i] + 1) = x(dofs[i], 0);
+    basis(bs * dofs[i] + 0, 3) = -x(dofs[i], 1);
+    basis(bs * dofs[i] + 1, 3) = x(dofs[i], 0);
 
-    basis.col(4)(bs * dofs[i] + 0) = x(dofs[i], 2);
-    basis.col(4)(bs * dofs[i] + 2) = -x(dofs[i], 0);
+    basis(bs * dofs[i] + 0, 4) = x(dofs[i], 2);
+    basis(bs * dofs[i] + 2, 4) = -x(dofs[i], 0);
 
-    basis.col(5)(bs * dofs[i] + 2) = x(dofs[i], 1);
-    basis.col(5)(bs * dofs[i] + 1) = -x(dofs[i], 2);
+    basis(bs * dofs[i] + 2, 5) = x(dofs[i], 1);
+    basis(bs * dofs[i] + 1, 5) = -x(dofs[i], 2);
   }
 
   const std::int32_t size = map->size_local() * bs;
@@ -108,8 +108,13 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   std::fill(u0->x()->mutable_array().begin(), u0->x()->mutable_array().end(),
             0.0);
 
-  const std::vector<std::int32_t> bdofs = dolfinx::fem::locate_dofs_geometrical(
-      {*V}, [](auto& x) { return x.row(1) < 1.0e-8; });
+  const std::vector<std::int32_t> bdofs
+      = dolfinx::fem::locate_dofs_geometrical({*V}, [](auto& x) {
+          std::vector<bool> marked(x.shape[1]);
+          std::transform(x.row(1).begin(), x.row(1).end(), marked.begin(),
+                         [](double x1) { return x1 < 1.0e-8; });
+          return marked;
+        });
 
   // Bottom (x[1] = 0) surface
   auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0, bdofs);
@@ -121,14 +126,16 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   // Define coefficients
   auto f = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   f->interpolate([](auto& x) {
-    auto dx = x.row(0) - 0.5;
-    auto dz = x.row(2) - 0.5;
-    auto r = dx * dx + dz * dz;
-    Eigen::Array<double, 3, Eigen::Dynamic, Eigen::RowMajor> values(3,
-                                                                    x.cols());
-    values.row(0) = -dz * r.sqrt() * x.row(1);
-    values.row(1) = 1.0;
-    values.row(2) = dx * r.sqrt() * x.row(1);
+    dolfinx::common::array2d<PetscScalar> values(3, x.shape[1]);
+    for (std::size_t i = 0; i < x.shape[1]; i++)
+    {
+      double dx = x(0, i) - 0.5;
+      double dz = x(2, i) - 0.5;
+      double r = dx * dx + dz * dz;
+      values(0, i) = -dz * std::sqrt(r) * x(1, i);
+      values(1, i) = 1.0;
+      values(2, i) = dx * std::sqrt(r) * x(1, i);
+    }
     return values;
   });
 
