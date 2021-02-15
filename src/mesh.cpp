@@ -3,6 +3,7 @@
 // root for full license information.
 
 #include "mesh.h"
+#include <Eigen/Core>
 #include <dolfinx/common/MPI.h>
 #include <dolfinx/common/log.h>
 #include <dolfinx/common/types.h>
@@ -150,7 +151,9 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     ncells = n * 6 + n * lspur * 6;
   }
 
-  Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor> geom(npoints, 3);
+  dolfinx::common::array2d<double> geom(npoints, 3);
+  Eigen::Map<Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor>> _geom(
+      geom.data(), geom.shape[0], geom.shape[1]);
   std::vector<std::int64_t> topo(4 * ncells);
   if (mpi_rank == 0)
   {
@@ -176,13 +179,13 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
 
       // Calculate the position of points
       double th = 2 * M_PI * i / n;
-      geom.row(p) << r0 * cos(th), r0 * sin(th), h0;
+      _geom.row(p) << r0 * cos(th), r0 * sin(th), h0;
       ++p;
-      geom.row(p) << r0 * cos(th), r0 * sin(th), -h0;
+      _geom.row(p) << r0 * cos(th), r0 * sin(th), -h0;
       ++p;
-      geom.row(p) << r1 * cos(th), r1 * sin(th), -h1;
+      _geom.row(p) << r1 * cos(th), r1 * sin(th), -h1;
       ++p;
-      geom.row(p) << r1 * cos(th), r1 * sin(th), h1;
+      _geom.row(p) << r1 * cos(th), r1 * sin(th), h1;
       ++p;
     }
 
@@ -205,10 +208,10 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
         for (int j = 0; j < 4; ++j)
         {
           pts[j + 4] = p;
-          geom.row(p) = geom.row(pts[j]);
-          geom(p, 0) += l0 * cos(th0 + k * dth);
-          geom(p, 1) += l0 * sin(th0 + k * dth);
-          geom(p, 2) *= pow(tap, k);
+          _geom.row(p) = _geom.row(pts[j]);
+          _geom(p, 0) += l0 * cos(th0 + k * dth);
+          _geom(p, 1) += l0 * sin(th0 + k * dth);
+          _geom(p, 2) *= pow(tap, k);
           ++p;
         }
 
@@ -226,16 +229,16 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     }
 
     // Check geometric sizes and rescale
-    geom.col(0) -= 0.9 * geom.col(0).minCoeff();
-    double scaling = 0.9 * geom.col(0).maxCoeff();
-    geom /= scaling;
+    _geom.col(0) -= 0.9 * _geom.col(0).minCoeff();
+    double scaling = 0.9 * _geom.col(0).maxCoeff();
+    _geom /= scaling;
 
-    LOG(INFO) << "x range = " << geom.col(0).minCoeff() << " - "
-              << geom.col(0).maxCoeff() << "\n";
-    LOG(INFO) << "y range = " << geom.col(1).minCoeff() << " - "
-              << geom.col(1).maxCoeff() << "\n";
-    LOG(INFO) << "z range = " << geom.col(2).minCoeff() << " - "
-              << geom.col(2).maxCoeff() << "\n";
+    LOG(INFO) << "x range = " << _geom.col(0).minCoeff() << " - "
+              << _geom.col(0).maxCoeff() << "\n";
+    LOG(INFO) << "y range = " << _geom.col(1).minCoeff() << " - "
+              << _geom.col(1).maxCoeff() << "\n";
+    LOG(INFO) << "z range = " << _geom.col(2).minCoeff() << " - "
+              << _geom.col(2).maxCoeff() << "\n";
   }
 
   // New Mesh
