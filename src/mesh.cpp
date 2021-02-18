@@ -151,7 +151,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     ncells = n * 6 + n * lspur * 6;
   }
 
-  dolfinx::common::array2d<double> geom(npoints, 3);
+  dolfinx::array2d<double> geom(npoints, 3);
   Eigen::Map<Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor>> _geom(
       geom.data(), geom.shape[0], geom.shape[1]);
   std::vector<std::int64_t> topo(4 * ncells);
