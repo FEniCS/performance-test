@@ -52,7 +52,7 @@ build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
   }
 
   // Rotations
-  const dolfinx::common::array2d<double> x = V.tabulate_dof_coordinates(false);
+  const dolfinx::array2d<double> x = V.tabulate_dof_coordinates(false);
   auto& dofs = V.dofmap()->list().array();
   for (int i = 0; i < dofs.size(); ++i)
   {
@@ -126,7 +126,7 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   // Define coefficients
   auto f = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   f->interpolate([](auto& x) {
-    dolfinx::common::array2d<PetscScalar> values(3, x.shape[1]);
+    dolfinx::array2d<PetscScalar> values(3, x.shape[1]);
     for (std::size_t i = 0; i < x.shape[1]; i++)
     {
       double dx = x(0, i) - 0.5;
