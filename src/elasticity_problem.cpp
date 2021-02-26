@@ -178,7 +178,7 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   Teuchos::RCP<const Teuchos::Comm<int>> comm
       = Teuchos::rcp(new Teuchos::MpiComm<int>(mesh->mpi_comm()));
   const std::vector<std::int64_t> global_indices
-      = pattern.index_map(1)->global_indices();
+      = pattern.column_map()->global_indices();
 
   std::vector<std::int64_t> global_index_view(global_indices.size() * bs);
   for (std::size_t i = 0; i < global_indices.size(); ++i)
