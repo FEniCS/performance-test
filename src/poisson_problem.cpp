@@ -104,7 +104,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   dolfinx::common::Timer tcre("Trilinos: create sparsity");
   std::vector<std::int64_t> global_indices
-      = pattern.index_map(1)->global_indices();
+      = pattern.column_map()->global_indices();
 
   const Teuchos::ArrayView<const std::int64_t> global_index_view(
       global_indices.data(), global_indices.size());
@@ -130,6 +130,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
                                       diagonal_pattern.links(i).end());
     for (std::int32_t q : off_diagonal_pattern.links(i))
       indices.push_back(q);
+
     Teuchos::ArrayView<std::int32_t> _indices(indices.data(), indices.size());
     crs_graph->insertLocalIndices(i, _indices);
   }
