@@ -355,8 +355,6 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
     s << "Norm[b](Tpetra) = " << norm2 << "\n";
 
-  dolfinx::la::VectorSpaceBasis nullspace = build_near_nullspace(*V);
-
   dolfinx::common::Timer ttri("Trilinos: solve");
 
   // Muelu preconditioner, to be constructed from a Tpetra Operator
@@ -452,6 +450,7 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   auto u = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
 
   // Build near-nullspace and attach to matrix
+  dolfinx::la::VectorSpaceBasis nullspace = build_near_nullspace(*V);
   A.set_near_nullspace(nullspace);
 
   t4.stop();

@@ -124,18 +124,18 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   crs_graph->fillComplete();
   tcre.stop();
 
-  std::vector<std::vector<std::pair<std::int64_t, PetscScalar>>> remote_rows(
-      V->dofmap()->index_map->num_ghosts());
-
   Teuchos::RCP<Tpetra::CrsMatrix<PetscScalar, std::int32_t, std::int64_t>>
       A_Tpetra = Teuchos::rcp(
           new Tpetra::CrsMatrix<PetscScalar, std::int32_t, std::int64_t>(
               crs_graph));
+
+  // Temp storage for off-process row indices
   std::vector<std::int64_t> global_cols;
+
   std::function<int(std::int32_t, const std::int32_t*, std::int32_t,
                     const std::int32_t*, const PetscScalar*)>
       tpetra_insert
-      = [&A_Tpetra, &global_indices, &global_cols, &nlocalrows, &remote_rows](
+      = [&A_Tpetra, &global_indices, &global_cols, &nlocalrows](
             std::int32_t nr, const std::int32_t* rows, const std::int32_t nc,
             const std::int32_t* cols, const PetscScalar* data) {
           for (std::int32_t i = 0; i < nr; ++i)
@@ -155,12 +155,15 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
             else
             {
               global_cols.resize(nc);
-              for (std::int32_t j = 0; j < nc; ++j)
-              {
+              for (int j = 0; j < nc; ++j)
                 global_cols[j] = global_indices[cols[j]];
-                remote_rows[rows[i] - nlocalrows].push_back(
-                    {global_cols[j], data[i * nc + j]});
-              }
+              int nvalid = A_Tpetra->sumIntoGlobalValues(
+                  global_indices[rows[i]], global_cols, data_view);
+              if (nvalid != nc)
+                throw std::runtime_error(
+                    "Inserted " + std::to_string(nvalid) + "/"
+                    + std::to_string(nc)
+                    + " on row:" + std::to_string(global_indices[rows[i]]));
             }
           }
           return 0;
@@ -169,106 +172,6 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::common::Timer tassm("Trilinos: assemble matrix");
   dolfinx::fem::assemble_matrix(tpetra_insert, *a, {bc});
   dolfinx::fem::add_diagonal(tpetra_insert, *V, {bc});
-
-  // SEND CACHED ROWS TO OWNING PROCESS
-
-  dolfinx::common::Timer tnbr("Assembly: Send off-process rows");
-  dolfinx::common::Timer tnbr2("Assembly: Create send data");
-
-  // Condense cache (sort and sum values on each row)
-  int mpi_size = dolfinx::MPI::size(MPI_COMM_WORLD);
-  const std::vector<int> ghost_owners
-      = V->dofmap()->index_map->ghost_owner_rank();
-  const std::vector<std::int64_t>& ghost_row = V->dofmap()->index_map->ghosts();
-
-  MPI_Comm neighbor_comm = V->dofmap()->index_map->comm(
-      dolfinx::common::IndexMap::Direction::reverse);
-  auto [src_nbr, dest_nbr] = dolfinx::MPI::neighbors(neighbor_comm);
-  int nnbr = dest_nbr.size();
-  std::map<int, int> nbrmap;
-  for (std::size_t i = 0; i < dest_nbr.size(); ++i)
-    nbrmap.insert({dest_nbr[i], i});
-
-  std::vector<std::vector<std::int64_t>> send_data_int(nnbr);
-  std::vector<std::vector<PetscScalar>> send_data_scalar(nnbr);
-  std::map<std::int64_t, PetscScalar> row_sum;
-  for (std::size_t i = 0; i < ghost_row.size(); ++i)
-  {
-    std::vector<std::pair<std::int64_t, PetscScalar>>& row = remote_rows[i];
-    row_sum.clear();
-    for (const std::pair<std::int64_t, PetscScalar>& q : row)
-      row_sum[q.first] += q.second;
-    std::vector<std::int64_t>& sd = send_data_int[nbrmap[ghost_owners[i]]];
-    std::vector<PetscScalar>& ss = send_data_scalar[nbrmap[ghost_owners[i]]];
-
-    sd.push_back(ghost_row[i]);
-    sd.push_back(row_sum.size());
-    for (const std::pair<std::int64_t, PetscScalar>& q : row_sum)
-    {
-      sd.push_back(q.first);
-      ss.push_back(q.second);
-    }
-  }
-
-  tnbr2.stop();
-  dolfinx::common::Timer tnbr3("Assembly: alltoall");
-
-  auto recv_data_int = dolfinx::MPI::neighbor_all_to_all(
-      neighbor_comm,
-      dolfinx::graph::AdjacencyList<std::int64_t>(send_data_int));
-  auto recv_data_scalar = dolfinx::MPI::neighbor_all_to_all(
-      neighbor_comm,
-      dolfinx::graph::AdjacencyList<PetscScalar>(send_data_scalar));
-  MPI_Barrier(MPI_COMM_WORLD);
-  tnbr3.stop();
-
-  dolfinx::common::Timer tnbr4("Assembly: collect data");
-
-  std::shared_ptr<const dolfinx::common::IndexMap> p1 = pattern.index_map(1);
-  const std::int64_t col_max = p1->local_range()[1];
-  const std::int64_t col_min = p1->local_range()[0];
-  std::map<std::int64_t, std::int32_t> column_global_to_local;
-  for (std::size_t i = 0; i < p1->ghosts().size(); ++i)
-    column_global_to_local.insert({p1->ghosts()[i], i + (col_max - col_min)});
-
-  for (int p = 0; p < recv_data_int.num_nodes(); ++p)
-  {
-    auto pdata = recv_data_int.links(p);
-    std::vector<std::int64_t> global_rows;
-    std::vector<int> num_cols;
-    for (int i = 0; i < recv_data_int.num_links(p); i += (pdata[i + 1] + 2))
-    {
-      global_rows.push_back(pdata[i]);
-      num_cols.push_back(pdata[i + 1]);
-    }
-    std::vector<std::int32_t> local_rows
-        = V->dofmap()->index_map->global_to_local(global_rows);
-
-    int c = 2;
-    int d = 0;
-    for (std::size_t i = 0; i < local_rows.size(); ++i)
-    {
-      const int num_col = num_cols[i];
-
-      Teuchos::ArrayView<const PetscScalar> data_view(
-          recv_data_scalar.links(p).data() + d, num_col);
-      std::vector<std::int32_t> col_local(num_col);
-      for (int j = 0; j < num_col; ++j)
-      {
-        const std::int64_t gi = recv_data_int.links(p)[c + j];
-        if (gi >= col_min and gi < col_max)
-          col_local[j] = gi - col_min;
-        else
-          col_local[j] = column_global_to_local[gi];
-      }
-      int nvalid
-          = A_Tpetra->sumIntoLocalValues(local_rows[i], col_local, data_view);
-      c += (num_col + 2);
-      d += num_col;
-    }
-  }
-  tnbr4.stop();
-  tnbr.stop();
 
   A_Tpetra->fillComplete(vecMap, vecMap);
   tassm.stop();
