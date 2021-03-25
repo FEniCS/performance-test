@@ -50,7 +50,7 @@ jobs:
           pip3 install git+https://github.com/FEniCS/ffcx
       - name: Build dolfinx cpp
         run: |
-          git clone -b master --single-branch https://github.com/FEniCS/dolfinx.git
+          git clone -b main --single-branch https://github.com/FEniCS/dolfinx.git
           cd $(mktemp -d)
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS_RELEASE='-O2 -Wall -Wextra -pedantic -Werror'  $OLDPWD/dolfinx/cpp
           ninja install
