@@ -131,6 +131,17 @@ void solve(int argc, char* argv[])
   else
     throw std::runtime_error("Unknown problem type: " + problem_type);
 
+  const std::int32_t num_ghosts
+      = u->function_space()->dofmap()->index_map->num_ghosts()
+        * u->function_space()->dofmap()->index_map_bs();
+  std::int32_t min_ghosts = -1;
+  std::int32_t max_ghosts = -1;
+  MPI_Reduce(&num_ghosts, &min_ghosts, 1, MPI_INT32_T, MPI_MIN, 0,
+             MPI_COMM_WORLD);
+
+  MPI_Reduce(&num_ghosts, &max_ghosts, 1, MPI_INT32_T, MPI_MAX, 0,
+             MPI_COMM_WORLD);
+
   // Print simulation summary
   if (dolfinx::MPI::rank(MPI_COMM_WORLD) == 0)
   {
@@ -143,6 +154,7 @@ void solve(int argc, char* argv[])
     const int tdim = mesh->topology().dim();
     const std::int64_t num_cells
         = mesh->topology().index_map(tdim)->size_global();
+
     std::cout
         << "----------------------------------------------------------------"
         << std::endl;
@@ -155,48 +167,20 @@ void solve(int argc, char* argv[])
     std::cout << "  Scaling type:    " << scaling_type << std::endl;
     std::cout << "  Num processes:   " << num_processes << std::endl;
     std::cout << "  Num cells        " << num_cells << std::endl;
+    std::cout << "  Num ghosts min   " << min_ghosts << std::endl;
+    std::cout << "  Num ghosts max   " << max_ghosts << std::endl;
     std::cout << "  Total degrees of freedom:               " << num_dofs
               << std::endl;
     std::cout << "  Average degrees of freedom per process: "
               << num_dofs / dolfinx::MPI::size(MPI_COMM_WORLD) << std::endl;
+
     std::cout
         << "----------------------------------------------------------------"
         << std::endl;
   }
 
-  // Create solver
-  dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
-  solver.set_from_options();
-  solver.set_operator(A->mat());
-
-  // Solve
-  dolfinx::common::Timer t5("ZZZ Solve");
-  int num_iter = solver.solve(u->vector(), b->vec());
-
-  t5.stop();
-
-  if (output)
-  {
-    dolfinx::common::Timer t6("ZZZ Output");
-    std::string filename
-        = output_dir + "/solution-" + std::to_string(num_processes) + ".xdmf";
-    dolfinx::io::XDMFFile file(MPI_COMM_WORLD, filename, "w");
-    file.write_mesh(*mesh);
-    file.write_function(*u, 0.0);
-    t6.stop();
-  }
-
   // Display timings
   dolfinx::list_timings(MPI_COMM_WORLD, {dolfinx::TimingType::wall});
-
-  PetscReal norm = 0.0;
-  VecNorm(u->vector(), NORM_2, &norm);
-  // Report number of Krylov iterations
-  if (dolfinx::MPI::rank(MPI_COMM_WORLD) == 0)
-  {
-    std::cout << "*** Number of Krylov iterations: " << num_iter << std::endl;
-    std::cout << "*** Solution norm:  " << norm << std::endl;
-  }
 }
 
 int main(int argc, char* argv[])
