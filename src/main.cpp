@@ -200,11 +200,10 @@ int main(int argc, char* argv[])
   int len;
   MPI_Get_processor_name(name, &len);
   if (mRank == 0)
-  {
     std::cout << "\n\n\n";
-  }
-  
-  printf("Node number %d/%d is %s \n", mRank, mSize, name);
+
+  if (mRank % 32 == 0)
+    printf("Node number %d/%d is %s \n", mRank, mSize, name);
 
   dolfinx::common::subsystem::finalize_petsc();
   dolfinx::common::subsystem::finalize_mpi();

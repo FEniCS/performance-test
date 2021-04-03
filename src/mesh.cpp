@@ -95,7 +95,7 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
   auto mesh = std::make_shared<dolfinx::mesh::Mesh>(
       dolfinx::generation::BoxMesh::create(
           comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz}, element,
-          dolfinx::mesh::GhostMode::shared_facet));
+          dolfinx::mesh::GhostMode::none));
 
   if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
   {
@@ -107,7 +107,7 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
   {
     mesh->topology_mutable().create_connectivity(3, 1);
     mesh = std::make_shared<dolfinx::mesh::Mesh>(
-        dolfinx::refinement::refine(*mesh, true));
+        dolfinx::refinement::refine(*mesh, false));
   }
 
   return mesh;
