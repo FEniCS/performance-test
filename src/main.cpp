@@ -191,8 +191,6 @@ int main(int argc, char* argv[])
 
   solve(argc, argv);
 
-  std::cout << "\n\n\n\n";
-
   MPI_Barrier(MPI_COMM_WORLD);
   int mRank, mSize;
   MPI_Comm_rank(MPI_COMM_WORLD, &mRank);
@@ -201,6 +199,11 @@ int main(int argc, char* argv[])
   char name[MPI_MAX_PROCESSOR_NAME];
   int len;
   MPI_Get_processor_name(name, &len);
+  if (mRank == 0)
+  {
+    std::cout << "\n\n\n";
+  }
+  
   printf("Node number %d/%d is %s \n", mRank, mSize, name);
 
   dolfinx::common::subsystem::finalize_petsc();
