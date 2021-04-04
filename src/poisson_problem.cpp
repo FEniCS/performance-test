@@ -32,46 +32,9 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
       create_functionspace_form_Poisson_a, "u", mesh);
   t0.stop();
 
-  // dolfinx::common::Timer t1("ZZZ Assemble");
-
-  // // Define boundary condition
-  // auto u0 = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
-  // std::fill(u0->x()->mutable_array().begin(), u0->x()->mutable_array().end(),
-  //           0.0);
-
-  // const std::vector<std::int32_t> bdofs
-  //     = dolfinx::fem::locate_dofs_geometrical({*V}, [](auto& x) {
-  //         constexpr double eps = 10.0 *
-  //         std::numeric_limits<double>::epsilon(); std::vector<bool>
-  //         marked(x.shape[1]); std::transform(
-  //             x.row(0).begin(), x.row(0).end(), marked.begin(),
-  //             [](double x0) { return x0 < eps or std::abs(x0 - 1) < eps; });
-  //         return marked;
-  //       });
-
-  // auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0,
-  // bdofs);
-
   // Define coefficients
   auto f = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   auto g = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
-  // f->interpolate([](auto& x) {
-  //   std::vector<PetscScalar> f(x.shape[1]);
-  //   std::transform(x.row(0).begin(), x.row(0).end(), x.row(1).begin(),
-  //                  f.begin(), [](double x0, double x1) {
-  //                    double dx
-  //                        = (x0 - 0.5) * (x0 - 0.5) + (x1 - 0.5) * (x1 - 0.5);
-  //                    return 10.0 * std::exp(-(dx) / 0.02);
-  //                  });
-  //   return f;
-  // });
-
-  // g->interpolate([](auto& x) {
-  //   std::vector<PetscScalar> f(x.shape[1]);
-  //   std::transform(x.row(0).begin(), x.row(0).end(), f.begin(),
-  //                  [](double x0) { return std::sin(5 * x0); });
-  //   return f;
-  // });
 
   // Define variational forms
   auto L = dolfinx::fem::create_form<PetscScalar>(create_form_Poisson_L, {V},
@@ -84,30 +47,20 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::la::PETScVector b(*L->function_spaces()[0]->dofmap()->index_map,
                              L->function_spaces()[0]->dofmap()->index_map_bs());
 
-  MatZeroEntries(A.mat());
-  // dolfinx::common::Timer t2("ZZZ Assemble matrix");
-  // dolfinx::fem::assemble_matrix(dolfinx::la::PETScMatrix::add_fn(A.mat()),
-  // *a,
-  //                               {bc});
-  // dolfinx::fem::add_diagonal(dolfinx::la::PETScMatrix::add_fn(A.mat()), *V,
-  //                            {bc});
-  MatAssemblyBegin(A.mat(), MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(A.mat(), MAT_FINAL_ASSEMBLY);
+  int rank = dolfinx::MPI::rank(mesh->mpi_comm());
 
-  VecSet(b.vec(), 0.0);
+  if (rank == 0)
+    std::cout << "Log -  Create vectors \n";
+
+  VecSet(b.vec(), 1.0);
 
   dolfinx::common::Timer t1("zzz PETSC Vector Scatter");
   VecGhostUpdateBegin(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
   VecGhostUpdateEnd(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
   t1.stop();
 
-  // dolfinx::common::Timer t3("ZZZ Assemble vector");
-  // dolfinx::fem::assemble_vector_petsc(b.vec(), *L);
-  // dolfinx::fem::apply_lifting_petsc(b.vec(), {a}, {{bc}}, {}, 1.0);
-  // VecGhostUpdateBegin(b.vec(), ADD_VALUES, SCATTER_REVERSE);
-  // VecGhostUpdateEnd(b.vec(), ADD_VALUES, SCATTER_REVERSE);
-  // dolfinx::fem::set_bc_petsc(b.vec(), {bc}, nullptr);
-  // t3.stop();
+  if (rank == 0)
+    std::cout << "Log -  PETSC scatter \n";
 
   // Create Function to hold solution
   auto u = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
@@ -115,6 +68,9 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::common::Timer t2("zzz Dolfinx Vector Scatter");
   dolfinx::la::scatter_fwd(*u->x());
   t2.stop();
+
+  if (rank == 0)
+    std::cout << "Log -  Dolfinx scatter \n";
 
   return {std::move(A), std::move(b), u};
 }

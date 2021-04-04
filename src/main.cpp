@@ -90,10 +90,10 @@ void solve(int argc, char* argv[])
       mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1, cmap);
     t0.stop();
 
-    // Create mesh entity permutations outside of the assembler
-    dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
-    mesh->topology_mutable().create_entity_permutations();
-    tperm.stop();
+    // // Create mesh entity permutations outside of the assembler
+    // dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
+    // mesh->topology_mutable().create_entity_permutations();
+    // tperm.stop();
 
     // Create Poisson problem
     auto data = poisson::problem(mesh);
