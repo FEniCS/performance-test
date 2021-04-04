@@ -52,22 +52,26 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   if (rank == 0)
     std::cout << "Log -  Create vectors \n";
 
-  VecSet(b.vec(), 1.0);
-
-  dolfinx::common::Timer t1("zzz PETSC Vector Scatter");
-  VecGhostUpdateBegin(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
-  VecGhostUpdateEnd(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
-  t1.stop();
+  for (int i = 0; i < 10; i++)
+  {
+    VecSet(b.vec(), i);
+    dolfinx::common::Timer t1("zzz PETSC Vector Scatter");
+    VecGhostUpdateBegin(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
+    VecGhostUpdateEnd(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
+    t1.stop();
+  }
 
   if (rank == 0)
     std::cout << "Log -  PETSC scatter \n";
 
   // Create Function to hold solution
   auto u = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
-
-  dolfinx::common::Timer t2("zzz Dolfinx Vector Scatter");
-  dolfinx::la::scatter_fwd(*u->x());
-  t2.stop();
+  for (int i = 0; i < 10; i++)
+  {
+    dolfinx::common::Timer t2("zzz Dolfinx Vector Scatter");
+    dolfinx::la::scatter_fwd(*u->x());
+    t2.stop();
+  }
 
   if (rank == 0)
     std::cout << "Log -  Dolfinx scatter \n";
