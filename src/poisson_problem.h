@@ -18,6 +18,6 @@ namespace poisson
 
 std::tuple<dolfinx::la::PETScMatrix, dolfinx::la::PETScVector,
            std::shared_ptr<dolfinx::fem::Function<PetscScalar>>>
-problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh);
+problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, bool use_petsc);
 
 } // namespace poisson

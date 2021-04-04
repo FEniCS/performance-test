@@ -40,7 +40,9 @@ void solve(int argc, char* argv[])
       "output", po::value<std::string>()->default_value(""),
       "output directory (no output unless this is set)")(
       "ndofs", po::value<std::size_t>()->default_value(50000),
-      "number of degrees of freedom");
+      "number of degrees of freedom")(
+      "use_petsc", po::value<bool>()->default_value(false),
+      "use petsc for vector scatter");
 
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv)
@@ -61,15 +63,11 @@ void solve(int argc, char* argv[])
   const std::string scaling_type = vm["scaling_type"].as<std::string>();
   const std::size_t ndofs = vm["ndofs"].as<std::size_t>();
   const std::string output_dir = vm["output"].as<std::string>();
+  bool use_petsc = vm["use_petsc"].as<bool>();
+
   const bool output = (output_dir.size() > 0);
 
-  bool strong_scaling;
-  if (scaling_type == "strong")
-    strong_scaling = true;
-  else if (scaling_type == "weak")
-    strong_scaling = false;
-  else
-    throw std::runtime_error("Scaling type '" + scaling_type + "` unknown");
+  bool strong_scaling = false;
 
   // Get number of processes
   const std::size_t num_processes = dolfinx::MPI::size(MPI_COMM_WORLD);
@@ -84,19 +82,10 @@ void solve(int argc, char* argv[])
     dolfinx::common::Timer t0("ZZZ Create Mesh");
     auto cmap
         = dolfinx::fem::create_coordinate_map(create_coordinate_map_Poisson);
-    if (mesh_type == "cube")
-      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1, cmap);
-    else
-      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1, cmap);
-    t0.stop();
-
-    // // Create mesh entity permutations outside of the assembler
-    // dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
-    // mesh->topology_mutable().create_entity_permutations();
-    // tperm.stop();
+    mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1, cmap);
 
     // Create Poisson problem
-    auto data = poisson::problem(mesh);
+    auto data = poisson::problem(mesh, use_petsc);
     A = std::make_shared<dolfinx::la::PETScMatrix>(
         std::move(std::get<0>(data)));
     b = std::make_shared<dolfinx::la::PETScVector>(
@@ -108,10 +97,7 @@ void solve(int argc, char* argv[])
     dolfinx::common::Timer t0("ZZZ Create Mesh");
     auto cmap
         = dolfinx::fem::create_coordinate_map(create_coordinate_map_Elasticity);
-    if (mesh_type == "cube")
-      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3, cmap);
-    else
-      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3, cmap);
+    mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3, cmap);
     t0.stop();
 
     // Create mesh entity permutations outside of the assembler

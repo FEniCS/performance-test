@@ -25,7 +25,7 @@
 
 std::tuple<dolfinx::la::PETScMatrix, dolfinx::la::PETScVector,
            std::shared_ptr<dolfinx::fem::Function<PetscScalar>>>
-poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
+poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, bool use_petsc)
 {
   dolfinx::common::Timer t0("ZZZ FunctionSpace");
   auto V = dolfinx::fem::create_functionspace(
@@ -46,35 +46,37 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::la::PETScMatrix A(dolfinx::fem::create_matrix(*a), false);
   dolfinx::la::PETScVector b(*L->function_spaces()[0]->dofmap()->index_map,
                              L->function_spaces()[0]->dofmap()->index_map_bs());
+  auto u = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
 
   int rank = dolfinx::MPI::rank(mesh->mpi_comm());
 
   if (rank == 0)
     std::cout << "Log -  Create vectors \n";
 
-  for (int i = 0; i < 10; i++)
+  if (use_petsc)
   {
-    VecSet(b.vec(), i);
-    dolfinx::common::Timer t1("zzz PETSC Vector Scatter");
-    VecGhostUpdateBegin(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
-    VecGhostUpdateEnd(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
-    t1.stop();
+    for (int i = 0; i < 10; i++)
+    {
+      VecSet(b.vec(), i);
+      dolfinx::common::Timer t1("zzz PETSC Vector Scatter");
+      VecGhostUpdateBegin(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
+      VecGhostUpdateEnd(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
+      t1.stop();
+    }
+    if (rank == 0)
+      std::cout << "Log -  PETSC scatter \n";
   }
-
-  if (rank == 0)
-    std::cout << "Log -  PETSC scatter \n";
-
-  // Create Function to hold solution
-  auto u = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
-  for (int i = 0; i < 10; i++)
+  else
   {
-    dolfinx::common::Timer t2("zzz Dolfinx Vector Scatter");
-    dolfinx::la::scatter_fwd(*u->x());
-    t2.stop();
+    for (int i = 0; i < 10; i++)
+    {
+      dolfinx::common::Timer t2("zzz Dolfinx Vector Scatter");
+      dolfinx::la::scatter_fwd(*u->x());
+      t2.stop();
+    }
+    if (rank == 0)
+      std::cout << "Log -  Dolfinx scatter \n";
   }
-
-  if (rank == 0)
-    std::cout << "Log -  Dolfinx scatter \n";
 
   return {std::move(A), std::move(b), u};
 }
