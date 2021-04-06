@@ -40,9 +40,9 @@ void solve(int argc, char* argv[])
       "output", po::value<std::string>()->default_value(""),
       "output directory (no output unless this is set)")(
       "ndofs", po::value<std::size_t>()->default_value(50000),
-      "number of degrees of freedom")(
-      "use_petsc", po::value<bool>()->default_value(false),
-      "use petsc for vector scatter");
+      "number of degrees of freedom")("use_petsc",
+                                      po::value<bool>()->default_value(false),
+                                      "use petsc for vector scatter");
 
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv)
@@ -165,8 +165,16 @@ void solve(int argc, char* argv[])
         << std::endl;
   }
 
-  // Display timings
-  dolfinx::list_timings(MPI_COMM_WORLD, {dolfinx::TimingType::wall});
+  // MPI_Barrier(MPI_COMM_WORLD);
+  // // Display timings
+  // // dolfinx::list_timings(MPI_COMM_WORLD, {dolfinx::TimingType::wall});
+  // auto [count, wtime, utime, stime]
+  //     = dolfinx::timing("zzz Dolfinx Vector Scatter");
+
+  // MPI_Barrier(MPI_COMM_WORLD);
+  // int rank = dolfinx::MPI::rank(MPI_COMM_WORLD);
+  // if (rank == 0)
+  // std::cout << "\n" << count << " " << wtime << " ";
 }
 
 int main(int argc, char* argv[])

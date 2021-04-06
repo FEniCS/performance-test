@@ -20,6 +20,7 @@
 #include <dolfinx/la/PETScVector.h>
 #include <dolfinx/la/utils.h>
 #include <dolfinx/mesh/Mesh.h>
+#include <iomanip>
 #include <memory>
 #include <utility>
 
@@ -49,19 +50,24 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, bool use_petsc)
   auto u = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
 
   int rank = dolfinx::MPI::rank(mesh->mpi_comm());
+  int mpi_size = dolfinx::MPI::size(mesh->mpi_comm());
 
   if (rank == 0)
     std::cout << "Log -  Create vectors \n";
 
+  std::cout << std::setprecision(8);
+
+  std::vector<double> timers;
   if (use_petsc)
   {
     for (int i = 0; i < 10; i++)
     {
       VecSet(b.vec(), i);
-      dolfinx::common::Timer t1("zzz PETSC Vector Scatter");
+      double t = MPI_Wtime();
       VecGhostUpdateBegin(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
       VecGhostUpdateEnd(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
-      t1.stop();
+      t = MPI_Wtime() - t;
+      timers.push_back(t);
     }
     if (rank == 0)
       std::cout << "Log -  PETSC scatter \n";
@@ -70,12 +76,23 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, bool use_petsc)
   {
     for (int i = 0; i < 10; i++)
     {
-      dolfinx::common::Timer t2("zzz Dolfinx Vector Scatter");
+      double t = MPI_Wtime();
       dolfinx::la::scatter_fwd(*u->x());
-      t2.stop();
+      t = MPI_Wtime() - t;
+      timers.push_back(t);
     }
     if (rank == 0)
       std::cout << "Log -  Dolfinx scatter \n";
+  }
+
+  if (rank == 0)
+  {
+
+    std::string method = (use_petsc) ? "PETSc" : "Dolfinx";
+    std::cout << "\n\n\n" <<mpi_size<< ", " << method << "\n\n";
+    for (auto el : timers)
+      std::cout << std::fixed << mpi_size << ", " << el << "\n";
+    std::cout << "\n\n=====================\n";
   }
 
   return {std::move(A), std::move(b), u};
