@@ -60,7 +60,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, bool use_petsc)
   std::vector<double> timers;
   if (use_petsc)
   {
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < 100; i++)
     {
       VecSet(b.vec(), i);
       double t = MPI_Wtime();
@@ -74,7 +74,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, bool use_petsc)
   }
   else
   {
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < 100; i++)
     {
       double t = MPI_Wtime();
       dolfinx::la::scatter_fwd(*u->x());
