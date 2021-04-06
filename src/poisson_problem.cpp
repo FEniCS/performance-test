@@ -104,7 +104,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   dolfinx::common::Timer tcre("Trilinos: create sparsity");
   std::vector<std::int64_t> global_indices
-      = pattern.column_map()->global_indices();
+      = pattern.column_indices();
 
   const Teuchos::ArrayView<const std::int64_t> global_index_view(
       global_indices.data(), global_indices.size());
