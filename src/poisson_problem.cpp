@@ -35,7 +35,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   dolfinx::common::Timer t1("ZZZ Assemble");
 
-  dolfinx::common::Timer t4("ZZZ Boundary condition");
+  dolfinx::common::Timer t2("ZZZ Create boundary conditions");
   // Define boundary condition
   auto u0 = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   std::fill(u0->x()->mutable_array().begin(), u0->x()->mutable_array().end(),
@@ -52,10 +52,10 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
         });
 
   auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0, bdofs);
-  t4.stop();
+  t2.stop();
 
   // Define coefficients
-  dolfinx::common::Timer t5("ZZZ Generate data");
+  dolfinx::common::Timer t3("ZZZ Create RHS function");
   auto f = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   auto g = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   f->interpolate([](auto& x) {
@@ -75,7 +75,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
                    [](double x0) { return std::sin(5 * x0); });
     return f;
   });
-  t5.stop();
+  t3.stop();
 
   // Define variational forms
   auto L = dolfinx::fem::create_form<PetscScalar>(create_form_Poisson_L, {V},
@@ -89,26 +89,26 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
                              L->function_spaces()[0]->dofmap()->index_map_bs());
 
   MatZeroEntries(A.mat());
-  dolfinx::common::Timer t2("ZZZ Assemble matrix");
+  dolfinx::common::Timer t4("ZZZ Assemble matrix");
   dolfinx::fem::assemble_matrix(dolfinx::la::PETScMatrix::add_fn(A.mat()), *a,
                                 {bc});
   dolfinx::fem::add_diagonal(dolfinx::la::PETScMatrix::add_fn(A.mat()), *V,
                              {bc});
   MatAssemblyBegin(A.mat(), MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(A.mat(), MAT_FINAL_ASSEMBLY);
-  t2.stop();
+  t4.stop();
 
   VecSet(b.vec(), 0.0);
   VecGhostUpdateBegin(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
   VecGhostUpdateEnd(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
 
-  dolfinx::common::Timer t3("ZZZ Assemble vector");
+  dolfinx::common::Timer t5("ZZZ Assemble vector");
   dolfinx::fem::assemble_vector_petsc(b.vec(), *L);
   dolfinx::fem::apply_lifting_petsc(b.vec(), {a}, {{bc}}, {}, 1.0);
   VecGhostUpdateBegin(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   VecGhostUpdateEnd(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   dolfinx::fem::set_bc_petsc(b.vec(), {bc}, nullptr);
-  t3.stop();
+  t6.stop();
 
   t1.stop();
 
