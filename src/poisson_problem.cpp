@@ -35,6 +35,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   dolfinx::common::Timer t1("ZZZ Assemble");
 
+  dolfinx::common::Timer t4("ZZZ Boundary condition");
   // Define boundary condition
   auto u0 = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   std::fill(u0->x()->mutable_array().begin(), u0->x()->mutable_array().end(),
@@ -51,8 +52,10 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
         });
 
   auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0, bdofs);
+  t4.stop();
 
   // Define coefficients
+  dolfinx::common::Timer t5("ZZZ Generate data");
   auto f = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   auto g = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   f->interpolate([](auto& x) {
@@ -72,6 +75,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
                    [](double x0) { return std::sin(5 * x0); });
     return f;
   });
+  t5.stop();
 
   // Define variational forms
   auto L = dolfinx::fem::create_form<PetscScalar>(create_form_Poisson_L, {V},
