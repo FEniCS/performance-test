@@ -108,7 +108,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   VecGhostUpdateBegin(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   VecGhostUpdateEnd(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   dolfinx::fem::set_bc_petsc(b.vec(), {bc}, nullptr);
-  t6.stop();
+  t5.stop();
 
   t1.stop();
 
