@@ -155,17 +155,19 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   t0c.stop();
 
   // Create matrices and vector, and assemble system
-  dolfinx::la::PETScMatrix A(dolfinx::fem::create_matrix(*a), false);
+  std::shared_ptr<dolfinx::la::PETScMatrix> A
+      = std::make_shared<dolfinx::la::PETScMatrix>(
+          dolfinx::fem::create_matrix(*a), false);
   dolfinx::la::PETScVector b(*L->function_spaces()[0]->dofmap()->index_map,
                              L->function_spaces()[0]->dofmap()->index_map_bs());
 
   dolfinx::common::Timer t2("ZZZ Assemble matrix");
-  dolfinx::fem::assemble_matrix(dolfinx::la::PETScMatrix::add_block_fn(A.mat()),
-                                *a, {bc});
-  dolfinx::fem::add_diagonal(dolfinx::la::PETScMatrix::add_fn(A.mat()), *V,
+  dolfinx::fem::assemble_matrix(
+      dolfinx::la::PETScMatrix::add_block_fn(A->mat()), *a, {bc});
+  dolfinx::fem::add_diagonal(dolfinx::la::PETScMatrix::add_fn(A->mat()), *V,
                              {bc});
-  MatAssemblyBegin(A.mat(), MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(A.mat(), MAT_FINAL_ASSEMBLY);
+  MatAssemblyBegin(A->mat(), MAT_FINAL_ASSEMBLY);
+  MatAssemblyEnd(A->mat(), MAT_FINAL_ASSEMBLY);
   t2.stop();
 
   VecSet(b.vec(), 0.0);
@@ -187,18 +189,18 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   // Build near-nullspace and attach to matrix
   dolfinx::la::VectorSpaceBasis nullspace = build_near_nullspace(*V);
-  A.set_near_nullspace(nullspace);
+  A->set_near_nullspace(nullspace);
 
   t4.stop();
 
   std::function<int(dolfinx::fem::Function<PetscScalar>&,
                     const dolfinx::la::PETScVector&)>
-      solver_function = [&A](dolfinx::fem::Function<PetscScalar>& u,
-                             const dolfinx::la::PETScVector& b) {
+      solver_function = [A](dolfinx::fem::Function<PetscScalar>& u,
+                            const dolfinx::la::PETScVector& b) {
         // Create solver
         dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
         solver.set_from_options();
-        solver.set_operator(A.mat());
+        solver.set_operator(A->mat());
 
         // Solve
         int num_iter = solver.solve(u.vector(), b.vec());
