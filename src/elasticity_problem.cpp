@@ -26,6 +26,7 @@
 #include <memory>
 #include <utility>
 #include <xtensor/xarray.hpp>
+#include <xtensor/xview.hpp>
 
 namespace
 {
@@ -54,7 +55,7 @@ build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
   }
 
   // Rotations
-  const dolfinx::array2d<double> x = V.tabulate_dof_coordinates(false);
+  const xt::xtensor<double, 2> x = V.tabulate_dof_coordinates(false);
   auto& dofs = V.dofmap()->list().array();
   for (int i = 0; i < dofs.size(); ++i)
   {
@@ -113,11 +114,8 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
             0.0);
 
   const std::vector<std::int32_t> bdofs = dolfinx::fem::locate_dofs_geometrical(
-      {*V}, [](const dolfinx::array2d<double>& x) {
-        std::vector<bool> marked(x.shape[1]);
-        std::transform(x.row(1).begin(), x.row(1).end(), marked.begin(),
-                       [](double x1) { return x1 < 1.0e-8; });
-        return marked;
+      {*V}, [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1> {
+        return xt::isclose(xt::row(x, 1), 0.0);
       });
 
   // Bottom (x[1] = 0) surface
