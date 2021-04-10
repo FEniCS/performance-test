@@ -44,13 +44,9 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
             0.0);
 
   const std::vector<std::int32_t> bdofs = dolfinx::fem::locate_dofs_geometrical(
-      {*V}, [](const dolfinx::array2d<double>& x) {
-        constexpr double eps = 10.0 * std::numeric_limits<double>::epsilon();
-        std::vector<bool> marked(x.shape[1]);
-        std::transform(
-            x.row(0).begin(), x.row(0).end(), marked.begin(),
-            [](double x0) { return x0 < eps or std::abs(x0 - 1) < eps; });
-        return marked;
+      {*V}, [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1> {
+        auto x0 = xt::row(x, 0);
+        return xt::isclose(x0, 0.0) or xt::isclose(x0, 1.0);
       });
 
   auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0, bdofs);
