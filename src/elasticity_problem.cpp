@@ -109,13 +109,13 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   std::fill(u0->x()->mutable_array().begin(), u0->x()->mutable_array().end(),
             0.0);
 
-  const std::vector<std::int32_t> bdofs
-      = dolfinx::fem::locate_dofs_geometrical({*V}, [](const dolfinx::array2d<double>& x) {
-          std::vector<bool> marked(x.shape[1]);
-          std::transform(x.row(1).begin(), x.row(1).end(), marked.begin(),
-                         [](double x1) { return x1 < 1.0e-8; });
-          return marked;
-        });
+  const std::vector<std::int32_t> bdofs = dolfinx::fem::locate_dofs_geometrical(
+      {*V}, [](const dolfinx::array2d<double>& x) {
+        std::vector<bool> marked(x.shape[1]);
+        std::transform(x.row(1).begin(), x.row(1).end(), marked.begin(),
+                       [](double x1) { return x1 < 1.0e-8; });
+        return marked;
+      });
 
   // Bottom (x[1] = 0) surface
   auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0, bdofs);

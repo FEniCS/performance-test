@@ -43,15 +43,15 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   std::fill(u0->x()->mutable_array().begin(), u0->x()->mutable_array().end(),
             0.0);
 
-  const std::vector<std::int32_t> bdofs
-      = dolfinx::fem::locate_dofs_geometrical({*V}, [](const dolfinx::array2d<double>& x) {
-          constexpr double eps = 10.0 * std::numeric_limits<double>::epsilon();
-          std::vector<bool> marked(x.shape[1]);
-          std::transform(
-              x.row(0).begin(), x.row(0).end(), marked.begin(),
-              [](double x0) { return x0 < eps or std::abs(x0 - 1) < eps; });
-          return marked;
-        });
+  const std::vector<std::int32_t> bdofs = dolfinx::fem::locate_dofs_geometrical(
+      {*V}, [](const dolfinx::array2d<double>& x) {
+        constexpr double eps = 10.0 * std::numeric_limits<double>::epsilon();
+        std::vector<bool> marked(x.shape[1]);
+        std::transform(
+            x.row(0).begin(), x.row(0).end(), marked.begin(),
+            [](double x0) { return x0 < eps or std::abs(x0 - 1) < eps; });
+        return marked;
+      });
 
   auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0, bdofs);
   t2.stop();
@@ -60,15 +60,17 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::common::Timer t3("ZZZ Create RHS function");
   auto f = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   auto g = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
-  f->interpolate([](const xt::xtensor<double, 2>& x) -> xt::xarray<PetscScalar> {
-    auto dx
-      = xt::square(xt::row(x, 0) - 0.5) + xt::square(xt::row(x, 1) - 0.5);
-    return 10 * xt::exp(-(dx) / 0.02);
-  });
+  f->interpolate(
+      [](const xt::xtensor<double, 2>& x) -> xt::xarray<PetscScalar> {
+        auto dx
+            = xt::square(xt::row(x, 0) - 0.5) + xt::square(xt::row(x, 1) - 0.5);
+        return 10 * xt::exp(-(dx) / 0.02);
+      });
 
-  g->interpolate([](const xt::xtensor<double, 2>& x) -> xt::xarray<PetscScalar> {
-    return xt::sin(5.0 * xt::row(x, 0));
-  });
+  g->interpolate(
+      [](const xt::xtensor<double, 2>& x) -> xt::xarray<PetscScalar> {
+        return xt::sin(5.0 * xt::row(x, 0));
+      });
   t3.stop();
 
   // Define variational forms
