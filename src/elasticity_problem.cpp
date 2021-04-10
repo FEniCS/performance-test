@@ -28,6 +28,7 @@
 #include <dolfinx/mesh/Mesh.h>
 #include <memory>
 #include <utility>
+#include <xtensor/xarray.hpp>
 
 #include <MueLu_CreateTpetraPreconditioner.hpp>
 #include <Tpetra_Core.hpp>
@@ -116,13 +117,13 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   std::fill(u0->x()->mutable_array().begin(), u0->x()->mutable_array().end(),
             0.0);
 
-  const std::vector<std::int32_t> bdofs
-      = dolfinx::fem::locate_dofs_geometrical({*V}, [](auto& x) {
-          std::vector<bool> marked(x.shape[1]);
-          std::transform(x.row(1).begin(), x.row(1).end(), marked.begin(),
-                         [](double x1) { return x1 < 1.0e-8; });
-          return marked;
-        });
+  const std::vector<std::int32_t> bdofs = dolfinx::fem::locate_dofs_geometrical(
+      {*V}, [](const dolfinx::array2d<double>& x) {
+        std::vector<bool> marked(x.shape[1]);
+        std::transform(x.row(1).begin(), x.row(1).end(), marked.begin(),
+                       [](double x1) { return x1 < 1.0e-8; });
+        return marked;
+      });
 
   // Bottom (x[1] = 0) surface
   auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0, bdofs);
@@ -133,9 +134,9 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   // Define coefficients
   auto f = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
-  f->interpolate([](auto& x) {
-    dolfinx::array2d<PetscScalar> values(3, x.shape[1]);
-    for (std::size_t i = 0; i < x.shape[1]; i++)
+  f->interpolate([](const xt::xtensor<double, 2>& x) {
+    xt::xtensor<PetscScalar, 2> values({3, x.shape(1)});
+    for (std::size_t i = 0; i < x.shape(1); i++)
     {
       double dx = x(0, i) - 0.5;
       double dz = x(2, i) - 0.5;
