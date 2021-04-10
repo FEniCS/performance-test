@@ -19,7 +19,7 @@
 #include <dolfinx/fem/FunctionSpace.h>
 #include <dolfinx/fem/utils.h>
 #include <dolfinx/io/XDMFFile.h>
-#include <dolfinx/la/PETScVector.h>
+#include <dolfinx/la/Vector.h>
 #include <string>
 #include <utility>
 
@@ -74,10 +74,10 @@ void solve(int argc, char* argv[])
 
   // Assemble problem
   std::shared_ptr<dolfinx::mesh::Mesh> mesh;
-  std::shared_ptr<dolfinx::la::PETScVector> b;
+  std::shared_ptr<dolfinx::la::Vector<PetscScalar>> b;
   std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u;
   std::function<int(dolfinx::fem::Function<PetscScalar>&,
-                    const dolfinx::la::PETScVector&)>
+                    const dolfinx::la::Vector<PetscScalar>&)>
       solver_function;
 
   if (problem_type == "poisson")
@@ -98,7 +98,7 @@ void solve(int argc, char* argv[])
 
     // Create Poisson problem
     auto data = poisson::problem(mesh);
-    b = std::make_shared<dolfinx::la::PETScVector>(
+    b = std::make_shared<dolfinx::la::Vector<PetscScalar>>(
         std::move(std::get<0>(data)));
     u = std::get<1>(data);
     solver_function = std::get<2>(data);
@@ -122,7 +122,7 @@ void solve(int argc, char* argv[])
     // Create elasticity problem. Near-nullspace will be attached to the
     // linear operator (matrix).
     auto data = elastic::problem(mesh);
-    b = std::make_shared<dolfinx::la::PETScVector>(
+    b = std::make_shared<dolfinx::la::Vector<PetscScalar>>(
         std::move(std::get<0>(data)));
     u = std::get<1>(data);
     solver_function = std::get<2>(data);

@@ -92,10 +92,10 @@ build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
 }
 } // namespace
 
-std::tuple<dolfinx::la::PETScVector,
+std::tuple<dolfinx::la::Vector<PetscScalar>,
            std::shared_ptr<dolfinx::fem::Function<PetscScalar>>,
            std::function<int(dolfinx::fem::Function<PetscScalar>&,
-                             const dolfinx::la::PETScVector&)>>
+                             const dolfinx::la::Vector<PetscScalar>&)>>
 elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 {
   dolfinx::common::Timer t0("ZZZ FunctionSpace");
@@ -158,8 +158,14 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   std::shared_ptr<dolfinx::la::PETScMatrix> A
       = std::make_shared<dolfinx::la::PETScMatrix>(
           dolfinx::fem::create_matrix(*a), false);
-  dolfinx::la::PETScVector b(*L->function_spaces()[0]->dofmap()->index_map,
-                             L->function_spaces()[0]->dofmap()->index_map_bs());
+
+  // Wrap la::Vector with Petsc Vec
+  dolfinx::la::Vector<PetscScalar> bx(
+      L->function_spaces()[0]->dofmap()->index_map,
+      L->function_spaces()[0]->dofmap()->index_map_bs());
+  Vec b_vec = dolfinx::la::create_ghosted_vector(
+      *(bx.map()), bx.bs(), tcb::span<PetscScalar>(bx.mutable_array()));
+  dolfinx::la::PETScVector b(b_vec, false);
 
   dolfinx::common::Timer t2("ZZZ Assemble matrix");
   dolfinx::fem::assemble_matrix(
@@ -194,18 +200,24 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   t4.stop();
 
   std::function<int(dolfinx::fem::Function<PetscScalar>&,
-                    const dolfinx::la::PETScVector&)>
+                    const dolfinx::la::Vector<PetscScalar>&)>
       solver_function = [A](dolfinx::fem::Function<PetscScalar>& u,
-                            const dolfinx::la::PETScVector& b) {
+                            const dolfinx::la::Vector<PetscScalar>& b) {
         // Create solver
         dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
         solver.set_from_options();
         solver.set_operator(A->mat());
 
+        // Wrap dolfinx::la::Vector
+        dolfinx::la::Vector<PetscScalar>& bnc
+            = const_cast<dolfinx::la::Vector<PetscScalar>&>(b);
+        Vec b_petsc = dolfinx::la::create_ghosted_vector(
+            *(b.map()), b.bs(), tcb::span<PetscScalar>(bnc.mutable_array()));
+
         // Solve
-        int num_iter = solver.solve(u.vector(), b.vec());
+        int num_iter = solver.solve(u.vector(), b_petsc);
         return num_iter;
       };
 
-  return {std::move(b), u, solver_function};
+  return {std::move(bx), u, solver_function};
 }
