@@ -19,8 +19,6 @@
 #include <dolfinx/fem/FunctionSpace.h>
 #include <dolfinx/fem/utils.h>
 #include <dolfinx/io/XDMFFile.h>
-#include <dolfinx/la/PETScKrylovSolver.h>
-#include <dolfinx/la/PETScMatrix.h>
 #include <dolfinx/la/PETScVector.h>
 #include <string>
 #include <utility>
@@ -76,9 +74,12 @@ void solve(int argc, char* argv[])
 
   // Assemble problem
   std::shared_ptr<dolfinx::mesh::Mesh> mesh;
-  std::shared_ptr<dolfinx::la::PETScMatrix> A;
   std::shared_ptr<dolfinx::la::PETScVector> b;
   std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u;
+  std::function<int(dolfinx::fem::Function<PetscScalar>&,
+                    const dolfinx::la::PETScVector&)>
+      solver_function;
+
   if (problem_type == "poisson")
   {
     dolfinx::common::Timer t0("ZZZ Create Mesh");
@@ -97,11 +98,10 @@ void solve(int argc, char* argv[])
 
     // Create Poisson problem
     auto data = poisson::problem(mesh);
-    A = std::make_shared<dolfinx::la::PETScMatrix>(
-        std::move(std::get<0>(data)));
     b = std::make_shared<dolfinx::la::PETScVector>(
-        std::move(std::get<1>(data)));
-    u = std::get<2>(data);
+        std::move(std::get<0>(data)));
+    u = std::get<1>(data);
+    solver_function = std::get<2>(data);
   }
   else if (problem_type == "elasticity")
   {
@@ -122,11 +122,10 @@ void solve(int argc, char* argv[])
     // Create elasticity problem. Near-nullspace will be attached to the
     // linear operator (matrix).
     auto data = elastic::problem(mesh);
-    A = std::make_shared<dolfinx::la::PETScMatrix>(
-        std::move(std::get<0>(data)));
     b = std::make_shared<dolfinx::la::PETScVector>(
-        std::move(std::get<1>(data)));
-    u = std::get<2>(data);
+        std::move(std::get<0>(data)));
+    u = std::get<1>(data);
+    solver_function = std::get<2>(data);
   }
   else
     throw std::runtime_error("Unknown problem type: " + problem_type);
@@ -164,15 +163,8 @@ void solve(int argc, char* argv[])
         << std::endl;
   }
 
-  // Create solver
-  dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
-  solver.set_from_options();
-  solver.set_operator(A->mat());
-
-  // Solve
   dolfinx::common::Timer t5("ZZZ Solve");
-  int num_iter = solver.solve(u->vector(), b->vec());
-
+  int num_iter = solver_function(*u, *b);
   t5.stop();
 
   if (output)

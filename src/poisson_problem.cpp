@@ -16,6 +16,7 @@
 #include <dolfinx/fem/assembler.h>
 #include <dolfinx/fem/petsc.h>
 #include <dolfinx/fem/utils.h>
+#include <dolfinx/la/PETScKrylovSolver.h>
 #include <dolfinx/la/PETScMatrix.h>
 #include <dolfinx/la/PETScVector.h>
 #include <dolfinx/mesh/Mesh.h>
@@ -24,8 +25,10 @@
 #include <xtensor/xarray.hpp>
 #include <xtensor/xview.hpp>
 
-std::tuple<dolfinx::la::PETScMatrix, dolfinx::la::PETScVector,
-           std::shared_ptr<dolfinx::fem::Function<PetscScalar>>>
+std::tuple<dolfinx::la::PETScVector,
+           std::shared_ptr<dolfinx::fem::Function<PetscScalar>>,
+           std::function<int(dolfinx::fem::Function<PetscScalar>&,
+                             const dolfinx::la::PETScVector&)>>
 poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 {
   dolfinx::common::Timer t0("ZZZ FunctionSpace");
@@ -111,5 +114,19 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   // Create Function to hold solution
   auto u = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
 
-  return {std::move(A), std::move(b), u};
+  std::function<int(dolfinx::fem::Function<PetscScalar>&,
+                    const dolfinx::la::PETScVector&)>
+      solver_function = [&A](dolfinx::fem::Function<PetscScalar>& u,
+                             const dolfinx::la::PETScVector& b) {
+        // Create solver
+        dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
+        solver.set_from_options();
+        solver.set_operator(A.mat());
+
+        // Solve
+        int num_iter = solver.solve(u.vector(), b.vec());
+        return num_iter;
+      };
+
+  return {std::move(b), u, solver_function};
 }

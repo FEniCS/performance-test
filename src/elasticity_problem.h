@@ -20,8 +20,10 @@ class Mesh;
 namespace elastic
 {
 
-std::tuple<dolfinx::la::PETScMatrix, dolfinx::la::PETScVector,
-           std::shared_ptr<dolfinx::fem::Function<PetscScalar>>>
+std::tuple<dolfinx::la::PETScVector,
+           std::shared_ptr<dolfinx::fem::Function<PetscScalar>>,
+           std::function<int(dolfinx::fem::Function<PetscScalar>&,
+                             const dolfinx::la::PETScVector&)>>
 problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh);
 
 } // namespace elastic
