@@ -21,6 +21,8 @@
 #include <dolfinx/mesh/Mesh.h>
 #include <memory>
 #include <utility>
+#include <xtensor/xarray.hpp>
+#include <xtensor/xview.hpp>
 
 std::tuple<dolfinx::la::PETScMatrix, dolfinx::la::PETScVector,
            std::shared_ptr<dolfinx::fem::Function<PetscScalar>>>
@@ -42,7 +44,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
             0.0);
 
   const std::vector<std::int32_t> bdofs
-      = dolfinx::fem::locate_dofs_geometrical({*V}, [](auto& x) {
+      = dolfinx::fem::locate_dofs_geometrical({*V}, [](const dolfinx::array2d<double>& x) {
           constexpr double eps = 10.0 * std::numeric_limits<double>::epsilon();
           std::vector<bool> marked(x.shape[1]);
           std::transform(
@@ -58,22 +60,14 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::common::Timer t3("ZZZ Create RHS function");
   auto f = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   auto g = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
-  f->interpolate([](auto& x) {
-    std::vector<PetscScalar> f(x.shape[1]);
-    std::transform(x.row(0).begin(), x.row(0).end(), x.row(1).begin(),
-                   f.begin(), [](double x0, double x1) {
-                     double dx
-                         = (x0 - 0.5) * (x0 - 0.5) + (x1 - 0.5) * (x1 - 0.5);
-                     return 10.0 * std::exp(-(dx) / 0.02);
-                   });
-    return f;
+  f->interpolate([](const xt::xtensor<double, 2>& x) -> xt::xarray<PetscScalar> {
+    auto dx
+      = xt::square(xt::row(x, 0) - 0.5) + xt::square(xt::row(x, 1) - 0.5);
+    return 10 * xt::exp(-(dx) / 0.02);
   });
 
-  g->interpolate([](auto& x) {
-    std::vector<PetscScalar> f(x.shape[1]);
-    std::transform(x.row(0).begin(), x.row(0).end(), f.begin(),
-                   [](double x0) { return std::sin(5 * x0); });
-    return f;
+  g->interpolate([](const xt::xtensor<double, 2>& x) -> xt::xarray<PetscScalar> {
+    return xt::sin(5.0 * xt::row(x, 0));
   });
   t3.stop();
 
