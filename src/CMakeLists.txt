@@ -30,11 +30,11 @@ add_custom_command(
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 # Executable
-add_executable(${PROJECT_NAME} main.cpp mesh.cpp elasticity_problem.cpp poisson_problem.cpp
+add_executable(${PROJECT_NAME} main.cpp mesh.cpp elasticity_problem.cpp poisson_problem.cpp poisson_problem_trilinos.cpp elasticity_problem_trilinos.cpp
   ${CMAKE_CURRENT_BINARY_DIR}/Elasticity.c
   ${CMAKE_CURRENT_BINARY_DIR}/Poisson.c)
 
-find_package(Trilinos REQUIRED)
+find_package(Trilinos)
 target_include_directories(${PROJECT_NAME} PRIVATE ${Trilinos_INCLUDE_DIRS})
 
 # Find Boost program_options

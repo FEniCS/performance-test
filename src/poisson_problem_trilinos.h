@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2019 Chris N. Richardson and Garth N. Wells
+// Copyright (C) 2021 Chris N. Richardson
 //
 // This file is part of FEniCS-miniapp (https://www.fenicsproject.org)
 //
@@ -8,15 +8,11 @@
 
 #include <dolfinx/fem/Function.h>
 #include <dolfinx/la/Vector.h>
+#include <dolfinx/mesh/Mesh.h>
 #include <memory>
 #include <utility>
 
-namespace dolfinx::mesh
-{
-class Mesh;
-}
-
-namespace elastic
+namespace poisson_trilinos
 {
 
 std::tuple<dolfinx::la::Vector<PetscScalar>,
@@ -25,4 +21,4 @@ std::tuple<dolfinx::la::Vector<PetscScalar>,
                              const dolfinx::la::Vector<PetscScalar>&)>>
 problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh);
 
-} // namespace elastic
+}

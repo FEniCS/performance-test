@@ -7,8 +7,10 @@
 #include "Elasticity.h"
 #include "Poisson.h"
 #include "elasticity_problem.h"
+#include "elasticity_problem_trilinos.h"
 #include "mesh.h"
 #include "poisson_problem.h"
+#include "poisson_problem_trilinos.h"
 #include <boost/program_options.hpp>
 #include <dolfinx/common/Timer.h>
 #include <dolfinx/common/subsystem.h>
@@ -19,9 +21,7 @@
 #include <dolfinx/fem/FunctionSpace.h>
 #include <dolfinx/fem/utils.h>
 #include <dolfinx/io/XDMFFile.h>
-#include <dolfinx/la/PETScKrylovSolver.h>
-#include <dolfinx/la/PETScMatrix.h>
-#include <dolfinx/la/PETScVector.h>
+#include <dolfinx/la/Vector.h>
 #include <string>
 #include <utility>
 
@@ -76,9 +76,12 @@ void solve(int argc, char* argv[])
 
   // Assemble problem
   std::shared_ptr<dolfinx::mesh::Mesh> mesh;
-  std::shared_ptr<dolfinx::la::PETScMatrix> A;
-  std::shared_ptr<dolfinx::la::PETScVector> b;
+  std::shared_ptr<dolfinx::la::Vector<PetscScalar>> b;
   std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u;
+  std::function<int(dolfinx::fem::Function<PetscScalar>&,
+                    const dolfinx::la::Vector<PetscScalar>&)>
+      solver_function;
+
   if (problem_type == "poisson")
   {
     dolfinx::common::Timer t0("ZZZ Create Mesh");
@@ -97,11 +100,33 @@ void solve(int argc, char* argv[])
 
     // Create Poisson problem
     auto data = poisson::problem(mesh);
-    A = std::make_shared<dolfinx::la::PETScMatrix>(
+    b = std::make_shared<dolfinx::la::Vector<PetscScalar>>(
         std::move(std::get<0>(data)));
-    b = std::make_shared<dolfinx::la::PETScVector>(
-        std::move(std::get<1>(data)));
-    u = std::get<2>(data);
+    u = std::get<1>(data);
+    solver_function = std::get<2>(data);
+  }
+  else if (problem_type == "poisson_trilinos")
+  {
+    dolfinx::common::Timer t0("ZZZ Create Mesh");
+    auto cmap
+        = dolfinx::fem::create_coordinate_map(create_coordinate_map_Poisson);
+    if (mesh_type == "cube")
+      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1, cmap);
+    else
+      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1, cmap);
+    t0.stop();
+
+    // Create mesh entity permutations outside of the assembler
+    dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
+    mesh->topology_mutable().create_entity_permutations();
+    tperm.stop();
+
+    // Create Poisson problem
+    auto data = poisson_trilinos::problem(mesh);
+    b = std::make_shared<dolfinx::la::Vector<PetscScalar>>(
+        std::move(std::get<0>(data)));
+    u = std::get<1>(data);
+    solver_function = std::get<2>(data);
   }
   else if (problem_type == "elasticity")
   {
@@ -122,11 +147,33 @@ void solve(int argc, char* argv[])
     // Create elasticity problem. Near-nullspace will be attached to the
     // linear operator (matrix).
     auto data = elastic::problem(mesh);
-    A = std::make_shared<dolfinx::la::PETScMatrix>(
+    b = std::make_shared<dolfinx::la::Vector<PetscScalar>>(
         std::move(std::get<0>(data)));
-    b = std::make_shared<dolfinx::la::PETScVector>(
-        std::move(std::get<1>(data)));
-    u = std::get<2>(data);
+    u = std::get<1>(data);
+    solver_function = std::get<2>(data);
+  }
+  else if (problem_type == "elasticity_trilinos")
+  {
+    dolfinx::common::Timer t0("ZZZ Create Mesh");
+    auto cmap
+        = dolfinx::fem::create_coordinate_map(create_coordinate_map_Elasticity);
+    if (mesh_type == "cube")
+      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3, cmap);
+    else
+      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3, cmap);
+    t0.stop();
+
+    // Create mesh entity permutations outside of the assembler
+    dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
+    mesh->topology_mutable().create_entity_permutations();
+    tperm.stop();
+
+    // Create elasticity problem.
+    auto data = elastic_trilinos::problem(mesh);
+    b = std::make_shared<dolfinx::la::Vector<PetscScalar>>(
+        std::move(std::get<0>(data)));
+    u = std::get<1>(data);
+    solver_function = std::get<2>(data);
   }
   else
     throw std::runtime_error("Unknown problem type: " + problem_type);
@@ -164,14 +211,8 @@ void solve(int argc, char* argv[])
         << std::endl;
   }
 
-  // Create solver
-  dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
-  solver.set_from_options();
-  solver.set_operator(A->mat());
-
-  // Solve
   dolfinx::common::Timer t5("ZZZ Solve");
-  int num_iter = solver.solve(u->vector(), b->vec());
+  int num_iter = solver_function(*u, *b);
   t5.stop();
 
   if (output)

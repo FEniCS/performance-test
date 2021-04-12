@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2019 Chris N. Richardson and Garth N. Wells
+// Copyright (C) 2021 Chris N. Richardson
 //
 // This file is part of FEniCS-miniapp (https://www.fenicsproject.org)
 //
@@ -16,7 +16,7 @@ namespace dolfinx::mesh
 class Mesh;
 }
 
-namespace elastic
+namespace elastic_trilinos
 {
 
 std::tuple<dolfinx::la::Vector<PetscScalar>,

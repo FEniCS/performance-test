@@ -1,10 +1,10 @@
-// Copyright (C) 2017-2019 Chris N. Richardson and Garth N. Wells
+// Copyright (C) 2021 Chris N. Richardson
 //
 // This file is part of FEniCS-miniapp (https://www.fenicsproject.org)
 //
 // SPDX-License-Identifier:    MIT
 
-#include "elasticity_problem.h"
+#include "elasticity_problem_trilinos.h"
 #include "Elasticity.h"
 #include <BelosSolverFactory.hpp>
 #include <BelosTpetraAdapter.hpp>
@@ -19,11 +19,7 @@
 #include <dolfinx/fem/FunctionSpace.h>
 #include <dolfinx/fem/assembler.h>
 #include <dolfinx/fem/petsc.h>
-#include <dolfinx/la/PETScKrylovSolver.h>
-#include <dolfinx/la/PETScMatrix.h>
-#include <dolfinx/la/PETScVector.h>
 #include <dolfinx/la/SparsityPattern.h>
-#include <dolfinx/la/VectorSpaceBasis.h>
 #include <dolfinx/la/utils.h>
 #include <dolfinx/mesh/Geometry.h>
 #include <dolfinx/mesh/Mesh.h>
@@ -36,76 +32,11 @@
 #include <Tpetra_Core.hpp>
 #include <Tpetra_CrsMatrix.hpp>
 
-namespace
-{
-// Function to compute the near nullspace for elasticity - it is made up
-// of the six rigid body modes
-dolfinx::la::VectorSpaceBasis
-build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
-{
-  // Create vectors for nullspace basis
-  auto map = V.dofmap()->index_map;
-  int bs = V.dofmap()->index_map_bs();
-  const std::int32_t length_block = map->size_local() + map->num_ghosts();
-  const std::int32_t length = bs * length_block;
-  Eigen::Matrix<PetscScalar, Eigen::Dynamic, 6> basis
-      = Eigen::Matrix<PetscScalar, Eigen::Dynamic, 6>::Zero(length, 6);
-
-  // NOTE: The below will be simpler once Eigen 3.4 is released, see
-  //
-  // http://eigen.tuxfamily.org/dox-devel/group__TutorialSlicingIndexing.html
-
-  // x0, x1, x2 translations
-  for (int k = 0; k < 3; ++k)
-  {
-    for (std::int32_t i = 0; i < length_block; ++i)
-      basis(bs * i + k, k) = 1.0;
-  }
-
-  // Rotations
-  const xt::xtensor<double, 2> x = V.tabulate_dof_coordinates(false);
-  auto& dofs = V.dofmap()->list().array();
-  for (int i = 0; i < dofs.size(); ++i)
-  {
-    basis(bs * dofs[i] + 0, 3) = -x(dofs[i], 1);
-    basis(bs * dofs[i] + 1, 3) = x(dofs[i], 0);
-
-    basis(bs * dofs[i] + 0, 4) = x(dofs[i], 2);
-    basis(bs * dofs[i] + 2, 4) = -x(dofs[i], 0);
-
-    basis(bs * dofs[i] + 2, 5) = x(dofs[i], 1);
-    basis(bs * dofs[i] + 1, 5) = -x(dofs[i], 2);
-  }
-
-  const std::int32_t size = map->size_local() * bs;
-  const std::int64_t size_global = map->size_global() * bs;
-  std::vector<std::shared_ptr<dolfinx::la::PETScVector>> basis_vec;
-  for (int i = 0; i < 6; ++i)
-  {
-    Vec vec0, vec1;
-    VecCreateMPIWithArray(V.mesh()->mpi_comm(), 3, size, size_global,
-                          basis.col(i).data(), &vec0);
-    VecDuplicate(vec0, &vec1);
-    VecCopy(vec0, vec1);
-    VecDestroy(&vec0);
-    basis_vec.push_back(
-        std::make_shared<dolfinx::la::PETScVector>(vec1, false));
-  }
-
-  // Create vector space and orthonormalize
-  dolfinx::la::VectorSpaceBasis vector_space(basis_vec);
-  vector_space.orthonormalize();
-  if (!vector_space.is_orthonormal())
-    throw std::runtime_error("Space not orthonormal");
-  return vector_space;
-}
-} // namespace
-
 std::tuple<dolfinx::la::Vector<PetscScalar>,
            std::shared_ptr<dolfinx::fem::Function<PetscScalar>>,
            std::function<int(dolfinx::fem::Function<PetscScalar>&,
                              const dolfinx::la::Vector<PetscScalar>&)>>
-elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
+elastic_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 {
   dolfinx::common::Timer t0("ZZZ FunctionSpace");
 
@@ -179,8 +110,7 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   Teuchos::RCP<const Teuchos::Comm<int>> comm
       = Teuchos::rcp(new Teuchos::MpiComm<int>(mesh->mpi_comm()));
-  const std::vector<std::int64_t> global_indices
-      = pattern.column_indices();
+  const std::vector<std::int64_t> global_indices = pattern.column_indices();
 
   std::vector<std::int64_t> global_index_view(global_indices.size() * bs);
   for (std::size_t i = 0; i < global_indices.size(); ++i)
@@ -336,161 +266,82 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   using OP = Tpetra::Operator<PetscScalar, std::int32_t, std::int64_t>;
 
   dolfinx::common::Timer tassv("Trilinos: assemble vector");
-  Teuchos::RCP<MV> b_Tpetra(new MV(vecMap, 1));
-  Teuchos::RCP<MV> x_Tpetra(new MV(vecMap, 1));
-  {
-    // Assemble RHS and gather ghost entries
-    Teuchos::RCP<MV> bdist_Tpetra(new MV(colMap, 1));
-    Teuchos::ArrayRCP<PetscScalar> bdist_view
-        = bdist_Tpetra->getDataNonConst(0);
-    tcb::span<PetscScalar> b_(bdist_view.get(), bdist_view.size());
-    std::fill(b_.begin(), b_.end(), 0.0);
-
-    dolfinx::fem::assemble_vector(b_, *L);
-    dolfinx::fem::apply_lifting(b_, {a}, {{bc}}, {}, 1.0);
-
-    Tpetra::Export<std::int32_t, std::int64_t> vec_export(colMap, vecMap);
-    b_Tpetra->doExport(*bdist_Tpetra, vec_export, Tpetra::CombineMode::ADD);
-
-    Teuchos::ArrayRCP<PetscScalar> bdist_viewt = b_Tpetra->getDataNonConst(0);
-    tcb::span<PetscScalar> bt_(bdist_viewt.get(), bdist_viewt.size());
-    dolfinx::fem::set_bc(bt_, {bc});
-  }
-  tassv.stop();
-
-  double norm2;
-  Teuchos::ArrayView<double> norm_view(&norm2, 1);
-  b_Tpetra->norm2(norm_view);
-  if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
-    s << "Norm[b](Tpetra) = " << norm2 << "\n";
-
-  dolfinx::common::Timer ttri("Trilinos: solve");
-
-  // Muelu preconditioner, to be constructed from a Tpetra Operator
-  // or Matrix
-  Teuchos::RCP<Teuchos::ParameterList> muelu_paramList(
-      new Teuchos::ParameterList);
-  muelu_paramList->set("problem: type", "Elasticity-3D");
-  Teuchos::RCP<MueLu::TpetraOperator<PetscScalar, std::int32_t, std::int64_t>>
-      muelu_prec = MueLu::CreateTpetraPreconditioner(
-          Teuchos::rcp_dynamic_cast<
-              Tpetra::Operator<PetscScalar, std::int32_t, std::int64_t>>(
-              A_Tpetra),
-          *muelu_paramList);
-
-  // Teuchos::RCP<MV> ns(new MV(vecMap, 6));
-  // for (int i = 0; i < 6; ++i)
-  // {
-  //   const PetscScalar* data;
-  //   VecGetArrayRead(nullspace[i]->vec(), &data);
-  //   Teuchos::ArrayRCP<PetscScalar> ns_view = ns->getDataNonConst(i);
-  //   std::copy(data, data + global_index_vec_view.size(), ns_view.get());
-  //   VecRestoreArrayRead(nullspace[i]->vec(), &data);
-  // }
-  // auto Fine = muelu_prec->GetHierarchy()->GetLevel(0);
-  // Fine->setDefaultVerbLevel(Teuchos::VERB_HIGH);
-  // Fine->Set("Nullspace", ns);
-
-  Teuchos::RCP<Teuchos::ParameterList> solver_paramList(
-      new Teuchos::ParameterList);
-  solver_paramList->set("Convergence Tolerance", 1e-8);
-  solver_paramList->set("Verbosity", Belos::Warnings | Belos::IterationDetails
-                                         | Belos::StatusTestDetails
-                                         | Belos::TimingDetails
-                                         | Belos::FinalSummary);
-  solver_paramList->set("Output Style", (int)Belos::Brief);
-  solver_paramList->set("Output Frequency", 1);
-  Belos::SolverFactory<PetscScalar, MV, OP> factory;
-  Teuchos::RCP<Belos::SolverManager<PetscScalar, MV, OP>> belos_solver
-      = factory.create("CG", solver_paramList);
-
-  Teuchos::RCP<Belos::LinearProblem<double, MV, OP>> problem(
-      new Belos::LinearProblem<double, MV, OP>);
-  problem->setOperator(A_Tpetra);
-  problem->setLeftPrec(muelu_prec);
-  problem->setProblem(x_Tpetra, b_Tpetra);
-  belos_solver->setProblem(problem);
-  belos_solver->solve();
-  x_Tpetra->norm2(norm_view);
-  if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
-    s << "Norm[x](Tpetra) = " << norm2 << "\n";
-  ttri.stop();
-
-  // Create matrices and vector, and assemble system
-  std::shared_ptr<dolfinx::la::PETScMatrix> A
-      = std::make_shared<dolfinx::la::PETScMatrix>(
-          dolfinx::fem::create_matrix(*a), false);
-
-  // Wrap la::Vector with Petsc Vec
   dolfinx::la::Vector<PetscScalar> bx(
       L->function_spaces()[0]->dofmap()->index_map,
       L->function_spaces()[0]->dofmap()->index_map_bs());
-  Vec b_vec = dolfinx::la::create_ghosted_vector(
-      *(bx.map()), bx.bs(), tcb::span<PetscScalar>(bx.mutable_array()));
-  dolfinx::la::PETScVector b(b_vec, false);
+  tcb::span<PetscScalar> b_(bx.mutable_array().data(),
+                            bx.mutable_array().size());
 
-  dolfinx::common::Timer t2("ZZZ Assemble matrix");
-  dolfinx::fem::assemble_matrix(
-      dolfinx::la::PETScMatrix::add_block_fn(A->mat()), *a, {bc});
-  dolfinx::fem::add_diagonal(dolfinx::la::PETScMatrix::add_fn(A->mat()), *V,
-                             {bc});
-  MatAssemblyBegin(A->mat(), MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(A->mat(), MAT_FINAL_ASSEMBLY);
-  t2.stop();
+  std::fill(b_.begin(), b_.end(), 0.0);
 
-  double norm;
-  MatNorm(A->mat(), NORM_FROBENIUS, &norm);
-  if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
-    s << "NormA(Petsc) = " << norm << "\n";
+  dolfinx::fem::assemble_vector(b_, *L);
+  dolfinx::fem::apply_lifting(b_, {a}, {{bc}}, {}, 1.0);
 
-  VecSet(b.vec(), 0.0);
-  VecGhostUpdateBegin(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
-  VecGhostUpdateEnd(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
+  dolfinx::la::scatter_rev(bx, dolfinx::common::IndexMap::Mode::add);
+  dolfinx::fem::set_bc(b_, {bc});
 
-  dolfinx::common::Timer t3("ZZZ Assemble vector");
-  dolfinx::fem::assemble_vector_petsc(b.vec(), *L);
-  dolfinx::fem::apply_lifting_petsc(b.vec(), {a}, {{bc}}, {}, 1.0);
-  VecGhostUpdateBegin(b.vec(), ADD_VALUES, SCATTER_REVERSE);
-  VecGhostUpdateEnd(b.vec(), ADD_VALUES, SCATTER_REVERSE);
-  dolfinx::fem::set_bc_petsc(b.vec(), {bc}, nullptr);
-  t3.stop();
-
-  VecNorm(b.vec(), NORM_2, &norm);
-  if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
-    s << "Norm[b](Petsc) = " << norm << "\n";
-
-  std::cout << s.str() << "\n";
-
-  dolfinx::common::Timer t4("ZZZ Create near-nullspace");
+  tassv.stop();
 
   // Create Function to hold solution
   auto u = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
 
-  // Build near-nullspace and attach to matrix
-  dolfinx::la::VectorSpaceBasis nullspace = build_near_nullspace(*V);
-  A->set_near_nullspace(nullspace);
-
-  t4.stop();
-
   std::function<int(dolfinx::fem::Function<PetscScalar>&,
                     const dolfinx::la::Vector<PetscScalar>&)>
-      solver_function = [A](dolfinx::fem::Function<PetscScalar>& u,
-                            const dolfinx::la::Vector<PetscScalar>& b) {
-        // Create solver
-        dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
-        solver.set_from_options();
-        solver.set_operator(A->mat());
+      solver_function = [A_Tpetra,
+                         vecMap](dolfinx::fem::Function<PetscScalar>& u,
+                                 const dolfinx::la::Vector<PetscScalar>& b) {
+        // FIXME: how to wrap memory with MultiVector? - this is a copy
+        const Teuchos::ArrayView<const PetscScalar> b_view(b.array().data(),
+                                                           b.array().size());
+        Teuchos::RCP<MV> b_Tpetra(new MV(vecMap, b_view, b.array().size(), 1));
 
-        // Wrap dolfinx::la::Vector
-        dolfinx::la::Vector<PetscScalar>& bnc
-            = const_cast<dolfinx::la::Vector<PetscScalar>&>(b);
-        Vec b_petsc = dolfinx::la::create_ghosted_vector(
-            *(b.map()), b.bs(), tcb::span<PetscScalar>(bnc.mutable_array()));
+        dolfinx::common::Timer ttri("Trilinos: solve");
 
-        // Solve
-        int num_iter = solver.solve(u.vector(), b_petsc);
-        return num_iter;
+        // Muelu preconditioner, to be constructed from a Tpetra Operator
+        // or Matrix
+        Teuchos::RCP<Teuchos::ParameterList> muelu_paramList(
+            new Teuchos::ParameterList);
+        muelu_paramList->set("problem: type", "Elasticity-3D");
+        Teuchos::RCP<
+            MueLu::TpetraOperator<PetscScalar, std::int32_t, std::int64_t>>
+            muelu_prec = MueLu::CreateTpetraPreconditioner(
+                Teuchos::rcp_dynamic_cast<
+                    Tpetra::Operator<PetscScalar, std::int32_t, std::int64_t>>(
+                    A_Tpetra),
+                *muelu_paramList);
+
+        Teuchos::RCP<Teuchos::ParameterList> solver_paramList(
+            new Teuchos::ParameterList);
+        solver_paramList->set("Convergence Tolerance", 1e-8);
+        solver_paramList->set("Verbosity",
+                              Belos::Warnings | Belos::IterationDetails
+                                  | Belos::StatusTestDetails
+                                  | Belos::TimingDetails | Belos::FinalSummary);
+        solver_paramList->set("Output Style", (int)Belos::Brief);
+        solver_paramList->set("Output Frequency", 1);
+        Belos::SolverFactory<PetscScalar, MV, OP> factory;
+        Teuchos::RCP<Belos::SolverManager<PetscScalar, MV, OP>> belos_solver
+            = factory.create("CG", solver_paramList);
+
+        Teuchos::RCP<Belos::LinearProblem<double, MV, OP>> problem(
+            new Belos::LinearProblem<double, MV, OP>);
+        problem->setOperator(A_Tpetra);
+        problem->setLeftPrec(muelu_prec);
+        Teuchos::RCP<MV> x_Tpetra(new MV(vecMap, 1));
+        problem->setProblem(x_Tpetra, b_Tpetra);
+        belos_solver->setProblem(problem);
+        belos_solver->solve();
+
+        // Copy out solution vector
+        std::copy(x_Tpetra->getData(0).begin(), x_Tpetra->getData(0).end(),
+                  u.x()->mutable_array().data());
+
+        const int num_iters = belos_solver->getNumIters();
+
+        ttri.stop();
+
+        return num_iters;
       };
 
   return {std::move(bx), u, solver_function};
-}
+} // namespace
