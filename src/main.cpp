@@ -82,99 +82,44 @@ void solve(int argc, char* argv[])
                     const dolfinx::la::Vector<PetscScalar>&)>
       solver_function;
 
+  int ndofs_per_node = 0;
+  std::shared_ptr<dolfinx::fem::CoordinateElement> cmap;
+  if (problem_type == "elasticity" or problem_type == "elasticity_trilinos")
+  {
+    cmap = std::make_shared<dolfinx::fem::CoordinateElement>(
+        dolfinx::fem::create_coordinate_map(create_coordinate_map_Elasticity));
+    ndofs_per_node = 3;
+  }
+  else
+  {
+    cmap = std::make_shared<dolfinx::fem::CoordinateElement>(
+        dolfinx::fem::create_coordinate_map(create_coordinate_map_Poisson));
+    ndofs_per_node = 1;
+  }
+
+  dolfinx::common::Timer t0("ZZZ Create Mesh");
+  if (mesh_type == "cube")
+    mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling,
+                            ndofs_per_node, *cmap);
+  else
+    mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling,
+                             ndofs_per_node, *cmap);
+  t0.stop();
+
+  // Create mesh entity permutations outside of the assembler
+  dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
+  mesh->topology_mutable().create_entity_permutations();
+  tperm.stop();
+
+  // Create Poisson problem
   if (problem_type == "poisson")
-  {
-    dolfinx::common::Timer t0("ZZZ Create Mesh");
-    auto cmap
-        = dolfinx::fem::create_coordinate_map(create_coordinate_map_Poisson);
-    if (mesh_type == "cube")
-      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1, cmap);
-    else
-      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1, cmap);
-    t0.stop();
-
-    // Create mesh entity permutations outside of the assembler
-    dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
-    mesh->topology_mutable().create_entity_permutations();
-    tperm.stop();
-
-    // Create Poisson problem
-    auto data = poisson::problem(mesh);
-    b = std::make_shared<dolfinx::la::Vector<PetscScalar>>(
-        std::move(std::get<0>(data)));
-    u = std::get<1>(data);
-    solver_function = std::get<2>(data);
-  }
+    std::tie(b, u, solver_function) = poisson::problem(mesh);
   else if (problem_type == "poisson_trilinos")
-  {
-    dolfinx::common::Timer t0("ZZZ Create Mesh");
-    auto cmap
-        = dolfinx::fem::create_coordinate_map(create_coordinate_map_Poisson);
-    if (mesh_type == "cube")
-      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1, cmap);
-    else
-      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1, cmap);
-    t0.stop();
-
-    // Create mesh entity permutations outside of the assembler
-    dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
-    mesh->topology_mutable().create_entity_permutations();
-    tperm.stop();
-
-    // Create Poisson problem
-    auto data = poisson_trilinos::problem(mesh);
-    b = std::make_shared<dolfinx::la::Vector<PetscScalar>>(
-        std::move(std::get<0>(data)));
-    u = std::get<1>(data);
-    solver_function = std::get<2>(data);
-  }
+    std::tie(b, u, solver_function) = poisson_trilinos::problem(mesh);
   else if (problem_type == "elasticity")
-  {
-    dolfinx::common::Timer t0("ZZZ Create Mesh");
-    auto cmap
-        = dolfinx::fem::create_coordinate_map(create_coordinate_map_Elasticity);
-    if (mesh_type == "cube")
-      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3, cmap);
-    else
-      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3, cmap);
-    t0.stop();
-
-    // Create mesh entity permutations outside of the assembler
-    dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
-    mesh->topology_mutable().create_entity_permutations();
-    tperm.stop();
-
-    // Create elasticity problem. Near-nullspace will be attached to the
-    // linear operator (matrix).
-    auto data = elastic::problem(mesh);
-    b = std::make_shared<dolfinx::la::Vector<PetscScalar>>(
-        std::move(std::get<0>(data)));
-    u = std::get<1>(data);
-    solver_function = std::get<2>(data);
-  }
+    std::tie(b, u, solver_function) = elastic::problem(mesh);
   else if (problem_type == "elasticity_trilinos")
-  {
-    dolfinx::common::Timer t0("ZZZ Create Mesh");
-    auto cmap
-        = dolfinx::fem::create_coordinate_map(create_coordinate_map_Elasticity);
-    if (mesh_type == "cube")
-      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3, cmap);
-    else
-      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3, cmap);
-    t0.stop();
-
-    // Create mesh entity permutations outside of the assembler
-    dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
-    mesh->topology_mutable().create_entity_permutations();
-    tperm.stop();
-
-    // Create elasticity problem.
-    auto data = elastic_trilinos::problem(mesh);
-    b = std::make_shared<dolfinx::la::Vector<PetscScalar>>(
-        std::move(std::get<0>(data)));
-    u = std::get<1>(data);
-    solver_function = std::get<2>(data);
-  }
+    std::tie(b, u, solver_function) = elastic_trilinos::problem(mesh);
   else
     throw std::runtime_error("Unknown problem type: " + problem_type);
 

@@ -28,7 +28,7 @@
 #include <xtensor/xarray.hpp>
 #include <xtensor/xview.hpp>
 
-std::tuple<dolfinx::la::Vector<PetscScalar>,
+std::tuple<std::shared_ptr<dolfinx::la::Vector<PetscScalar>>,
            std::shared_ptr<dolfinx::fem::Function<PetscScalar>>,
            std::function<int(dolfinx::fem::Function<PetscScalar>&,
                              const dolfinx::la::Vector<PetscScalar>&)>>
@@ -192,16 +192,17 @@ poisson_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   using OP = Tpetra::Operator<PetscScalar, std::int32_t, std::int64_t>;
 
   dolfinx::common::Timer tassv("Trilinos: assemble vector");
-  dolfinx::la::Vector<PetscScalar> bx(
-      L->function_spaces()[0]->dofmap()->index_map,
-      L->function_spaces()[0]->dofmap()->index_map_bs());
-  tcb::span<PetscScalar> b_(bx.mutable_array().data(),
-                            bx.mutable_array().size());
+  std::shared_ptr<dolfinx::la::Vector<PetscScalar>> bx
+      = std::make_shared<dolfinx::la::Vector<PetscScalar>>(
+          L->function_spaces()[0]->dofmap()->index_map,
+          L->function_spaces()[0]->dofmap()->index_map_bs());
+  tcb::span<PetscScalar> b_(bx->mutable_array().data(),
+                            bx->mutable_array().size());
 
   std::fill(b_.begin(), b_.end(), 0.0);
   dolfinx::fem::assemble_vector(b_, *L);
   dolfinx::fem::apply_lifting(b_, {a}, {{bc}}, {}, 1.0);
-  dolfinx::la::scatter_rev(bx, dolfinx::common::IndexMap::Mode::add);
+  dolfinx::la::scatter_rev(*bx, dolfinx::common::IndexMap::Mode::add);
   dolfinx::fem::set_bc(b_, {bc});
 
   const int size_local = V->dofmap()->index_map->size_local();
@@ -211,7 +212,7 @@ poisson_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   double global_norm;
   MPI_Allreduce(&local_norm, &global_norm, 1, MPI_DOUBLE, MPI_SUM,
-                bx.map()->comm());
+                bx->map()->comm());
 
   if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
     s << "Norm[b](Tpetra) = " << std::sqrt(global_norm) << "\n";
@@ -281,5 +282,5 @@ poisson_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
         return num_iters;
       };
 
-  return {std::move(bx), u, solver_function};
+  return {bx, u, solver_function};
 }

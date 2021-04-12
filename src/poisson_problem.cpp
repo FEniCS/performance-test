@@ -25,7 +25,7 @@
 #include <xtensor/xarray.hpp>
 #include <xtensor/xview.hpp>
 
-std::tuple<dolfinx::la::Vector<PetscScalar>,
+std::tuple<std::shared_ptr<dolfinx::la::Vector<PetscScalar>>,
            std::shared_ptr<dolfinx::fem::Function<PetscScalar>>,
            std::function<int(dolfinx::fem::Function<PetscScalar>&,
                              const dolfinx::la::Vector<PetscScalar>&)>>
@@ -84,11 +84,12 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
           dolfinx::fem::create_matrix(*a), false);
 
   // Wrap la::Vector with Petsc Vec
-  dolfinx::la::Vector<PetscScalar> bx(
-      L->function_spaces()[0]->dofmap()->index_map,
-      L->function_spaces()[0]->dofmap()->index_map_bs());
+  std::shared_ptr<dolfinx::la::Vector<PetscScalar>> bx
+      = std::make_shared<dolfinx::la::Vector<PetscScalar>>(
+          L->function_spaces()[0]->dofmap()->index_map,
+          L->function_spaces()[0]->dofmap()->index_map_bs());
   Vec b_vec = dolfinx::la::create_ghosted_vector(
-      *(bx.map()), bx.bs(), tcb::span<PetscScalar>(bx.mutable_array()));
+      *(bx->map()), bx->bs(), tcb::span<PetscScalar>(bx->mutable_array()));
   dolfinx::la::PETScVector b(b_vec, false);
 
   MatZeroEntries(A->mat());
@@ -138,5 +139,5 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
         return num_iter;
       };
 
-  return {std::move(bx), u, solver_function};
+  return {bx, u, solver_function};
 }

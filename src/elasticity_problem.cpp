@@ -6,10 +6,7 @@
 
 #include "elasticity_problem.h"
 #include "Elasticity.h"
-#include <BelosSolverFactory.hpp>
-#include <BelosTpetraAdapter.hpp>
 #include <Eigen/Dense>
-#include <MueLu_CreateTpetraPreconditioner.hpp>
 #include <dolfinx/common/Timer.h>
 #include <dolfinx/common/array2d.h>
 #include <dolfinx/fem/DirichletBC.h>
@@ -31,10 +28,6 @@
 #include <utility>
 #include <xtensor/xarray.hpp>
 #include <xtensor/xview.hpp>
-
-#include <MueLu_CreateTpetraPreconditioner.hpp>
-#include <Tpetra_Core.hpp>
-#include <Tpetra_CrsMatrix.hpp>
 
 namespace
 {
@@ -101,7 +94,7 @@ build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
 }
 } // namespace
 
-std::tuple<dolfinx::la::Vector<PetscScalar>,
+std::tuple<std::shared_ptr<dolfinx::la::Vector<PetscScalar>>,
            std::shared_ptr<dolfinx::fem::Function<PetscScalar>>,
            std::function<int(dolfinx::fem::Function<PetscScalar>&,
                              const dolfinx::la::Vector<PetscScalar>&)>>
@@ -177,11 +170,12 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::common::Timer t3("ZZZ Assemble vector");
 
   // Wrap la::Vector with Petsc Vec
-  dolfinx::la::Vector<PetscScalar> bx(
-      L->function_spaces()[0]->dofmap()->index_map,
-      L->function_spaces()[0]->dofmap()->index_map_bs());
+  std::shared_ptr<dolfinx::la::Vector<PetscScalar>> bx
+      = std::make_shared<dolfinx::la::Vector<PetscScalar>>(
+          L->function_spaces()[0]->dofmap()->index_map,
+          L->function_spaces()[0]->dofmap()->index_map_bs());
   Vec b_vec = dolfinx::la::create_ghosted_vector(
-      *(bx.map()), bx.bs(), tcb::span<PetscScalar>(bx.mutable_array()));
+      *(bx->map()), bx->bs(), tcb::span<PetscScalar>(bx->mutable_array()));
   dolfinx::la::PETScVector b(b_vec, false);
 
   VecSet(b.vec(), 0.0);
@@ -226,5 +220,5 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
         return num_iter;
       };
 
-  return {std::move(bx), u, solver_function};
+  return {bx, u, solver_function};
 }
