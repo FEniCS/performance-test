@@ -91,6 +91,8 @@ elastic_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
                                                   {V, V}, {}, {}, {});
   t0c.stop();
 
+  dolfinx::common::Timer tassm("ZZZ Assemble matrix");
+
   dolfinx::common::Timer tcre("Trilinos: create sparsity");
   dolfinx::la::SparsityPattern pattern
       = dolfinx::fem::create_sparsity_pattern(*a);
@@ -249,37 +251,25 @@ elastic_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
         return 0;
       };
 
-  dolfinx::common::Timer tassm("Trilinos: assemble matrix");
   dolfinx::fem::assemble_matrix(tpetra_insert_block, *a, {bc});
   dolfinx::fem::add_diagonal(tpetra_insert, *V, {bc});
-
   A_Tpetra->fillComplete();
   tassm.stop();
-
-  std::stringstream s;
-
-  double Tpetra_norm = A_Tpetra->getFrobeniusNorm();
-  if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
-    s << "NormA(Tpetra) = " << Tpetra_norm << "\n";
 
   using MV = Tpetra::MultiVector<PetscScalar, std::int32_t, std::int64_t>;
   using OP = Tpetra::Operator<PetscScalar, std::int32_t, std::int64_t>;
 
-  dolfinx::common::Timer tassv("Trilinos: assemble vector");
+  dolfinx::common::Timer tassv("ZZZ Assemble vector");
   dolfinx::la::Vector<PetscScalar> bx(
       L->function_spaces()[0]->dofmap()->index_map,
       L->function_spaces()[0]->dofmap()->index_map_bs());
   tcb::span<PetscScalar> b_(bx.mutable_array().data(),
                             bx.mutable_array().size());
-
   std::fill(b_.begin(), b_.end(), 0.0);
-
   dolfinx::fem::assemble_vector(b_, *L);
   dolfinx::fem::apply_lifting(b_, {a}, {{bc}}, {}, 1.0);
-
   dolfinx::la::scatter_rev(bx, dolfinx::common::IndexMap::Mode::add);
   dolfinx::fem::set_bc(b_, {bc});
-
   tassv.stop();
 
   // Create Function to hold solution
