@@ -61,7 +61,7 @@ jobs:
           cd build
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Release  ../src
           ninja
-      - name: Run Poisson test (BoomerAMG, serial)
+      - name: Run Poisson test (GAMG, serial)
         run: |
           cd build/
           ./dolfinx-scaling-test \
@@ -72,10 +72,8 @@ jobs:
           -ksp_view \
           -ksp_type cg \
           -ksp_rtol 1.0e-8 \
-          -pc_type hypre \
-          -pc_hypre_type boomeramg \
-          -pc_hypre_boomeramg_strong_threshold 0.5
-      - name: Run Poisson test (BoomerAMG, weak)
+          -pc_type gamg 
+      - name: Run Poisson test (GAMG, weak)
         run: |
           cd build/
           mpirun -np 2 ./dolfinx-scaling-test \
@@ -86,10 +84,8 @@ jobs:
           -ksp_view \
           -ksp_type cg \
           -ksp_rtol 1.0e-8 \
-          -pc_type hypre \
-          -pc_hypre_type boomeramg \
-          -pc_hypre_boomeramg_strong_threshold 0.5
-      - name: Run Poisson test (BoomerAMG, weak, unstructured mesh)
+          -pc_type gamg 
+      - name: Run Poisson test (GAMG, weak, unstructured mesh)
         run: |
           cd build/
           mpirun -np 2 ./dolfinx-scaling-test \
@@ -101,10 +97,8 @@ jobs:
           -ksp_view \
           -ksp_type cg \
           -ksp_rtol 1.0e-8 \
-          -pc_type hypre \
-          -pc_hypre_type boomeramg \
-          -pc_hypre_boomeramg_strong_threshold 0.5
-      - name: Run Poisson test (BoomerAMG, strong)
+          -pc_type gamg
+      - name: Run Poisson test (GAMG, strong)
         run: |
           cd build/
           mpirun -np 2 ./dolfinx-scaling-test \
@@ -115,9 +109,7 @@ jobs:
           -ksp_view \
           -ksp_type cg \
           -ksp_rtol 1.0e-8 \
-          -pc_type hypre \
-          -pc_hypre_type boomeramg \
-          -pc_hypre_boomeramg_strong_threshold 0.5
+          -pc_type gamg
       - name: Run elasticity test (GAMG, serial)
         run: |
           cd build/
