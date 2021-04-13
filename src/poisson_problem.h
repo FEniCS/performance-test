@@ -7,8 +7,7 @@
 #pragma once
 
 #include <dolfinx/fem/Function.h>
-#include <dolfinx/la/PETScMatrix.h>
-#include <dolfinx/la/PETScVector.h>
+#include <dolfinx/la/Vector.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <memory>
 #include <utility>
@@ -16,8 +15,10 @@
 namespace poisson
 {
 
-std::tuple<dolfinx::la::PETScMatrix, dolfinx::la::PETScVector,
-           std::shared_ptr<dolfinx::fem::Function<PetscScalar>>>
+std::tuple<dolfinx::la::Vector<PetscScalar>,
+           std::shared_ptr<dolfinx::fem::Function<PetscScalar>>,
+           std::function<int(dolfinx::fem::Function<PetscScalar>&,
+                             const dolfinx::la::Vector<PetscScalar>&)>>
 problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh);
 
 } // namespace poisson

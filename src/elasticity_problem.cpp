@@ -16,6 +16,7 @@
 #include <dolfinx/fem/FunctionSpace.h>
 #include <dolfinx/fem/assembler.h>
 #include <dolfinx/fem/petsc.h>
+#include <dolfinx/la/PETScKrylovSolver.h>
 #include <dolfinx/la/PETScMatrix.h>
 #include <dolfinx/la/PETScVector.h>
 #include <dolfinx/la/VectorSpaceBasis.h>
@@ -92,8 +93,10 @@ build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
 }
 } // namespace
 
-std::tuple<dolfinx::la::PETScMatrix, dolfinx::la::PETScVector,
-           std::shared_ptr<dolfinx::fem::Function<PetscScalar>>>
+std::tuple<dolfinx::la::Vector<PetscScalar>,
+           std::shared_ptr<dolfinx::fem::Function<PetscScalar>>,
+           std::function<int(dolfinx::fem::Function<PetscScalar>&,
+                             const dolfinx::la::Vector<PetscScalar>&)>>
 elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 {
   dolfinx::common::Timer t0("ZZZ FunctionSpace");
@@ -150,17 +153,25 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   t0c.stop();
 
   // Create matrices and vector, and assemble system
-  dolfinx::la::PETScMatrix A(dolfinx::fem::create_matrix(*a), false);
-  dolfinx::la::PETScVector b(*L->function_spaces()[0]->dofmap()->index_map,
-                             L->function_spaces()[0]->dofmap()->index_map_bs());
+  std::shared_ptr<dolfinx::la::PETScMatrix> A
+      = std::make_shared<dolfinx::la::PETScMatrix>(
+          dolfinx::fem::create_matrix(*a), false);
+
+  // Wrap la::Vector with Petsc Vec
+  dolfinx::la::Vector<PetscScalar> bx(
+      L->function_spaces()[0]->dofmap()->index_map,
+      L->function_spaces()[0]->dofmap()->index_map_bs());
+  Vec b_vec = dolfinx::la::create_ghosted_vector(
+      *(bx.map()), bx.bs(), tcb::span<PetscScalar>(bx.mutable_array()));
+  dolfinx::la::PETScVector b(b_vec, false);
 
   dolfinx::common::Timer t2("ZZZ Assemble matrix");
-  dolfinx::fem::assemble_matrix(dolfinx::la::PETScMatrix::add_block_fn(A.mat()),
-                                *a, {bc});
-  dolfinx::fem::add_diagonal(dolfinx::la::PETScMatrix::add_fn(A.mat()), *V,
+  dolfinx::fem::assemble_matrix(
+      dolfinx::la::PETScMatrix::add_block_fn(A->mat()), *a, {bc});
+  dolfinx::fem::add_diagonal(dolfinx::la::PETScMatrix::add_fn(A->mat()), *V,
                              {bc});
-  MatAssemblyBegin(A.mat(), MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(A.mat(), MAT_FINAL_ASSEMBLY);
+  MatAssemblyBegin(A->mat(), MAT_FINAL_ASSEMBLY);
+  MatAssemblyEnd(A->mat(), MAT_FINAL_ASSEMBLY);
   t2.stop();
 
   VecSet(b.vec(), 0.0);
@@ -182,9 +193,29 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   // Build near-nullspace and attach to matrix
   dolfinx::la::VectorSpaceBasis nullspace = build_near_nullspace(*V);
-  A.set_near_nullspace(nullspace);
+  A->set_near_nullspace(nullspace);
 
   t4.stop();
 
-  return {std::move(A), std::move(b), u};
+  std::function<int(dolfinx::fem::Function<PetscScalar>&,
+                    const dolfinx::la::Vector<PetscScalar>&)>
+      solver_function = [A](dolfinx::fem::Function<PetscScalar>& u,
+                            const dolfinx::la::Vector<PetscScalar>& b) {
+        // Create solver
+        dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
+        solver.set_from_options();
+        solver.set_operator(A->mat());
+
+        // Wrap dolfinx::la::Vector
+        dolfinx::la::Vector<PetscScalar>& bnc
+            = const_cast<dolfinx::la::Vector<PetscScalar>&>(b);
+        Vec b_petsc = dolfinx::la::create_ghosted_vector(
+            *(b.map()), b.bs(), tcb::span<PetscScalar>(bnc.mutable_array()));
+
+        // Solve
+        int num_iter = solver.solve(u.vector(), b_petsc);
+        return num_iter;
+      };
+
+  return {std::move(bx), u, solver_function};
 }
