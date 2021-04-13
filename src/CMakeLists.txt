@@ -12,14 +12,15 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(Eigen3 REQUIRED)
 find_package(Basix REQUIRED)
 find_package(DOLFINX REQUIRED)
-find_package(PETSc REQUIRED)
 
-message(STATUS "Complex = ${PETSC_SCALAR_COMPLEX} ${PETSC_INCLUDE_DIRS}")
+string(FIND "x-$ENV{PETSC_ARCH}" "complex" PETSC_SCALAR_COMPLEX)
 
-if(${PETSC_SCALAR_COMPLEX})
-  set(SCALAR_TYPE "double complex")
-else()
+message(STATUS ${PETSC_SCALAR_COMPLEX})
+
+if(${PETSC_SCALAR_COMPLEX} EQUAL -1)
   set(SCALAR_TYPE "double")
+else()
+  set(SCALAR_TYPE "double complex")
 endif()
 
 set(CMAKE_BUILD_TYPE "Release")
@@ -34,7 +35,7 @@ add_custom_command(
   OUTPUT Poisson.c
   COMMAND ffcx --scalar_type ${SCALAR_TYPE} ${CMAKE_CURRENT_SOURCE_DIR}/Poisson.ufl
   DEPENDS Poisson.ufl
-) 
+)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 # Executable
