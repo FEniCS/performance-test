@@ -13,10 +13,17 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(Eigen3 REQUIRED)
 find_package(Basix REQUIRED)
 find_package(DOLFINX REQUIRED)
+find_package(PETSc REQUIRED)
+
+message(STATUS "Complex = ${PETSC_SCALAR_COMPLEX}")
+
+if(${PETSC_SCALAR_COMPLEX})
+  set(SCALAR_TYPE "double complex")
+else()
+  set(SCALAR_TYPE "double")
+endif()
 
 set(CMAKE_BUILD_TYPE "Release")
-
-set(SCALAR_TYPE "double complex")
 
 # Compile UFL files
 add_custom_command(
