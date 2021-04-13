@@ -8,14 +8,13 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Get DOLFIN configuration data (DOLFINConfig.cmake must be in
-# DOLFIN_CMAKE_CONFIG_PATH)
+# Get DOLFINX configuration data
 find_package(Eigen3 REQUIRED)
 find_package(Basix REQUIRED)
 find_package(DOLFINX REQUIRED)
 find_package(PETSc REQUIRED)
 
-message(STATUS "Complex = ${PETSC_SCALAR_COMPLEX}")
+message(STATUS "Complex = ${PETSC_SCALAR_COMPLEX} ${PETSC_INCLUDE_DIRS}")
 
 if(${PETSC_SCALAR_COMPLEX})
   set(SCALAR_TYPE "double complex")
