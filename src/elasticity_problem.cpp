@@ -158,7 +158,6 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   std::shared_ptr<dolfinx::la::PETScMatrix> A
       = std::make_shared<dolfinx::la::PETScMatrix>(
           dolfinx::fem::create_matrix(*a), false);
-
   dolfinx::fem::assemble_matrix(
       dolfinx::la::PETScMatrix::add_block_fn(A->mat()), *a, {bc});
   dolfinx::fem::add_diagonal(dolfinx::la::PETScMatrix::add_fn(A->mat()), *V,
