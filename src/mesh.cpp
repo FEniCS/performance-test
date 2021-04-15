@@ -37,10 +37,10 @@ std::int64_t nvertices(int i, int j, int k, int nrefine)
 }
 } // namespace
 
-std::shared_ptr<dolfinx::mesh::Mesh>
-create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
-                 std::size_t dofs_per_node,
-                 const dolfinx::fem::CoordinateElement& element)
+std::shared_ptr<dolfinx::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
+                                                      std::size_t target_dofs,
+                                                      bool target_dofs_total,
+                                                      std::size_t dofs_per_node)
 {
   // Get number of processes
   const std::size_t num_processes = dolfinx::MPI::size(comm);
@@ -94,7 +94,8 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
 
   auto mesh = std::make_shared<dolfinx::mesh::Mesh>(
       dolfinx::generation::BoxMesh::create(
-          comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz}, element,
+          comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz},
+          dolfinx::mesh::CellType::tetrahedron,
           dolfinx::mesh::GhostMode::none));
 
   if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
@@ -115,8 +116,7 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
 //-----------------------------------------------------------------------------
 std::shared_ptr<dolfinx::mesh::Mesh>
 create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
-                  bool target_dofs_total, std::size_t dofs_per_node,
-                  const dolfinx::fem::CoordinateElement& element)
+                  bool target_dofs_total, std::size_t dofs_per_node)
 {
   int target = target_dofs / dofs_per_node;
   int mpi_size = dolfinx::MPI::size(comm);
@@ -245,6 +245,10 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   std::vector<std::int32_t> offsets(ncells + 1, 0);
   for (std::size_t i = 0; i < offsets.size() - 1; ++i)
     offsets[i + 1] = offsets[i] + 4;
+
+  dolfinx::fem::CoordinateElement element(dolfinx::mesh::CellType::tetrahedron,
+                                          1);
+
   auto mesh = std::make_shared<dolfinx::mesh::Mesh>(dolfinx::mesh::create_mesh(
       comm,
       dolfinx::graph::AdjacencyList<std::int64_t>(std::move(topo),
