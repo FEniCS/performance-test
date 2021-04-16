@@ -83,27 +83,18 @@ void solve(int argc, char* argv[])
       solver_function;
 
   int ndofs_per_node = 0;
-  std::shared_ptr<dolfinx::fem::CoordinateElement> cmap;
   if (problem_type == "elasticity" or problem_type == "elasticity_trilinos")
-  {
-    cmap = std::make_shared<dolfinx::fem::CoordinateElement>(
-        dolfinx::fem::create_coordinate_map(create_coordinate_map_Elasticity));
     ndofs_per_node = 3;
-  }
   else
-  {
-    cmap = std::make_shared<dolfinx::fem::CoordinateElement>(
-        dolfinx::fem::create_coordinate_map(create_coordinate_map_Poisson));
     ndofs_per_node = 1;
-  }
 
   dolfinx::common::Timer t0("ZZZ Create Mesh");
   if (mesh_type == "cube")
     mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling,
-                            ndofs_per_node, *cmap);
+                            ndofs_per_node);
   else
     mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling,
-                             ndofs_per_node, *cmap);
+                             ndofs_per_node);
   t0.stop();
 
   // Create mesh entity permutations outside of the assembler
@@ -111,7 +102,7 @@ void solve(int argc, char* argv[])
   mesh->topology_mutable().create_entity_permutations();
   tperm.stop();
 
-  // Create Poisson problem
+  // Create problem
   if (problem_type == "poisson")
     std::tie(b, u, solver_function) = poisson::problem(mesh);
   else if (problem_type == "poisson_trilinos")

@@ -37,8 +37,8 @@ poisson_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::common::Timer t0("ZZZ FunctionSpace");
   std::stringstream s;
 
-  auto V = dolfinx::fem::create_functionspace(
-      create_functionspace_form_Poisson_a, "u", mesh);
+  auto V = dolfinx::fem::create_functionspace(functionspace_form_Poisson_a, "u",
+                                              mesh);
 
   t0.stop();
 
@@ -77,10 +77,14 @@ poisson_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   t3.stop();
 
   // Define variational forms
-  auto L = dolfinx::fem::create_form<PetscScalar>(create_form_Poisson_L, {V},
-                                                  {{"f", f}, {"g", g}}, {}, {});
-  auto a = dolfinx::fem::create_form<PetscScalar>(create_form_Poisson_a, {V, V},
-                                                  {}, {}, {});
+  auto L = std::make_shared<dolfinx::fem::Form<PetscScalar>>(
+      dolfinx::fem::create_form<PetscScalar>(*form_Poisson_L, {V},
+                                             {{"f", f}, {"g", g}}, {}, {}));
+  auto a = std::make_shared<
+      dolfinx::fem::Form<PetscScalar>>(dolfinx::fem::create_form<PetscScalar>(
+      *form_Poisson_a, {V, V},
+      std::vector<std::shared_ptr<const dolfinx::fem::Function<PetscScalar>>>{},
+      {}, {}));
 
   Teuchos::RCP<const Teuchos::Comm<int>> comm
       = Teuchos::rcp(new Teuchos::MpiComm<int>(mesh->mpi_comm()));

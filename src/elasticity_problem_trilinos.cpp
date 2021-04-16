@@ -40,8 +40,8 @@ elastic_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 {
   dolfinx::common::Timer t0("ZZZ FunctionSpace");
 
-  auto V = dolfinx::fem::create_functionspace(
-      create_functionspace_form_Elasticity_a, "u", mesh);
+  auto V = dolfinx::fem::create_functionspace(functionspace_form_Elasticity_a,
+                                              "u", mesh);
 
   t0.stop();
 
@@ -85,10 +85,14 @@ elastic_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::common::Timer t0c("ZZZ Create forms");
 
   // Define variational forms
-  auto L = dolfinx::fem::create_form<PetscScalar>(create_form_Elasticity_L, {V},
-                                                  {{"f", f}}, {}, {});
-  auto a = dolfinx::fem::create_form<PetscScalar>(create_form_Elasticity_a,
-                                                  {V, V}, {}, {}, {});
+  auto L = std::make_shared<dolfinx::fem::Form<PetscScalar>>(
+      dolfinx::fem::create_form<PetscScalar>(*form_Elasticity_L, {V},
+                                             {{"f", f}}, {}, {}));
+  auto a = std::make_shared<
+      dolfinx::fem::Form<PetscScalar>>(dolfinx::fem::create_form<PetscScalar>(
+      *form_Elasticity_a, {V, V},
+      std::vector<std::shared_ptr<const dolfinx::fem::Function<PetscScalar>>>{},
+      {}, {}));
   t0c.stop();
 
   dolfinx::common::Timer tassm("ZZZ Assemble matrix");
