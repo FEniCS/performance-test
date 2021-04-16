@@ -16,6 +16,9 @@
 #include <dolfinx/mesh/cell_types.h>
 #include <dolfinx/refinement/refine.h>
 #include <memory>
+#include <xtensor/xfixed.hpp>
+#include <xtensor/xtensor.hpp>
+#include <xtensor/xview.hpp>
 
 namespace
 {
@@ -141,7 +144,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
                     {0, 2, 3, 4}, {6, 7, 4, 2}, {2, 3, 4, 7}};
 
   // Calculate number of points and cells (only on process 0)
-  int npoints = 0;
+  std::size_t npoints = 0;
   int ncells = 0;
   const int mpi_rank = dolfinx::MPI::rank(comm);
 
@@ -151,9 +154,9 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     ncells = n * 6 + n * lspur * 6;
   }
 
-  dolfinx::array2d<double> geom(npoints, 3);
-  Eigen::Map<Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor>> _geom(
-      geom.data(), geom.shape[0], geom.shape[1]);
+  xt::xtensor<double, 2> geom({npoints, 3});
+  // Eigen::Map<Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor>> _geom(
+  //     geom.data(), geom.shape[0], geom.shape[1]);
   std::vector<std::int64_t> topo(4 * ncells);
   if (mpi_rank == 0)
   {
@@ -178,14 +181,23 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
       }
 
       // Calculate the position of points
-      double th = 2 * M_PI * i / n;
-      _geom.row(p) << r0 * cos(th), r0 * sin(th), h0;
+      const double th = 2 * M_PI * i / n;
+      xt::xtensor_fixed<double, xt::xshape<3>> x;
+
+      x = {r0 * cos(th), r0 * sin(th), h0};
+      xt::row(geom, p) = x;
       ++p;
-      _geom.row(p) << r0 * cos(th), r0 * sin(th), -h0;
+
+      x = {r0 * cos(th), r0 * sin(th), -h0};
+      xt::row(geom, p) = x;
       ++p;
-      _geom.row(p) << r1 * cos(th), r1 * sin(th), -h1;
+
+      x = {r1 * cos(th), r1 * sin(th), -h1};
+      xt::row(geom, p) = x;
       ++p;
-      _geom.row(p) << r1 * cos(th), r1 * sin(th), h1;
+
+      x = {r1 * cos(th), r1 * sin(th), h1};
+      xt::row(geom, p) = x;
       ++p;
     }
 
@@ -197,9 +209,14 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
       double th0 = 2 * M_PI * (i + .5) / n;
 
       // Starting points on outer edge of ring
-      Eigen::Array<int, 8, 1> pts;
-      pts << (i * 4 + 2) % (n * 4), (i * 4 + 3) % (n * 4),
-          (i * 4 + 7) % (n * 4), (i * 4 + 6) % (n * 4), 0, 0, 0, 0;
+      xt::xtensor_fixed<int, xt::xshape<8>> pts = {(i * 4 + 2) % (n * 4),
+                                                   (i * 4 + 3) % (n * 4),
+                                                   (i * 4 + 7) % (n * 4),
+                                                   (i * 4 + 6) % (n * 4),
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   0};
 
       // Build each spur outwards
       for (int k = 0; k < lspur; ++k)
@@ -208,10 +225,10 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
         for (int j = 0; j < 4; ++j)
         {
           pts[j + 4] = p;
-          _geom.row(p) = _geom.row(pts[j]);
-          _geom(p, 0) += l0 * cos(th0 + k * dth);
-          _geom(p, 1) += l0 * sin(th0 + k * dth);
-          _geom(p, 2) *= pow(tap, k);
+          xt::row(geom, p) = xt::row(geom, pts[j]);
+          geom(p, 0) += l0 * std::cos(th0 + k * dth);
+          geom(p, 1) += l0 * std::sin(th0 + k * dth);
+          geom(p, 2) *= std::pow(tap, k);
           ++p;
         }
 
@@ -224,21 +241,22 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
         }
 
         // Outer face becomes inner face of next cube
-        pts.head(4) = pts.tail(4);
+        using namespace xt::placeholders;
+        xt::view(pts, xt::range(0, 4)) = xt::view(pts, xt::range(-4, _));
       }
     }
 
     // Check geometric sizes and rescale
-    _geom.col(0) -= 0.9 * _geom.col(0).minCoeff();
-    double scaling = 0.9 * _geom.col(0).maxCoeff();
-    _geom /= scaling;
+    xt::col(geom, 0) -= 0.9 * xt::amin(xt::col(geom, 0))();
+    double scaling = 0.9 * xt::amax(xt::col(geom, 0))();
+    geom /= scaling;
 
-    LOG(INFO) << "x range = " << _geom.col(0).minCoeff() << " - "
-              << _geom.col(0).maxCoeff() << "\n";
-    LOG(INFO) << "y range = " << _geom.col(1).minCoeff() << " - "
-              << _geom.col(1).maxCoeff() << "\n";
-    LOG(INFO) << "z range = " << _geom.col(2).minCoeff() << " - "
-              << _geom.col(2).maxCoeff() << "\n";
+    // LOG(INFO) << "x range = " << _geom.col(0).minCoeff() << " - "
+    //           << _geom.col(0).maxCoeff() << "\n";
+    // LOG(INFO) << "y range = " << _geom.col(1).minCoeff() << " - "
+    //           << _geom.col(1).maxCoeff() << "\n";
+    // LOG(INFO) << "z range = " << _geom.col(2).minCoeff() << " - "
+    //           << _geom.col(2).maxCoeff() << "\n";
   }
 
   // New Mesh
