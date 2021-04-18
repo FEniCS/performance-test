@@ -141,8 +141,8 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
                     {0, 2, 3, 4}, {6, 7, 4, 2}, {2, 3, 4, 7}};
 
   // Calculate number of points and cells (only on process 0)
-  int npoints = 0;
-  int ncells = 0;
+  std::uint32_t npoints = 0;
+  std::uint32_t ncells = 0;
   const int mpi_rank = dolfinx::MPI::rank(comm);
 
   if (mpi_rank == 0)
@@ -151,9 +151,9 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     ncells = n * 6 + n * lspur * 6;
   }
 
-  dolfinx::array2d<double> geom(npoints, 3);
+  xt::xtensor<double, 2> geom({npoints, 3});
   Eigen::Map<Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor>> _geom(
-      geom.data(), geom.shape[0], geom.shape[1]);
+      geom.data(), geom.shape(0), geom.shape(1));
   std::vector<std::int64_t> topo(4 * ncells);
   if (mpi_rank == 0)
   {
