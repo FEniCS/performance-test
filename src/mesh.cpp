@@ -251,12 +251,12 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     double scaling = 0.9 * xt::amax(xt::col(geom, 0))();
     geom /= scaling;
 
-    // LOG(INFO) << "x range = " << _geom.col(0).minCoeff() << " - "
-    //           << _geom.col(0).maxCoeff() << "\n";
-    // LOG(INFO) << "y range = " << _geom.col(1).minCoeff() << " - "
-    //           << _geom.col(1).maxCoeff() << "\n";
-    // LOG(INFO) << "z range = " << _geom.col(2).minCoeff() << " - "
-    //           << _geom.col(2).maxCoeff() << "\n";
+    LOG(INFO) << "x range = " << xt::amin(xt::col(geom, 0))() << " - "
+              << xt::amax(xt::col(geom, 0))() << "\n";
+    LOG(INFO) << "y range = " << xt::amin(xt::col(geom, 1))() << " - "
+              << xt::amax(xt::col(geom, 1))() << "\n";
+    LOG(INFO) << "z range = " << xt::amin(xt::col(geom, 2))() << " - "
+              << xt::amax(xt::col(geom, 2))() << "\n";
   }
 
   // New Mesh
