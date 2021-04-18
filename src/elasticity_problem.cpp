@@ -69,8 +69,9 @@ build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
   for (int i = 0; i < 6; ++i)
   {
     Vec vec0, vec1;
+    xt::xarray<PetscScalar> basis_row = xt::col(basis, i);
     VecCreateMPIWithArray(V.mesh()->mpi_comm(), 3, size, size_global,
-                          xt::col(basis, i).data(), &vec0);
+                          basis_row.data(), &vec0);
     VecDuplicate(vec0, &vec1);
     VecCopy(vec0, vec1);
     VecDestroy(&vec0);
