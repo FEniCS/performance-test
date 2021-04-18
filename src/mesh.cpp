@@ -180,14 +180,13 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
       xt::xtensor_fixed<double, xt::xshape<3>> point
           = {r0 * cos(th), r0 * sin(th), h0};
 
-      xt::row(geom, ++p) = point;
+      xt::row(geom, p++) = point;
       point = {r0 * cos(th), r0 * sin(th), -h0};
-      xt::row(geom, ++p) = point;
+      xt::row(geom, p++) = point;
       point = {r1 * cos(th), r1 * sin(th), -h1};
-      xt::row(geom, ++p) = point;
+      xt::row(geom, p++) = point;
       point = {r1 * cos(th), r1 * sin(th), h1};
-      xt::row(geom, ++p) = point;
-      ++p;
+      xt::row(geom, p++) = point;
     }
 
     // Add spurs to ring
@@ -213,7 +212,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
         for (int j = 0; j < 4; ++j)
         {
           pts[j + 4] = p;
-          xt::row(geom, ++p) = xt::row(geom, pts[j]);
+          xt::row(geom, p) = xt::row(geom, pts[j]);
           geom(p, 0) += l0 * cos(th0 + k * dth);
           geom(p, 1) += l0 * sin(th0 + k * dth);
           geom(p, 2) *= pow(tap, k);
