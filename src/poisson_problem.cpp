@@ -6,7 +6,6 @@
 
 #include "poisson_problem.h"
 #include "Poisson.h"
-#include <Eigen/Dense>
 #include <cfloat>
 #include <cmath>
 #include <dolfinx/common/Timer.h>
