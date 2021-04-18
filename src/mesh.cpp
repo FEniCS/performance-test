@@ -20,7 +20,7 @@
 namespace
 {
 // Calculate number of vertices for any given level of refinement
-std::int64_t nvertices(int i, int j, int k, int nrefine)
+constexpr std::int64_t nvertices(int i, int j, int k, int nrefine)
 {
   std::int64_t nv = (i + 1) * (j + 1) * (k + 1);
   std::int64_t earr[3] = {1, 3, 7};
@@ -124,21 +124,22 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     target *= mpi_size;
 
   // Parameters controlling shape
-  int n = 17;       // number of spokes
-  double r0 = 0.25; // inner radius of ring
-  double r1 = 0.5;  // outer radius of ring
+  constexpr int n = 17;       // number of spokes
+  constexpr double r0 = 0.25; // inner radius of ring
+  constexpr double r1 = 0.5;  // outer radius of ring
 
-  double h0 = 1.2; // height (inner)
-  double h1 = 1.0; // height (outer)
+  constexpr double h0 = 1.2; // height (inner)
+  constexpr double h1 = 1.0; // height (outer)
 
-  int lspur = 6;     // number of elements in each spoke
-  double l0 = 0.5;   // length of each element in spoke
-  double dth = 0.15; // curl (angle increment) as spoke goes out
-  double tap = 0.9;  // taper (fractional height decrease on each element)
+  constexpr int lspur = 6;     // number of elements in each spoke
+  constexpr double l0 = 0.5;   // length of each element in spoke
+  constexpr double dth = 0.15; // curl (angle increment) as spoke goes out
+  constexpr double tap
+      = 0.9; // taper (fractional height decrease on each element)
 
   // Subdivision of a cube into 6 tetrahedra
-  int cube[6][4] = {{0, 1, 2, 4}, {1, 2, 4, 5}, {2, 4, 5, 6},
-                    {0, 2, 3, 4}, {6, 7, 4, 2}, {2, 3, 4, 7}};
+  constexpr int cube[6][4] = {{0, 1, 2, 4}, {1, 2, 4, 5}, {2, 4, 5, 6},
+                              {0, 2, 3, 4}, {6, 7, 4, 2}, {2, 3, 4, 7}};
 
   // Calculate number of points and cells (only on process 0)
   int npoints = 0;
@@ -163,8 +164,8 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     {
       std::cout << "Adding cube " << i << "\n";
       // Get the points for current cube
-      xt::xtensor_fixed<int, xt::xshape<8>> pts;
-      for (int j = 0; j < 8; ++j)
+      std::array<int, 8> pts;
+      for (int j = 0; j < pts.size(); ++j)
         pts[j] = ((i * 4 + j) % (n * 4));
 
       // Add to topology
@@ -193,8 +194,10 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     for (int i = 0; i < n; ++i)
     {
       std::cout << "Adding spur " << i << "\n";
+
       // Intermediate angle between two faces
       double th0 = 2 * M_PI * (i + .5) / n;
+
       // Starting points on outer edge of ring
       xt::xtensor_fixed<int, xt::xshape<8>> pts = {(i * 4 + 2) % (n * 4),
                                                    (i * 4 + 3) % (n * 4),
@@ -228,8 +231,8 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
         }
 
         // Outer face becomes inner face of next cube
-
-        xt::view(pts, xt::range(0, 4)) = xt::view(pts, xt::range(4, 8));
+        using namespace xt::placeholders;
+        xt::view(pts, xt::range(0, 4)) = xt::view(pts, xt::range(-4, _));
       }
     }
 
@@ -238,12 +241,12 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     double scaling = 0.9 * xt::amax(xt::col(geom, 0))[0];
     geom /= scaling;
 
-    LOG(INFO) << "x range = " << xt::amin(xt::col(geom, 0))[0] << " - "
-              << xt::amax(xt::col(geom, 0))[0] << "\n";
-    LOG(INFO) << "y range = " << xt::amin(xt::col(geom, 1))[0] << " - "
-              << xt::amax(xt::col(geom, 1))[0] << "\n";
-    LOG(INFO) << "z range = " << xt::amin(xt::col(geom, 2))[0] << " - "
-              << xt::amax(xt::col(geom, 2))[0] << "\n";
+    LOG(INFO) << "x range = " << xt::amin(xt::col(geom, 0))() << " - "
+              << xt::amax(xt::col(geom, 0))() << "\n";
+    LOG(INFO) << "y range = " << xt::amin(xt::col(geom, 1))() << " - "
+              << xt::amax(xt::col(geom, 1))() << "\n";
+    LOG(INFO) << "z range = " << xt::amin(xt::col(geom, 2))() << " - "
+              << xt::amax(xt::col(geom, 2))() << "\n";
   }
 
   // New Mesh
