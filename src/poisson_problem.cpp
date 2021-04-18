@@ -99,8 +99,10 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::common::Timer t4("ZZZ Assemble matrix");
   dolfinx::fem::assemble_matrix(
       dolfinx::la::PETScMatrix::set_block_fn(A->mat(), ADD_VALUES), *a, {bc});
+  MatAssemblyBegin(A->mat(), MAT_FLUSH_ASSEMBLY);
+  MatAssemblyEnd(A->mat(), MAT_FLUSH_ASSEMBLY);
   dolfinx::fem::set_diagonal(
-      dolfinx::la::PETScMatrix::set_block_fn(A->mat(), ADD_VALUES), *V, {bc});
+      dolfinx::la::PETScMatrix::set_fn(A->mat(), INSERT_VALUES), *V, {bc});
   MatAssemblyBegin(A->mat(), MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(A->mat(), MAT_FINAL_ASSEMBLY);
   t4.stop();
