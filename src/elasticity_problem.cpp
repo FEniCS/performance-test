@@ -6,7 +6,6 @@
 
 #include "elasticity_problem.h"
 #include "Elasticity.h"
-#include <Eigen/Dense>
 #include <dolfinx/common/Timer.h>
 #include <dolfinx/common/array2d.h>
 #include <dolfinx/fem/DirichletBC.h>
@@ -40,12 +39,7 @@ build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
   int bs = V.dofmap()->index_map_bs();
   const std::int32_t length_block = map->size_local() + map->num_ghosts();
   const std::int32_t length = bs * length_block;
-  Eigen::Matrix<PetscScalar, Eigen::Dynamic, 6> basis
-      = Eigen::Matrix<PetscScalar, Eigen::Dynamic, 6>::Zero(length, 6);
-
-  // NOTE: The below will be simpler once Eigen 3.4 is released, see
-  //
-  // http://eigen.tuxfamily.org/dox-devel/group__TutorialSlicingIndexing.html
+  xt::xtensor<PetscScalar, 2> basis = xt::zeros<PetscScalar>({length, 6});
 
   // x0, x1, x2 translations
   for (int k = 0; k < 3; ++k)
@@ -75,8 +69,9 @@ build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
   for (int i = 0; i < 6; ++i)
   {
     Vec vec0, vec1;
+    xt::xarray<PetscScalar> basis_row = xt::col(basis, i);
     VecCreateMPIWithArray(V.mesh()->mpi_comm(), 3, size, size_global,
-                          basis.col(i).data(), &vec0);
+                          basis_row.data(), &vec0);
     VecDuplicate(vec0, &vec1);
     VecCopy(vec0, vec1);
     VecDestroy(&vec0);
@@ -171,9 +166,11 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   dolfinx::common::Timer t2("ZZZ Assemble matrix");
   dolfinx::fem::assemble_matrix(
-      dolfinx::la::PETScMatrix::add_block_fn(A->mat()), *a, {bc});
-  dolfinx::fem::add_diagonal(dolfinx::la::PETScMatrix::add_fn(A->mat()), *V,
-                             {bc});
+      dolfinx::la::PETScMatrix::set_block_fn(A->mat(), ADD_VALUES), *a, {bc});
+  MatAssemblyBegin(A->mat(), MAT_FLUSH_ASSEMBLY);
+  MatAssemblyEnd(A->mat(), MAT_FLUSH_ASSEMBLY);
+  dolfinx::fem::set_diagonal(
+      dolfinx::la::PETScMatrix::set_fn(A->mat(), INSERT_VALUES), *V, {bc});
   MatAssemblyBegin(A->mat(), MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(A->mat(), MAT_FINAL_ASSEMBLY);
   t2.stop();
