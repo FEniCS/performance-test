@@ -127,21 +127,22 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     target *= mpi_size;
 
   // Parameters controlling shape
-  int n = 17;       // number of spokes
-  double r0 = 0.25; // inner radius of ring
-  double r1 = 0.5;  // outer radius of ring
+  constexpr int n = 17;       // number of spokes
+  constexpr double r0 = 0.25; // inner radius of ring
+  constexpr double r1 = 0.5;  // outer radius of ring
 
-  double h0 = 1.2; // height (inner)
-  double h1 = 1.0; // height (outer)
+  constexpr double h0 = 1.2; // height (inner)
+  constexpr double h1 = 1.0; // height (outer)
 
-  int lspur = 6;     // number of elements in each spoke
-  double l0 = 0.5;   // length of each element in spoke
-  double dth = 0.15; // curl (angle increment) as spoke goes out
-  double tap = 0.9;  // taper (fractional height decrease on each element)
+  constexpr int lspur = 6;     // number of elements in each spoke
+  constexpr double l0 = 0.5;   // length of each element in spoke
+  constexpr double dth = 0.15; // curl (angle increment) as spoke goes out
+  constexpr double tap
+      = 0.9; // taper (fractional height decrease on each element)
 
   // Subdivision of a cube into 6 tetrahedra
-  int cube[6][4] = {{0, 1, 2, 4}, {1, 2, 4, 5}, {2, 4, 5, 6},
-                    {0, 2, 3, 4}, {6, 7, 4, 2}, {2, 3, 4, 7}};
+  constexpr int cube[6][4] = {{0, 1, 2, 4}, {1, 2, 4, 5}, {2, 4, 5, 6},
+                              {0, 2, 3, 4}, {6, 7, 4, 2}, {2, 3, 4, 7}};
 
   // Calculate number of points and cells (only on process 0)
   std::size_t npoints = 0;
@@ -155,8 +156,6 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   }
 
   xt::xtensor<double, 2> geom({npoints, 3});
-  // Eigen::Map<Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor>> _geom(
-  //     geom.data(), geom.shape[0], geom.shape[1]);
   std::vector<std::int64_t> topo(4 * ncells);
   if (mpi_rank == 0)
   {
@@ -166,10 +165,9 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     // Add n 'cubes' to make a joined up ring.
     for (int i = 0; i < n; ++i)
     {
-      std::cout << "Adding cube " << i << "\n";
       // Get the points for current cube
-      Eigen::Array<int, 8, 1> pts;
-      for (int j = 0; j < 8; ++j)
+      std::array<int, 8> pts;
+      for (int j = 0; j < pts.size(); ++j)
         pts[j] = ((i * 4 + j) % (n * 4));
 
       // Add to topology
