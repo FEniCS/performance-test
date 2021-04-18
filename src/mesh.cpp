@@ -229,7 +229,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
 
         // Outer face becomes inner face of next cube
 
-        xt::view(pts, xt::range(0, 5)) = xt::view(pts, xt::range(5, 9));
+        xt::view(pts, xt::range(0, 4)) = xt::view(pts, xt::range(4, 8));
       }
     }
 
