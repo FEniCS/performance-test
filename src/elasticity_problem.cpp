@@ -133,16 +133,13 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   f->interpolate(
       [](const xt::xtensor<double, 2>& x)
       {
-        xt::xtensor<PetscScalar, 2> values({3, x.shape(1)});
-        for (std::size_t i = 0; i < x.shape(1); i++)
-        {
-          double dx = x(0, i) - 0.5;
-          double dz = x(2, i) - 0.5;
-          double r = dx * dx + dz * dz;
-          values(0, i) = -dz * std::sqrt(r) * x(1, i);
-          values(1, i) = 1.0;
-          values(2, i) = dx * std::sqrt(r) * x(1, i);
-        }
+        xt::xtensor<PetscScalar, 2> values(x.shape());
+        auto dx = xt::row(x, 0) - 0.5;
+        auto dz = xt::row(x, 2) - 0.5;
+        auto r = xt::sqrt(dx * dx + dz * dz);
+        xt::row(values, 0) = -dz * r * xt::row(x, 1);
+        xt::row(values, 1) = 1.0;
+        xt::row(values, 2) = dx * r * xt::row(x, 1);
         return values;
       });
 
