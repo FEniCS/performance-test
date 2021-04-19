@@ -108,10 +108,18 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   std::fill(u0->x()->mutable_array().begin(), u0->x()->mutable_array().end(),
             0.0);
 
-  const std::vector<std::int32_t> bdofs = dolfinx::fem::locate_dofs_geometrical(
-      {*V}, [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1> {
+  const int tdim = mesh->topology().dim();
+
+  // Find facets with bc applied
+  const std::vector<std::int32_t> bc_facets = dolfinx::mesh::locate_entities(
+      *mesh, tdim - 1,
+      [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1> {
         return xt::isclose(xt::row(x, 1), 0.0);
       });
+
+  // Find constrained dofs
+  const std::vector<std::int32_t> bdofs
+      = dolfinx::fem::locate_dofs_topological(*V, tdim - 1, bc_facets);
 
   // Bottom (x[1] = 0) surface
   auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0, bdofs);
@@ -122,19 +130,18 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   // Define coefficients
   auto f = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
-  f->interpolate([](const xt::xtensor<double, 2>& x) {
-    xt::xtensor<PetscScalar, 2> values({3, x.shape(1)});
-    for (std::size_t i = 0; i < x.shape(1); i++)
-    {
-      double dx = x(0, i) - 0.5;
-      double dz = x(2, i) - 0.5;
-      double r = dx * dx + dz * dz;
-      values(0, i) = -dz * std::sqrt(r) * x(1, i);
-      values(1, i) = 1.0;
-      values(2, i) = dx * std::sqrt(r) * x(1, i);
-    }
-    return values;
-  });
+  f->interpolate(
+      [](const xt::xtensor<double, 2>& x)
+      {
+        xt::xtensor<PetscScalar, 2> values(x.shape());
+        auto dx = xt::row(x, 0) - 0.5;
+        auto dz = xt::row(x, 2) - 0.5;
+        auto r = xt::sqrt(dx * dx + dz * dz);
+        xt::row(values, 0) = -dz * r * xt::row(x, 1);
+        xt::row(values, 1) = 1.0;
+        xt::row(values, 2) = dx * r * xt::row(x, 1);
+        return values;
+      });
 
   t0b.stop();
 
@@ -201,22 +208,23 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   std::function<int(dolfinx::fem::Function<PetscScalar>&,
                     const dolfinx::la::Vector<PetscScalar>&)>
       solver_function = [A](dolfinx::fem::Function<PetscScalar>& u,
-                            const dolfinx::la::Vector<PetscScalar>& b) {
-        // Create solver
-        dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
-        solver.set_from_options();
-        solver.set_operator(A->mat());
+                            const dolfinx::la::Vector<PetscScalar>& b)
+  {
+    // Create solver
+    dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
+    solver.set_from_options();
+    solver.set_operator(A->mat());
 
-        // Wrap dolfinx::la::Vector
-        dolfinx::la::Vector<PetscScalar>& bnc
-            = const_cast<dolfinx::la::Vector<PetscScalar>&>(b);
-        Vec b_petsc = dolfinx::la::create_ghosted_vector(
-            *(b.map()), b.bs(), tcb::span<PetscScalar>(bnc.mutable_array()));
+    // Wrap dolfinx::la::Vector
+    dolfinx::la::Vector<PetscScalar>& bnc
+        = const_cast<dolfinx::la::Vector<PetscScalar>&>(b);
+    Vec b_petsc = dolfinx::la::create_ghosted_vector(
+        *(b.map()), b.bs(), tcb::span<PetscScalar>(bnc.mutable_array()));
 
-        // Solve
-        int num_iter = solver.solve(u.vector(), b_petsc);
-        return num_iter;
-      };
+    // Solve
+    int num_iter = solver.solve(u.vector(), b_petsc);
+    return num_iter;
+  };
 
   return {std::move(bx), u, solver_function};
 }
