@@ -8,7 +8,6 @@
 #include "Poisson.h"
 #include <BelosSolverFactory.hpp>
 #include <BelosTpetraAdapter.hpp>
-#include <Eigen/Dense>
 #include <MueLu_CreateTpetraPreconditioner.hpp>
 #include <Tpetra_Core.hpp>
 #include <Tpetra_CrsMatrix.hpp>
@@ -181,9 +180,28 @@ poisson_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
           return 0;
         };
 
+  std::function<int(std::int32_t, const std::int32_t*, std::int32_t,
+                    const std::int32_t*, const PetscScalar*)>
+      tpetra_set
+      = [&A_Tpetra, &global_indices, &global_cols, &nlocalrows](
+            std::int32_t nr, const std::int32_t* rows, const std::int32_t nc,
+            const std::int32_t* cols, const PetscScalar* data) {
+          if (*rows >= nlocalrows or nr > 1 or nc > 1)
+            throw std::runtime_error("Error setting diagonal");
+          Teuchos::ArrayView<const int> col_view(cols, 1);
+          Teuchos::ArrayView<const double> data_view(data, 1);
+          int nvalid = A_Tpetra->replaceLocalValues(*rows, col_view, data_view);
+          if (nvalid != nc)
+            throw std::runtime_error("Inserted " + std::to_string(nvalid) + "/"
+                                     + std::to_string(nc) + " on row:"
+                                     + std::to_string(global_indices[*rows]));
+
+          return 0;
+        };
+
   dolfinx::common::Timer tassm("Trilinos: assemble matrix");
   dolfinx::fem::assemble_matrix(tpetra_insert, *a, {bc});
-  dolfinx::fem::add_diagonal(tpetra_insert, *V, {bc});
+  dolfinx::fem::set_diagonal(tpetra_set, *V, {bc});
 
   A_Tpetra->fillComplete(vecMap, vecMap);
   tassm.stop();
