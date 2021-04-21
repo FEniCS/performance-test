@@ -34,7 +34,6 @@ RUN apt-get -qq update && \
     libboost-system-dev \
     libboost-thread-dev \
     libboost-timer-dev \
-    libeigen3-dev \
     liblapack-dev \
     libmpich-dev \
     libopenblas-dev \

@@ -6,7 +6,6 @@
 
 #include "elasticity_problem.h"
 #include "Elasticity.h"
-#include <Eigen/Dense>
 #include <dolfinx/common/Timer.h>
 #include <dolfinx/common/array2d.h>
 #include <dolfinx/fem/DirichletBC.h>
@@ -41,12 +40,7 @@ build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
   int bs = V.dofmap()->index_map_bs();
   const std::int32_t length_block = map->size_local() + map->num_ghosts();
   const std::int32_t length = bs * length_block;
-  Eigen::Matrix<PetscScalar, Eigen::Dynamic, 6> basis
-      = Eigen::Matrix<PetscScalar, Eigen::Dynamic, 6>::Zero(length, 6);
-
-  // NOTE: The below will be simpler once Eigen 3.4 is released, see
-  //
-  // http://eigen.tuxfamily.org/dox-devel/group__TutorialSlicingIndexing.html
+  xt::xtensor<PetscScalar, 2> basis = xt::zeros<PetscScalar>({length, 6});
 
   // x0, x1, x2 translations
   for (int k = 0; k < 3; ++k)
@@ -76,8 +70,9 @@ build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
   for (int i = 0; i < 6; ++i)
   {
     Vec vec0, vec1;
+    xt::xarray<PetscScalar> basis_row = xt::col(basis, i);
     VecCreateMPIWithArray(V.mesh()->mpi_comm(), 3, size, size_global,
-                          basis.col(i).data(), &vec0);
+                          basis_row.data(), &vec0);
     VecDuplicate(vec0, &vec1);
     VecCopy(vec0, vec1);
     VecDestroy(&vec0);
@@ -114,10 +109,18 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   std::fill(u0->x()->mutable_array().begin(), u0->x()->mutable_array().end(),
             0.0);
 
-  const std::vector<std::int32_t> bdofs = dolfinx::fem::locate_dofs_geometrical(
-      {*V}, [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1> {
+  const int tdim = mesh->topology().dim();
+
+  // Find facets with bc applied
+  const std::vector<std::int32_t> bc_facets = dolfinx::mesh::locate_entities(
+      *mesh, tdim - 1,
+      [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1> {
         return xt::isclose(xt::row(x, 1), 0.0);
       });
+
+  // Find constrained dofs
+  const std::vector<std::int32_t> bdofs
+      = dolfinx::fem::locate_dofs_topological(*V, tdim - 1, bc_facets);
 
   // Bottom (x[1] = 0) surface
   auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0, bdofs);
@@ -128,19 +131,18 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   // Define coefficients
   auto f = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
-  f->interpolate([](const xt::xtensor<double, 2>& x) {
-    xt::xtensor<PetscScalar, 2> values({3, x.shape(1)});
-    for (std::size_t i = 0; i < x.shape(1); i++)
-    {
-      double dx = x(0, i) - 0.5;
-      double dz = x(2, i) - 0.5;
-      double r = dx * dx + dz * dz;
-      values(0, i) = -dz * std::sqrt(r) * x(1, i);
-      values(1, i) = 1.0;
-      values(2, i) = dx * std::sqrt(r) * x(1, i);
-    }
-    return values;
-  });
+  f->interpolate(
+      [](const xt::xtensor<double, 2>& x)
+      {
+        xt::xtensor<PetscScalar, 2> values(x.shape());
+        auto dx = xt::row(x, 0) - 0.5;
+        auto dz = xt::row(x, 2) - 0.5;
+        auto r = xt::sqrt(dx * dx + dz * dz);
+        xt::row(values, 0) = -dz * r * xt::row(x, 1);
+        xt::row(values, 1) = 1.0;
+        xt::row(values, 2) = dx * r * xt::row(x, 1);
+        return values;
+      });
 
   t0b.stop();
 
@@ -163,9 +165,11 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
       = std::make_shared<dolfinx::la::PETScMatrix>(
           dolfinx::fem::create_matrix(*a), false);
   dolfinx::fem::assemble_matrix(
-      dolfinx::la::PETScMatrix::add_block_fn(A->mat()), *a, {bc});
-  dolfinx::fem::add_diagonal(dolfinx::la::PETScMatrix::add_fn(A->mat()), *V,
-                             {bc});
+      dolfinx::la::PETScMatrix::set_block_fn(A->mat(), ADD_VALUES), *a, {bc});
+  MatAssemblyBegin(A->mat(), MAT_FLUSH_ASSEMBLY);
+  MatAssemblyEnd(A->mat(), MAT_FLUSH_ASSEMBLY);
+  dolfinx::fem::set_diagonal(
+      dolfinx::la::PETScMatrix::set_fn(A->mat(), INSERT_VALUES), *V, {bc});
   MatAssemblyBegin(A->mat(), MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(A->mat(), MAT_FINAL_ASSEMBLY);
   t2.stop();
@@ -206,22 +210,23 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   std::function<int(dolfinx::fem::Function<PetscScalar>&,
                     const dolfinx::la::Vector<PetscScalar>&)>
       solver_function = [A](dolfinx::fem::Function<PetscScalar>& u,
-                            const dolfinx::la::Vector<PetscScalar>& b) {
-        // Create solver
-        dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
-        solver.set_from_options();
-        solver.set_operator(A->mat());
+                            const dolfinx::la::Vector<PetscScalar>& b)
+  {
+    // Create solver
+    dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
+    solver.set_from_options();
+    solver.set_operator(A->mat());
 
-        // Wrap dolfinx::la::Vector
-        dolfinx::la::Vector<PetscScalar>& bnc
-            = const_cast<dolfinx::la::Vector<PetscScalar>&>(b);
-        Vec b_petsc = dolfinx::la::create_ghosted_vector(
-            *(b.map()), b.bs(), tcb::span<PetscScalar>(bnc.mutable_array()));
+    // Wrap dolfinx::la::Vector
+    dolfinx::la::Vector<PetscScalar>& bnc
+        = const_cast<dolfinx::la::Vector<PetscScalar>&>(b);
+    Vec b_petsc = dolfinx::la::create_ghosted_vector(
+        *(b.map()), b.bs(), tcb::span<PetscScalar>(bnc.mutable_array()));
 
-        // Solve
-        int num_iter = solver.solve(u.vector(), b_petsc);
-        return num_iter;
-      };
+    // Solve
+    int num_iter = solver.solve(u.vector(), b_petsc);
+    return num_iter;
+  };
 
   return {bx, u, solver_function};
 }
