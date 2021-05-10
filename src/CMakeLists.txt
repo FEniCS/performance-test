@@ -17,15 +17,18 @@ set(CMAKE_BUILD_TYPE "Release")
 
 # Compile UFL files
 
-foreach (X RANGE 1 8)
   add_custom_command(
-    OUTPUT Poisson${X}.c
-    COMMAND ffcx ${CMAKE_CURRENT_SOURCE_DIR}/Poisson${X}.ufl
-    DEPENDS Poisson${X}.ufl
+    OUTPUT Poisson.c
+    COMMAND ffcx --full_tables --code_hoisting --fuse_loops ${CMAKE_CURRENT_SOURCE_DIR}/Poisson.ufl
+    # COMMAND ffcx ${CMAKE_CURRENT_SOURCE_DIR}/Poisson${X}.ufl
+    DEPENDS Poisson.ufl
   )
+
+  foreach (X RANGE 1 8)
   add_custom_command(
     OUTPUT Elasticity${X}.c
-    COMMAND ffcx ${CMAKE_CURRENT_SOURCE_DIR}/Elasticity${X}.ufl
+    COMMAND ffcx --full_tables --code_hoisting --fuse_loops ${CMAKE_CURRENT_SOURCE_DIR}/Elasticity${X}.ufl
+#    COMMAND ffcx ${CMAKE_CURRENT_SOURCE_DIR}/Elasticity${X}.ufl
     DEPENDS Elasticity${X}.ufl
   )
 endforeach()
@@ -36,9 +39,7 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 add_executable(${PROJECT_NAME} main.cpp mesh.cpp elasticity_problem.cpp poisson_problem.cpp
 ${CMAKE_CURRENT_BINARY_DIR}/Elasticity1.c
 ${CMAKE_CURRENT_BINARY_DIR}/Elasticity2.c
-${CMAKE_CURRENT_BINARY_DIR}/Poisson1.c 
-${CMAKE_CURRENT_BINARY_DIR}/Poisson2.c
-${CMAKE_CURRENT_BINARY_DIR}/Poisson3.c)
+${CMAKE_CURRENT_BINARY_DIR}/Poisson.c)
 
 # Find Boost program_options
 if(DEFINED ENV{BOOST_ROOT} OR DEFINED BOOST_ROOT)

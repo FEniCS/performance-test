@@ -5,9 +5,7 @@
 // SPDX-License-Identifier:    MIT
 
 #include "poisson_problem.h"
-#include "Poisson1.h"
-#include "Poisson2.h"
-#include "Poisson3.h"
+#include "Poisson.h"
 #include <cfloat>
 #include <cmath>
 #include <dolfinx/common/Timer.h>
@@ -35,11 +33,11 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
   dolfinx::common::Timer t0("ZZZ FunctionSpace");
 
   std::vector fs_poisson_a
-      = {functionspace_form_Poisson1_a, functionspace_form_Poisson2_a,
-         functionspace_form_Poisson3_a};
+      = {functionspace_form_Poisson_a1, functionspace_form_Poisson_a2,
+         functionspace_form_Poisson_a3};
 
-  auto V = dolfinx::fem::create_functionspace(*fs_poisson_a.at(order - 1), "u",
-                                              mesh);
+  auto V = dolfinx::fem::create_functionspace(*fs_poisson_a.at(order - 1),
+                                              "v_0", mesh);
 
   t0.stop();
 
@@ -85,14 +83,14 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
   t3.stop();
 
   std::vector form_poisson_L
-      = {form_Poisson1_L, form_Poisson2_L, form_Poisson3_L};
+      = {form_Poisson_L1, form_Poisson_L2, form_Poisson_L3};
   std::vector form_poisson_a
-      = {form_Poisson1_a, form_Poisson2_a, form_Poisson3_a};
+      = {form_Poisson_a1, form_Poisson_a2, form_Poisson_a3};
 
   // Define variational forms
   auto L = std::make_shared<dolfinx::fem::Form<PetscScalar>>(
       dolfinx::fem::create_form<PetscScalar>(*form_poisson_L.at(order - 1), {V},
-                                             {{"f", f}, {"g", g}}, {}, {}));
+                                             {{"w0", f}, {"w1", g}}, {}, {}));
   auto a = std::make_shared<
       dolfinx::fem::Form<PetscScalar>>(dolfinx::fem::create_form<PetscScalar>(
       *form_poisson_a.at(order - 1), {V, V},
