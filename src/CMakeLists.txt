@@ -16,22 +16,25 @@ find_package(DOLFINX REQUIRED)
 set(CMAKE_BUILD_TYPE "Release")
 
 # Compile UFL files
-add_custom_command(
-  OUTPUT Elasticity.c
-  COMMAND ffcx ${CMAKE_CURRENT_SOURCE_DIR}/Elasticity.ufl
-  DEPENDS Elasticity.ufl
-)
+
 add_custom_command(
   OUTPUT Poisson.c
   COMMAND ffcx ${CMAKE_CURRENT_SOURCE_DIR}/Poisson.ufl
   DEPENDS Poisson.ufl
 )
+
+add_custom_command(
+  OUTPUT Elasticity.c
+  COMMAND ffcx ${CMAKE_CURRENT_SOURCE_DIR}/Elasticity.ufl
+  DEPENDS Elasticity.ufl
+)
+
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 # Executable
 add_executable(${PROJECT_NAME} main.cpp mesh.cpp elasticity_problem.cpp poisson_problem.cpp
-  ${CMAKE_CURRENT_BINARY_DIR}/Elasticity.c
-  ${CMAKE_CURRENT_BINARY_DIR}/Poisson.c)
+${CMAKE_CURRENT_BINARY_DIR}/Elasticity.c
+${CMAKE_CURRENT_BINARY_DIR}/Poisson.c)
 
 # Find Boost program_options
 if(DEFINED ENV{BOOST_ROOT} OR DEFINED BOOST_ROOT)
