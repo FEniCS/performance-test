@@ -20,7 +20,7 @@
 #
 # Compile this form with FFC: ffc -l dolfin Poisson.ufl.
 
-element = FiniteElement("Lagrange", tetrahedron, 3)
+element = FiniteElement("Lagrange", tetrahedron, 2)
 
 u = TrialFunction(element)
 v = TestFunction(element)

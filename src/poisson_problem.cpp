@@ -5,7 +5,8 @@
 // SPDX-License-Identifier:    MIT
 
 #include "poisson_problem.h"
-#include "Poisson.h"
+#include "Poisson1.h"
+#include "Poisson2.h"
 #include <cfloat>
 #include <cmath>
 #include <dolfinx/common/Timer.h>
@@ -28,12 +29,15 @@ std::tuple<dolfinx::la::Vector<PetscScalar>,
            std::shared_ptr<dolfinx::fem::Function<PetscScalar>>,
            std::function<int(dolfinx::fem::Function<PetscScalar>&,
                              const dolfinx::la::Vector<PetscScalar>&)>>
-poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
+poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
 {
   dolfinx::common::Timer t0("ZZZ FunctionSpace");
 
-  auto V = dolfinx::fem::create_functionspace(*functionspace_form_Poisson_a,
-                                              "u", mesh);
+  std::vector fs_poisson_a
+      = {functionspace_form_Poisson1_a, functionspace_form_Poisson2_a};
+
+  auto V
+      = dolfinx::fem::create_functionspace(*fs_poisson_a.at(order), "u", mesh);
 
   t0.stop();
 
@@ -49,8 +53,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   const int tdim = mesh->topology().dim();
   const std::vector<std::int32_t> bc_facets = dolfinx::mesh::locate_entities(
       *mesh, tdim - 1,
-      [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1>
-      {
+      [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1> {
         auto x0 = xt::row(x, 0);
         return xt::isclose(x0, 0.0) or xt::isclose(x0, 1.0);
       });
@@ -67,8 +70,7 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   auto f = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   auto g = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   f->interpolate(
-      [](const xt::xtensor<double, 2>& x) -> xt::xarray<PetscScalar>
-      {
+      [](const xt::xtensor<double, 2>& x) -> xt::xarray<PetscScalar> {
         auto dx
             = xt::square(xt::row(x, 0) - 0.5) + xt::square(xt::row(x, 1) - 0.5);
         return 10 * xt::exp(-(dx) / 0.02);
@@ -80,13 +82,16 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
       });
   t3.stop();
 
+  std::vector form_poisson_L = {form_Poisson1_L, form_Poisson2_L};
+  std::vector form_poisson_a = {form_Poisson1_a, form_Poisson2_a};
+
   // Define variational forms
   auto L = std::make_shared<dolfinx::fem::Form<PetscScalar>>(
-      dolfinx::fem::create_form<PetscScalar>(*form_Poisson_L, {V},
+      dolfinx::fem::create_form<PetscScalar>(*form_poisson_L.at(order), {V},
                                              {{"f", f}, {"g", g}}, {}, {}));
   auto a = std::make_shared<
       dolfinx::fem::Form<PetscScalar>>(dolfinx::fem::create_form<PetscScalar>(
-      *form_Poisson_a, {V, V},
+      *form_poisson_a.at(order), {V, V},
       std::vector<std::shared_ptr<const dolfinx::fem::Function<PetscScalar>>>{},
       {}, {}));
 
@@ -135,23 +140,22 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   std::function<int(dolfinx::fem::Function<PetscScalar>&,
                     const dolfinx::la::Vector<PetscScalar>&)>
       solver_function = [A](dolfinx::fem::Function<PetscScalar>& u,
-                            const dolfinx::la::Vector<PetscScalar>& b)
-  {
-    // Create solver
-    dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
-    solver.set_from_options();
-    solver.set_operator(A->mat());
+                            const dolfinx::la::Vector<PetscScalar>& b) {
+        // Create solver
+        dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
+        solver.set_from_options();
+        solver.set_operator(A->mat());
 
-    // Wrap dolfinx::la::Vector
-    dolfinx::la::Vector<PetscScalar>& bnc
-        = const_cast<dolfinx::la::Vector<PetscScalar>&>(b);
-    Vec b_petsc = dolfinx::la::create_ghosted_vector(
-        *(b.map()), b.bs(), tcb::span<PetscScalar>(bnc.mutable_array()));
+        // Wrap dolfinx::la::Vector
+        dolfinx::la::Vector<PetscScalar>& bnc
+            = const_cast<dolfinx::la::Vector<PetscScalar>&>(b);
+        Vec b_petsc = dolfinx::la::create_ghosted_vector(
+            *(b.map()), b.bs(), tcb::span<PetscScalar>(bnc.mutable_array()));
 
-    // Solve
-    int num_iter = solver.solve(u.vector(), b_petsc);
-    return num_iter;
-  };
+        // Solve
+        int num_iter = solver.solve(u.vector(), b_petsc);
+        return num_iter;
+      };
 
   return {std::move(bx), u, solver_function};
 }

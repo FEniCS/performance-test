@@ -22,16 +22,21 @@ add_custom_command(
   DEPENDS Elasticity.ufl
 )
 add_custom_command(
-  OUTPUT Poisson.c
-  COMMAND ffcx ${CMAKE_CURRENT_SOURCE_DIR}/Poisson.ufl
-  DEPENDS Poisson.ufl
+  OUTPUT Poisson1.c
+  COMMAND ffcx ${CMAKE_CURRENT_SOURCE_DIR}/Poisson1.ufl
+  DEPENDS Poisson1.ufl
+)
+add_custom_command(
+  OUTPUT Poisson2.c
+  COMMAND ffcx ${CMAKE_CURRENT_SOURCE_DIR}/Poisson2.ufl
+  DEPENDS Poisson2.ufl
 )
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 # Executable
 add_executable(${PROJECT_NAME} main.cpp mesh.cpp elasticity_problem.cpp poisson_problem.cpp
   ${CMAKE_CURRENT_BINARY_DIR}/Elasticity.c
-  ${CMAKE_CURRENT_BINARY_DIR}/Poisson.c)
+  ${CMAKE_CURRENT_BINARY_DIR}/Poisson1.c ${CMAKE_CURRENT_BINARY_DIR}/Poisson2.c)
 
 # Find Boost program_options
 if(DEFINED ENV{BOOST_ROOT} OR DEFINED BOOST_ROOT)

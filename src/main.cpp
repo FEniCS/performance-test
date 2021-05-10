@@ -72,7 +72,7 @@ void solve(int argc, char* argv[])
   // Get number of processes
   const std::size_t num_processes = dolfinx::MPI::size(MPI_COMM_WORLD);
 
-  int order = 3;
+  int order = 1;
 
   // Assemble problem
   std::shared_ptr<dolfinx::mesh::Mesh> mesh;
@@ -97,7 +97,7 @@ void solve(int argc, char* argv[])
     tperm.stop();
 
     // Create Poisson problem
-    auto data = poisson::problem(mesh);
+    auto data = poisson::problem(mesh, order);
     b = std::make_shared<dolfinx::la::Vector<PetscScalar>>(
         std::move(std::get<0>(data)));
     u = std::get<1>(data);
