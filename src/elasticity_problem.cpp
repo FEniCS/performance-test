@@ -5,7 +5,8 @@
 // SPDX-License-Identifier:    MIT
 
 #include "elasticity_problem.h"
-#include "Elasticity.h"
+#include "Elasticity1.h"
+#include "Elasticity2.h"
 #include <dolfinx/common/Timer.h>
 #include <dolfinx/common/array2d.h>
 #include <dolfinx/fem/DirichletBC.h>
@@ -92,12 +93,14 @@ std::tuple<std::shared_ptr<dolfinx::la::Vector<PetscScalar>>,
            std::shared_ptr<dolfinx::fem::Function<PetscScalar>>,
            std::function<int(dolfinx::fem::Function<PetscScalar>&,
                              const dolfinx::la::Vector<PetscScalar>&)>>
-elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
+elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
 {
   dolfinx::common::Timer t0("ZZZ FunctionSpace");
 
-  auto V = dolfinx::fem::create_functionspace(functionspace_form_Elasticity_a,
-                                              "u", mesh);
+  std::vector fs_elasticity
+      = {functionspace_form_Elasticity1_a, functionspace_form_Elasticity2_a};
+  auto V = dolfinx::fem::create_functionspace(*fs_elasticity.at(order - 1), "u",
+                                              mesh);
 
   t0.stop();
 
@@ -146,12 +149,14 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   dolfinx::common::Timer t0c("ZZZ Create forms");
 
   // Define variational forms
+  std::vector form_elasticity_L = {form_Elasticity1_L, form_Elasticity2_L};
+  std::vector form_elasticity_a = {form_Elasticity1_a, form_Elasticity2_a};
   auto L = std::make_shared<dolfinx::fem::Form<PetscScalar>>(
-      dolfinx::fem::create_form<PetscScalar>(*form_Elasticity_L, {V},
-                                             {{"f", f}}, {}, {}));
+      dolfinx::fem::create_form<PetscScalar>(*form_elasticity_L.at(order - 1),
+                                             {V}, {{"f", f}}, {}, {}));
   auto a = std::make_shared<
       dolfinx::fem::Form<PetscScalar>>(dolfinx::fem::create_form<PetscScalar>(
-      *form_Elasticity_a, {V, V},
+      *form_elasticity_a.at(order - 1), {V, V},
       std::vector<std::shared_ptr<const dolfinx::fem::Function<PetscScalar>>>{},
       {}, {}));
   t0c.stop();

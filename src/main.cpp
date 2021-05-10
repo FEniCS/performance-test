@@ -104,7 +104,7 @@ void solve(int argc, char* argv[])
   {
     // Create elasticity problem. Near-nullspace will be attached to the
     // linear operator (matrix).
-    std::tie(b, u, solver_function) = elastic::problem(mesh);
+    std::tie(b, u, solver_function) = elastic::problem(mesh, order);
   }
   else
     throw std::runtime_error("Unknown problem type: " + problem_type);
