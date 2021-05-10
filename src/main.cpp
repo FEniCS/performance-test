@@ -72,6 +72,8 @@ void solve(int argc, char* argv[])
   // Get number of processes
   const std::size_t num_processes = dolfinx::MPI::size(MPI_COMM_WORLD);
 
+  int order = 2;
+
   // Assemble problem
   std::shared_ptr<dolfinx::mesh::Mesh> mesh;
   std::shared_ptr<dolfinx::la::Vector<PetscScalar>> b;
@@ -84,7 +86,7 @@ void solve(int argc, char* argv[])
   {
     dolfinx::common::Timer t0("ZZZ Create Mesh");
     if (mesh_type == "cube")
-      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1);
+      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1, order);
     else
       mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1);
     t0.stop();
@@ -105,7 +107,7 @@ void solve(int argc, char* argv[])
   {
     dolfinx::common::Timer t0("ZZZ Create Mesh");
     if (mesh_type == "cube")
-      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3);
+      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3, order);
     else
       mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3);
     t0.stop();
