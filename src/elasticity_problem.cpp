@@ -5,8 +5,7 @@
 // SPDX-License-Identifier:    MIT
 
 #include "elasticity_problem.h"
-#include "Elasticity1.h"
-#include "Elasticity2.h"
+#include "Elasticity.h"
 #include <dolfinx/common/Timer.h>
 #include <dolfinx/common/array2d.h>
 #include <dolfinx/fem/DirichletBC.h>
@@ -98,9 +97,10 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
   dolfinx::common::Timer t0("ZZZ FunctionSpace");
 
   std::vector fs_elasticity
-      = {functionspace_form_Elasticity1_a, functionspace_form_Elasticity2_a};
-  auto V = dolfinx::fem::create_functionspace(*fs_elasticity.at(order - 1), "u",
-                                              mesh);
+      = {functionspace_form_Elasticity_a1, functionspace_form_Elasticity_a2,
+         functionspace_form_Elasticity_a3};
+  auto V = dolfinx::fem::create_functionspace(*fs_elasticity.at(order - 1),
+                                              "v_0", mesh);
 
   t0.stop();
 
@@ -149,11 +149,13 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
   dolfinx::common::Timer t0c("ZZZ Create forms");
 
   // Define variational forms
-  std::vector form_elasticity_L = {form_Elasticity1_L, form_Elasticity2_L};
-  std::vector form_elasticity_a = {form_Elasticity1_a, form_Elasticity2_a};
+  std::vector form_elasticity_L
+      = {form_Elasticity_L1, form_Elasticity_L2, form_Elasticity_L3};
+  std::vector form_elasticity_a
+      = {form_Elasticity_a1, form_Elasticity_a2, form_Elasticity_a3};
   auto L = std::make_shared<dolfinx::fem::Form<PetscScalar>>(
       dolfinx::fem::create_form<PetscScalar>(*form_elasticity_L.at(order - 1),
-                                             {V}, {{"f", f}}, {}, {}));
+                                             {V}, {{"w0", f}}, {}, {}));
   auto a = std::make_shared<
       dolfinx::fem::Form<PetscScalar>>(dolfinx::fem::create_form<PetscScalar>(
       *form_elasticity_a.at(order - 1), {V, V},

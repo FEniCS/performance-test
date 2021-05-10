@@ -20,6 +20,7 @@
 #
 # Compile this form with FFC: ffc -l dolfin Poisson.ufl.
 
+gl = globals()
 forms = []
 for degree in range(1, 4):
     element = FiniteElement("Lagrange", tetrahedron, degree)
@@ -31,9 +32,13 @@ for degree in range(1, 4):
 
     aname = 'a' + str(degree)
     Lname = 'L' + str(degree)
-    globals()[aname] = inner(grad(u), grad(v))*dx
-    globals()[Lname] = f*v*dx + g*v*ds
 
+    # Insert with global name, so that the forms will be named a1, a2, a3 etc.
+    gl[aname] = inner(grad(u), grad(v))*dx
+    gl[Lname] = f*v*dx + g*v*ds
+
+    # Delete, so that the forms will get unnamed args and coefficients
+    # and default to v_0, v_1, w0, w1 etc.
     del u, v, f, g
 
-    forms += [globals()[aname], globals()[Lname]]
+    forms += [gl[aname], gl[Lname]]
