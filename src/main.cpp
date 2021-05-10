@@ -72,7 +72,7 @@ void solve(int argc, char* argv[])
   // Get number of processes
   const std::size_t num_processes = dolfinx::MPI::size(MPI_COMM_WORLD);
 
-  int order = 2;
+  int order = 3;
 
   // Assemble problem
   std::shared_ptr<dolfinx::mesh::Mesh> mesh;
