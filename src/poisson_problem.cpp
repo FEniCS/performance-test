@@ -25,7 +25,7 @@
 #include <xtensor/xarray.hpp>
 #include <xtensor/xview.hpp>
 
-std::tuple<dolfinx::la::Vector<PetscScalar>,
+std::tuple<std::shared_ptr<dolfinx::la::Vector<PetscScalar>>,
            std::shared_ptr<dolfinx::fem::Function<PetscScalar>>,
            std::function<int(dolfinx::fem::Function<PetscScalar>&,
                              const dolfinx::la::Vector<PetscScalar>&)>>
@@ -36,8 +36,8 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
   std::vector fs_poisson_a
       = {functionspace_form_Poisson1_a, functionspace_form_Poisson2_a};
 
-  auto V
-      = dolfinx::fem::create_functionspace(*fs_poisson_a.at(order), "u", mesh);
+  auto V = dolfinx::fem::create_functionspace(*fs_poisson_a.at(order - 1), "u",
+                                              mesh);
 
   t0.stop();
 
@@ -87,11 +87,11 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
 
   // Define variational forms
   auto L = std::make_shared<dolfinx::fem::Form<PetscScalar>>(
-      dolfinx::fem::create_form<PetscScalar>(*form_poisson_L.at(order), {V},
+      dolfinx::fem::create_form<PetscScalar>(*form_poisson_L.at(order - 1), {V},
                                              {{"f", f}, {"g", g}}, {}, {}));
   auto a = std::make_shared<
       dolfinx::fem::Form<PetscScalar>>(dolfinx::fem::create_form<PetscScalar>(
-      *form_poisson_a.at(order), {V, V},
+      *form_poisson_a.at(order - 1), {V, V},
       std::vector<std::shared_ptr<const dolfinx::fem::Function<PetscScalar>>>{},
       {}, {}));
 
@@ -156,6 +156,6 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
         int num_iter = solver.solve(u.vector(), b_petsc);
         return num_iter;
       };
-
-  return {std::move(bx), u, solver_function};
+  return {std::make_shared<dolfinx::la::Vector<PetscScalar>>(std::move(bx)), u,
+          solver_function};
 }

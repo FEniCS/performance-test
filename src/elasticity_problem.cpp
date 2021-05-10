@@ -88,7 +88,7 @@ build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
 }
 } // namespace
 
-std::tuple<dolfinx::la::Vector<PetscScalar>,
+std::tuple<std::shared_ptr<dolfinx::la::Vector<PetscScalar>>,
            std::shared_ptr<dolfinx::fem::Function<PetscScalar>>,
            std::function<int(dolfinx::fem::Function<PetscScalar>&,
                              const dolfinx::la::Vector<PetscScalar>&)>>
@@ -130,18 +130,16 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   // Define coefficients
   auto f = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
-  f->interpolate(
-      [](const xt::xtensor<double, 2>& x)
-      {
-        xt::xtensor<PetscScalar, 2> values(x.shape());
-        auto dx = xt::row(x, 0) - 0.5;
-        auto dz = xt::row(x, 2) - 0.5;
-        auto r = xt::sqrt(dx * dx + dz * dz);
-        xt::row(values, 0) = -dz * r * xt::row(x, 1);
-        xt::row(values, 1) = 1.0;
-        xt::row(values, 2) = dx * r * xt::row(x, 1);
-        return values;
-      });
+  f->interpolate([](const xt::xtensor<double, 2>& x) {
+    xt::xtensor<PetscScalar, 2> values(x.shape());
+    auto dx = xt::row(x, 0) - 0.5;
+    auto dz = xt::row(x, 2) - 0.5;
+    auto r = xt::sqrt(dx * dx + dz * dz);
+    xt::row(values, 0) = -dz * r * xt::row(x, 1);
+    xt::row(values, 1) = 1.0;
+    xt::row(values, 2) = dx * r * xt::row(x, 1);
+    return values;
+  });
 
   t0b.stop();
 
@@ -208,23 +206,23 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   std::function<int(dolfinx::fem::Function<PetscScalar>&,
                     const dolfinx::la::Vector<PetscScalar>&)>
       solver_function = [A](dolfinx::fem::Function<PetscScalar>& u,
-                            const dolfinx::la::Vector<PetscScalar>& b)
-  {
-    // Create solver
-    dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
-    solver.set_from_options();
-    solver.set_operator(A->mat());
+                            const dolfinx::la::Vector<PetscScalar>& b) {
+        // Create solver
+        dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
+        solver.set_from_options();
+        solver.set_operator(A->mat());
 
-    // Wrap dolfinx::la::Vector
-    dolfinx::la::Vector<PetscScalar>& bnc
-        = const_cast<dolfinx::la::Vector<PetscScalar>&>(b);
-    Vec b_petsc = dolfinx::la::create_ghosted_vector(
-        *(b.map()), b.bs(), tcb::span<PetscScalar>(bnc.mutable_array()));
+        // Wrap dolfinx::la::Vector
+        dolfinx::la::Vector<PetscScalar>& bnc
+            = const_cast<dolfinx::la::Vector<PetscScalar>&>(b);
+        Vec b_petsc = dolfinx::la::create_ghosted_vector(
+            *(b.map()), b.bs(), tcb::span<PetscScalar>(bnc.mutable_array()));
 
-    // Solve
-    int num_iter = solver.solve(u.vector(), b_petsc);
-    return num_iter;
-  };
+        // Solve
+        int num_iter = solver.solve(u.vector(), b_petsc);
+        return num_iter;
+      };
 
-  return {std::move(bx), u, solver_function};
+  return {std::make_shared<dolfinx::la::Vector<PetscScalar>>(std::move(bx)), u,
+          solver_function};
 }

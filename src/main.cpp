@@ -4,8 +4,6 @@
 //
 // SPDX-License-Identifier:    MIT
 
-#include "Elasticity.h"
-#include "Poisson.h"
 #include "elasticity_problem.h"
 #include "mesh.h"
 #include "poisson_problem.h"
@@ -38,7 +36,8 @@ void solve(int argc, char* argv[])
       "output", po::value<std::string>()->default_value(""),
       "output directory (no output unless this is set)")(
       "ndofs", po::value<std::size_t>()->default_value(50000),
-      "number of degrees of freedom");
+      "number of degrees of freedom")(
+      "order", po::value<std::size_t>()->default_value(1), "polynomial order");
 
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv)
@@ -58,6 +57,7 @@ void solve(int argc, char* argv[])
   const std::string mesh_type = vm["mesh_type"].as<std::string>();
   const std::string scaling_type = vm["scaling_type"].as<std::string>();
   const std::size_t ndofs = vm["ndofs"].as<std::size_t>();
+  const int order = vm["order"].as<std::size_t>();
   const std::string output_dir = vm["output"].as<std::string>();
   const bool output = (output_dir.size() > 0);
 
@@ -72,8 +72,6 @@ void solve(int argc, char* argv[])
   // Get number of processes
   const std::size_t num_processes = dolfinx::MPI::size(MPI_COMM_WORLD);
 
-  int order = 1;
-
   // Assemble problem
   std::shared_ptr<dolfinx::mesh::Mesh> mesh;
   std::shared_ptr<dolfinx::la::Vector<PetscScalar>> b;
@@ -82,48 +80,31 @@ void solve(int argc, char* argv[])
                     const dolfinx::la::Vector<PetscScalar>&)>
       solver_function;
 
+  const int ndofs_per_node = (problem_type == "elasticity") ? 3 : 1;
+
+  dolfinx::common::Timer t0("ZZZ Create Mesh");
+  if (mesh_type == "cube")
+    mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling,
+                            ndofs_per_node, order);
+  else
+    mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling,
+                             ndofs_per_node);
+  t0.stop();
+
+  // Create mesh entity permutations outside of the assembler
+  dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
+  mesh->topology_mutable().create_entity_permutations();
+  tperm.stop();
+
   if (problem_type == "poisson")
-  {
-    dolfinx::common::Timer t0("ZZZ Create Mesh");
-    if (mesh_type == "cube")
-      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1, order);
-    else
-      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 1);
-    t0.stop();
-
-    // Create mesh entity permutations outside of the assembler
-    dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
-    mesh->topology_mutable().create_entity_permutations();
-    tperm.stop();
-
-    // Create Poisson problem
-    auto data = poisson::problem(mesh, order);
-    b = std::make_shared<dolfinx::la::Vector<PetscScalar>>(
-        std::move(std::get<0>(data)));
-    u = std::get<1>(data);
-    solver_function = std::get<2>(data);
+  { // Create Poisson problem
+    std::tie(b, u, solver_function) = poisson::problem(mesh, order);
   }
   else if (problem_type == "elasticity")
   {
-    dolfinx::common::Timer t0("ZZZ Create Mesh");
-    if (mesh_type == "cube")
-      mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3, order);
-    else
-      mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, 3);
-    t0.stop();
-
-    // Create mesh entity permutations outside of the assembler
-    dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
-    mesh->topology_mutable().create_entity_permutations();
-    tperm.stop();
-
     // Create elasticity problem. Near-nullspace will be attached to the
     // linear operator (matrix).
-    auto data = elastic::problem(mesh);
-    b = std::make_shared<dolfinx::la::Vector<PetscScalar>>(
-        std::move(std::get<0>(data)));
-    u = std::get<1>(data);
-    solver_function = std::get<2>(data);
+    std::tie(b, u, solver_function) = elastic::problem(mesh);
   }
   else
     throw std::runtime_error("Unknown problem type: " + problem_type);
