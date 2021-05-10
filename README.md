@@ -19,7 +19,7 @@ The source of the tests is in `src/` directory.
 - FEniCS/DOLFIN-X installation, with MPI, PETSc and HDF5 enabled
   (development version of dolfinx **required**)
 - PETSc installation (development version **required**)
-
+- `libboost-program-options-dev`
 The development versions of dolfinx and PETSc have a number of fixes
 that are necessary to run the tests successfully, and for performance.
 

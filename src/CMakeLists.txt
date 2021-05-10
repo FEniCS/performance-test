@@ -8,8 +8,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Get DOLFINX configuration data
-find_package(Eigen3 REQUIRED)
+# Get DOLFIN configuration data (DOLFINConfig.cmake must be in
+# DOLFIN_CMAKE_CONFIG_PATH)
 find_package(Basix REQUIRED)
 find_package(DOLFINX REQUIRED)
 
@@ -52,7 +52,6 @@ set(Boost_VERBOSE TRUE)
 find_package(Boost 1.70 REQUIRED program_options)
 
 # Target libraries
-target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})
 target_link_libraries(${PROJECT_NAME} dolfinx Boost::program_options)
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)

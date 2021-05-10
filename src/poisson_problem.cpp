@@ -6,7 +6,6 @@
 
 #include "poisson_problem.h"
 #include "Poisson.h"
-#include <Eigen/Dense>
 #include <cfloat>
 #include <cmath>
 #include <dolfinx/common/Timer.h>
@@ -46,11 +45,19 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   std::fill(u0->x()->mutable_array().begin(), u0->x()->mutable_array().end(),
             0.0);
 
-  const std::vector<std::int32_t> bdofs = dolfinx::fem::locate_dofs_geometrical(
-      {*V}, [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1> {
+  // Find facets with bc applied
+  const int tdim = mesh->topology().dim();
+  const std::vector<std::int32_t> bc_facets = dolfinx::mesh::locate_entities(
+      *mesh, tdim - 1,
+      [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1>
+      {
         auto x0 = xt::row(x, 0);
         return xt::isclose(x0, 0.0) or xt::isclose(x0, 1.0);
       });
+
+  // Find constrained dofs
+  const std::vector<std::int32_t> bdofs
+      = dolfinx::fem::locate_dofs_topological(*V, tdim - 1, bc_facets);
 
   auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0, bdofs);
   t2.stop();
@@ -60,7 +67,8 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   auto f = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   auto g = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   f->interpolate(
-      [](const xt::xtensor<double, 2>& x) -> xt::xarray<PetscScalar> {
+      [](const xt::xtensor<double, 2>& x) -> xt::xarray<PetscScalar>
+      {
         auto dx
             = xt::square(xt::row(x, 0) - 0.5) + xt::square(xt::row(x, 1) - 0.5);
         return 10 * xt::exp(-(dx) / 0.02);
@@ -97,10 +105,12 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   MatZeroEntries(A->mat());
   dolfinx::common::Timer t4("ZZZ Assemble matrix");
-  dolfinx::fem::assemble_matrix(dolfinx::la::PETScMatrix::add_fn(A->mat()), *a,
-                                {bc});
-  dolfinx::fem::add_diagonal(dolfinx::la::PETScMatrix::add_fn(A->mat()), *V,
-                             {bc});
+  dolfinx::fem::assemble_matrix(
+      dolfinx::la::PETScMatrix::set_block_fn(A->mat(), ADD_VALUES), *a, {bc});
+  MatAssemblyBegin(A->mat(), MAT_FLUSH_ASSEMBLY);
+  MatAssemblyEnd(A->mat(), MAT_FLUSH_ASSEMBLY);
+  dolfinx::fem::set_diagonal(
+      dolfinx::la::PETScMatrix::set_fn(A->mat(), INSERT_VALUES), *V, {bc});
   MatAssemblyBegin(A->mat(), MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(A->mat(), MAT_FINAL_ASSEMBLY);
   t4.stop();
@@ -125,22 +135,23 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   std::function<int(dolfinx::fem::Function<PetscScalar>&,
                     const dolfinx::la::Vector<PetscScalar>&)>
       solver_function = [A](dolfinx::fem::Function<PetscScalar>& u,
-                            const dolfinx::la::Vector<PetscScalar>& b) {
-        // Create solver
-        dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
-        solver.set_from_options();
-        solver.set_operator(A->mat());
+                            const dolfinx::la::Vector<PetscScalar>& b)
+  {
+    // Create solver
+    dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
+    solver.set_from_options();
+    solver.set_operator(A->mat());
 
-        // Wrap dolfinx::la::Vector
-        dolfinx::la::Vector<PetscScalar>& bnc
-            = const_cast<dolfinx::la::Vector<PetscScalar>&>(b);
-        Vec b_petsc = dolfinx::la::create_ghosted_vector(
-            *(b.map()), b.bs(), tcb::span<PetscScalar>(bnc.mutable_array()));
+    // Wrap dolfinx::la::Vector
+    dolfinx::la::Vector<PetscScalar>& bnc
+        = const_cast<dolfinx::la::Vector<PetscScalar>&>(b);
+    Vec b_petsc = dolfinx::la::create_ghosted_vector(
+        *(b.map()), b.bs(), tcb::span<PetscScalar>(bnc.mutable_array()));
 
-        // Solve
-        int num_iter = solver.solve(u.vector(), b_petsc);
-        return num_iter;
-      };
+    // Solve
+    int num_iter = solver.solve(u.vector(), b_petsc);
+    return num_iter;
+  };
 
   return {std::move(bx), u, solver_function};
 }
