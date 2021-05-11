@@ -40,6 +40,7 @@ Options for the test are:
   (fixed problem size per process)
 - Number of degrees-of-freedom (`--ndofs`): total (in case of strong
   scaling) or per process (for weak scaling)
+- Order (`--order`): polynomial order (1, 2, or 3) - only on cube mesh, defaults to 1.
 - File output (`--output`): `true` or `false` (IO performance depends
   heavily on the underlying filesystem)
 - Data output directory (`--output_dir`): directory to write solution

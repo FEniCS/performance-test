@@ -19,28 +19,58 @@
 
 namespace
 {
-// Calculate number of vertices for any given level of refinement
-constexpr std::int64_t nvertices(int i, int j, int k, int nrefine)
+// Calculate number of vertices, edges, facets, and cells for any given level
+// of refinement
+constexpr std::tuple<std::int64_t, std::int64_t, std::int64_t, std::int64_t>
+num_entities(int i, int j, int k, int nrefine)
 {
   std::int64_t nv = (i + 1) * (j + 1) * (k + 1);
+  std::int64_t ne = 0;
+  std::int64_t nc = (i * j * k) * 6;
   std::int64_t earr[3] = {1, 3, 7};
+  std::int64_t farr[2] = {2, 12};
   for (int r = 0; r < nrefine; ++r)
   {
-    std::size_t ne = earr[0] * (i + j + k) + earr[1] * (i * j + j * k + k * i)
-                     + earr[2] * i * j * k;
+    ne = earr[0] * (i + j + k) + earr[1] * (i * j + j * k + k * i)
+         + earr[2] * i * j * k;
     nv += ne;
+    nc *= 8;
     earr[0] *= 2;
     earr[1] *= 4;
     earr[2] *= 8;
+    farr[0] *= 4;
+    farr[1] *= 8;
   }
-  return nv;
+  ne = earr[0] * (i + j + k) + earr[1] * (i * j + j * k + k * i)
+       + earr[2] * i * j * k;
+  std::int64_t nf = farr[0] * (i * j + j * k + k * i) + farr[1] * i * j * k;
+
+  return {nv, ne, nf, nc};
 }
+std::int64_t num_pdofs(int i, int j, int k, int nrefine, int order)
+{
+  auto [nv, ne, nf, nc] = num_entities(i, j, k, nrefine);
+
+  switch (order)
+  {
+  case 1:
+    return nv;
+  case 2:
+    return nv + ne;
+  case 3:
+    return nv + 2 * ne + nf;
+  case 4:
+    return nv + 3 * ne + 3 * nf + nc;
+  default:
+    throw std::runtime_error("Order not supported");
+  }
+}
+
 } // namespace
 
-std::shared_ptr<dolfinx::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
-                                                      std::size_t target_dofs,
-                                                      bool target_dofs_total,
-                                                      std::size_t dofs_per_node)
+std::shared_ptr<dolfinx::mesh::Mesh>
+create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
+                 std::size_t dofs_per_node, int order)
 {
   // Get number of processes
   const std::size_t num_processes = dolfinx::MPI::size(comm);
@@ -66,7 +96,7 @@ std::shared_ptr<dolfinx::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
       Nx = 40;
       ++r;
     }
-    nc = nvertices(Nx, Nx, Nx, r);
+    nc = num_pdofs(Nx, Nx, Nx, r, order);
   }
 
   Ny = Nx;
@@ -80,7 +110,7 @@ std::shared_ptr<dolfinx::mesh::Mesh> create_cube_mesh(MPI_Comm comm,
     {
       for (std::size_t k = i - 5; k < i + 5; ++k)
       {
-        std::size_t diff = std::abs(nvertices(i, j, k, r) - N);
+        std::size_t diff = std::abs(num_pdofs(i, j, k, r, order) - N);
         if (diff < mindiff)
         {
           mindiff = diff;
