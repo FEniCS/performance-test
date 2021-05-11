@@ -6,7 +6,9 @@
 
 #include "elasticity_problem.h"
 #include "mesh.h"
+#include "mem.h"
 #include "poisson_problem.h"
+#include <thread>
 #include <boost/program_options.hpp>
 #include <dolfinx/common/Timer.h>
 #include <dolfinx/common/subsystem.h>
@@ -172,11 +174,26 @@ void solve(int argc, char* argv[])
 
 int main(int argc, char* argv[])
 {
-  dolfinx::common::subsystem::init_logging(argc, argv);
   dolfinx::common::subsystem::init_mpi();
+  dolfinx::common::subsystem::init_logging(argc, argv);
   dolfinx::common::subsystem::init_petsc(argc, argv);
 
-  solve(argc, argv);
+  std::string thread_name = "RANK: " 
+    + std::to_string(dolfinx::MPI::rank(MPI_COMM_WORLD));
+  loguru::set_thread_name(thread_name.c_str());
+  loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
+
+  const int rank = dolfinx::MPI::rank(MPI_COMM_WORLD);
+  if (rank == 0)
+  { 
+    bool quit_flag = false;
+    std::thread mem_thread(process_mem_usage, std::ref(quit_flag));
+    solve(argc, argv);
+    quit_flag = true;
+    mem_thread.join();
+  }
+  else
+    solve(argc, argv);
 
   dolfinx::common::subsystem::finalize_petsc();
   dolfinx::common::subsystem::finalize_mpi();
