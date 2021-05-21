@@ -53,7 +53,8 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
   const int tdim = mesh->topology().dim();
   const std::vector<std::int32_t> bc_facets = dolfinx::mesh::locate_entities(
       *mesh, tdim - 1,
-      [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1> {
+      [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1>
+      {
         auto x0 = xt::row(x, 0);
         return xt::isclose(x0, 0.0) or xt::isclose(x0, 1.0);
       });
@@ -70,7 +71,8 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
   auto f = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   auto g = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
   f->interpolate(
-      [](const xt::xtensor<double, 2>& x) -> xt::xarray<PetscScalar> {
+      [](const xt::xtensor<double, 2>& x) -> xt::xarray<PetscScalar>
+      {
         auto dx
             = xt::square(xt::row(x, 0) - 0.5) + xt::square(xt::row(x, 1) - 0.5);
         return 10 * xt::exp(-(dx) / 0.02);
@@ -112,8 +114,11 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
 
   MatZeroEntries(A->mat());
   dolfinx::common::Timer t4("ZZZ Assemble matrix");
+  const std::vector constants_a = dolfinx::fem::pack_constants(*a);
+  const dolfinx::array2d coeffs_a = dolfinx::fem::pack_coefficients(*a);
   dolfinx::fem::assemble_matrix(
-      dolfinx::la::PETScMatrix::set_block_fn(A->mat(), ADD_VALUES), *a, {bc});
+      dolfinx::la::PETScMatrix::set_block_fn(A->mat(), ADD_VALUES), *a,
+      tcb::make_span(constants_a), coeffs_a, {bc});
   MatAssemblyBegin(A->mat(), MAT_FLUSH_ASSEMBLY);
   MatAssemblyEnd(A->mat(), MAT_FLUSH_ASSEMBLY);
   dolfinx::fem::set_diagonal(
@@ -122,13 +127,23 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
   MatAssemblyEnd(A->mat(), MAT_FINAL_ASSEMBLY);
   t4.stop();
 
-  VecSet(b.vec(), 0.0);
-  VecGhostUpdateBegin(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
-  VecGhostUpdateEnd(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
+  // Zero PETSc vector
+  Vec b_local;
+  VecGhostGetLocalForm(b.vec(), &b_local);
+  PetscInt n = 0;
+  VecGetSize(b_local, &n);
+  PetscScalar* array = nullptr;
+  VecGetArray(b_local, &array);
+  VecSet(b_local, 0.0);
+  VecRestoreArray(b_local, &array);
+  VecGhostRestoreLocalForm(b.vec(), &b_local);
 
   dolfinx::common::Timer t5("ZZZ Assemble vector");
-  dolfinx::fem::assemble_vector_petsc(b.vec(), *L);
-  dolfinx::fem::apply_lifting_petsc(b.vec(), {a}, {{bc}}, {}, 1.0);
+  const std::vector constants_L = dolfinx::fem::pack_constants(*L);
+  const dolfinx::array2d coeffs_L = dolfinx::fem::pack_coefficients(*L);
+  dolfinx::fem::assemble_vector_petsc(b.vec(), *L, constants_L, coeffs_L);
+  dolfinx::fem::apply_lifting_petsc(b.vec(), {a}, {constants_L}, {&coeffs_L},
+                                    {{bc}}, {}, 1.0);
   VecGhostUpdateBegin(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   VecGhostUpdateEnd(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   dolfinx::fem::set_bc_petsc(b.vec(), {bc}, nullptr);
@@ -142,22 +157,23 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
   std::function<int(dolfinx::fem::Function<PetscScalar>&,
                     const dolfinx::la::Vector<PetscScalar>&)>
       solver_function = [A](dolfinx::fem::Function<PetscScalar>& u,
-                            const dolfinx::la::Vector<PetscScalar>& b) {
-        // Create solver
-        dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
-        solver.set_from_options();
-        solver.set_operator(A->mat());
+                            const dolfinx::la::Vector<PetscScalar>& b)
+  {
+    // Create solver
+    dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
+    solver.set_from_options();
+    solver.set_operator(A->mat());
 
-        // Wrap dolfinx::la::Vector
-        dolfinx::la::Vector<PetscScalar>& bnc
-            = const_cast<dolfinx::la::Vector<PetscScalar>&>(b);
-        Vec b_petsc = dolfinx::la::create_ghosted_vector(
-            *(b.map()), b.bs(), tcb::span<PetscScalar>(bnc.mutable_array()));
+    // Wrap dolfinx::la::Vector
+    dolfinx::la::Vector<PetscScalar>& bnc
+        = const_cast<dolfinx::la::Vector<PetscScalar>&>(b);
+    Vec b_petsc = dolfinx::la::create_ghosted_vector(
+        *(b.map()), b.bs(), tcb::span<PetscScalar>(bnc.mutable_array()));
 
-        // Solve
-        int num_iter = solver.solve(u.vector(), b_petsc);
-        return num_iter;
-      };
+    // Solve
+    int num_iter = solver.solve(u.vector(), b_petsc);
+    return num_iter;
+  };
   return {std::make_shared<dolfinx::la::Vector<PetscScalar>>(std::move(bx)), u,
           solver_function};
 }
