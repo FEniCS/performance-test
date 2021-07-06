@@ -13,20 +13,28 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(Basix REQUIRED)
 find_package(DOLFINX REQUIRED)
 
+string(FIND "x-$ENV{PETSC_ARCH}" "complex" PETSC_SCALAR_COMPLEX)
+
+message(STATUS ${PETSC_SCALAR_COMPLEX})
+
+if(${PETSC_SCALAR_COMPLEX} EQUAL -1)
+  set(SCALAR_TYPE "double")
+else()
+  set(SCALAR_TYPE "double complex")
+endif()
+
 set(CMAKE_BUILD_TYPE "Release")
 
 # Compile UFL files
-
-add_custom_command(
-  OUTPUT Poisson.c
-  COMMAND ffcx ${CMAKE_CURRENT_SOURCE_DIR}/Poisson.ufl
-  DEPENDS Poisson.ufl
-)
-
 add_custom_command(
   OUTPUT Elasticity.c
-  COMMAND ffcx ${CMAKE_CURRENT_SOURCE_DIR}/Elasticity.ufl
+  COMMAND ffcx --scalar_type ${SCALAR_TYPE} ${CMAKE_CURRENT_SOURCE_DIR}/Elasticity.ufl
   DEPENDS Elasticity.ufl
+)
+add_custom_command(
+  OUTPUT Poisson.c
+  COMMAND ffcx --scalar_type ${SCALAR_TYPE} ${CMAKE_CURRENT_SOURCE_DIR}/Poisson.ufl
+  DEPENDS Poisson.ufl
 )
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)

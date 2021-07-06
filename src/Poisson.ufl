@@ -37,7 +37,7 @@ for degree in range(1, 4):
 
     # Insert into namespace so that the forms will be named a1, a2, a3 etc.
     ns[aname] = inner(grad(u), grad(v))*dx
-    ns[Lname] = f*v*dx + g*v*ds
+    ns[Lname] = inner(f, v)*dx + inner(g, v)*ds
 
     # Delete, so that the forms will get unnamed args and coefficients
     # and default to v_0, v_1, w0, w1 etc.

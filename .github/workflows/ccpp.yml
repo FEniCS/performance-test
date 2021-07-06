@@ -6,7 +6,7 @@ on:
       - "**"
   pull_request:
     branches:
-      - master
+      - main
   schedule:
     # * is a special character in YAML so you have to quote this string
     - cron: "0 3 * * 0,3"
@@ -20,7 +20,7 @@ jobs:
       CC: clang-10
       CXX: clang++-10
 
-      PETSC_ARCH: linux-gnu-real-64
+      PETSC_ARCH: linux-gnu-${{ matrix.petsc_arch }}-64
       OMPI_ALLOW_RUN_AS_ROOT: 1
       OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
       OMPI_MCA_rmaps_base_oversubscribe: 1
@@ -28,6 +28,10 @@ jobs:
       OMPI_MCA_btl_vader_single_copy_mechanism: none
       OMPI_MCA_mpi_yield_when_idle: 1
       OMPI_MCA_hwloc_base_binding_policy: none
+    
+    strategy:
+      matrix:
+        petsc_arch: [real, complex]
 
     steps:
       - uses: actions/checkout@v2
@@ -61,7 +65,7 @@ jobs:
           cd build
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Release  ../src
           ninja
-      - name: Run Poisson test (BoomerAMG, serial)
+      - name: Run Poisson test (GAMG, serial)
         run: |
           cd build/
           ./dolfinx-scaling-test \
@@ -72,10 +76,8 @@ jobs:
           -ksp_view \
           -ksp_type cg \
           -ksp_rtol 1.0e-8 \
-          -pc_type hypre \
-          -pc_hypre_type boomeramg \
-          -pc_hypre_boomeramg_strong_threshold 0.5
-      - name: Run Poisson test (BoomerAMG, weak)
+          -pc_type gamg 
+      - name: Run Poisson test (GAMG, weak)
         run: |
           cd build/
           mpirun -np 2 ./dolfinx-scaling-test \
@@ -86,9 +88,7 @@ jobs:
           -ksp_view \
           -ksp_type cg \
           -ksp_rtol 1.0e-8 \
-          -pc_type hypre \
-          -pc_hypre_type boomeramg \
-          -pc_hypre_boomeramg_strong_threshold 0.5
+          -pc_type gamg
       - name: Run Poisson test (BoomerAMG, 3rd order, weak)
         run: |
           cd build/
@@ -101,9 +101,7 @@ jobs:
           -ksp_view \
           -ksp_type cg \
           -ksp_rtol 1.0e-8 \
-          -pc_type hypre \
-          -pc_hypre_type boomeramg \
-          -pc_hypre_boomeramg_strong_threshold 0.5
+          -pc_type gamg
       - name: Run Poisson test (BoomerAMG, weak, unstructured mesh)
         run: |
           cd build/
@@ -116,10 +114,8 @@ jobs:
           -ksp_view \
           -ksp_type cg \
           -ksp_rtol 1.0e-8 \
-          -pc_type hypre \
-          -pc_hypre_type boomeramg \
-          -pc_hypre_boomeramg_strong_threshold 0.5
-      - name: Run Poisson test (BoomerAMG, strong)
+          -pc_type gamg
+      - name: Run Poisson test (GAMG, strong)
         run: |
           cd build/
           mpirun -np 2 ./dolfinx-scaling-test \
@@ -130,9 +126,7 @@ jobs:
           -ksp_view \
           -ksp_type cg \
           -ksp_rtol 1.0e-8 \
-          -pc_type hypre \
-          -pc_hypre_type boomeramg \
-          -pc_hypre_boomeramg_strong_threshold 0.5
+          -pc_type gamg
       - name: Run elasticity test (GAMG, serial)
         run: |
           cd build/
