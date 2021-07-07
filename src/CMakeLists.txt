@@ -12,6 +12,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # DOLFIN_CMAKE_CONFIG_PATH)
 find_package(Basix REQUIRED)
 find_package(DOLFINX REQUIRED)
+find_package(HDF5 REQUIRED)
 
 set(CMAKE_BUILD_TYPE "Release")
 

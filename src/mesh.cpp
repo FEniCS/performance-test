@@ -19,6 +19,156 @@
 
 namespace
 {
+
+//-----------------------------------------------------------------------------
+xt::xtensor<double, 2>
+create_geom(MPI_Comm comm, const std::array<std::array<double, 3>, 2>& p,
+            std::array<std::size_t, 3> n)
+{
+  // Extract data
+  const std::array<double, 3>& p0 = p[0];
+  const std::array<double, 3>& p1 = p[1];
+  std::int64_t nx = n[0];
+  std::int64_t ny = n[1];
+  std::int64_t nz = n[2];
+
+  const std::int64_t n_points = (nx + 1) * (ny + 1) * (nz + 1);
+  std::array range_p = dolfinx::MPI::local_range(
+      dolfinx::MPI::rank(comm), n_points, dolfinx::MPI::size(comm));
+
+  // Extract minimum and maximum coordinates
+  const double x0 = std::min(p0[0], p1[0]);
+  const double x1 = std::max(p0[0], p1[0]);
+  const double y0 = std::min(p0[1], p1[1]);
+  const double y1 = std::max(p0[1], p1[1]);
+  const double z0 = std::min(p0[2], p1[2]);
+  const double z1 = std::max(p0[2], p1[2]);
+
+  const double a = x0;
+  const double b = x1;
+  const double ab = (b - a) / static_cast<double>(nx);
+  const double c = y0;
+  const double d = y1;
+  const double cd = (d - c) / static_cast<double>(ny);
+  const double e = z0;
+  const double f = z1;
+  const double ef = (f - e) / static_cast<double>(nz);
+
+  xt::xtensor<double, 2> geom(
+      {static_cast<std::size_t>(range_p[1] - range_p[0]), 3});
+  const std::int64_t sqxy = (nx + 1) * (ny + 1);
+  std::array<double, 3> point;
+  for (std::int64_t v = range_p[0]; v < range_p[1]; ++v)
+  {
+    const std::int64_t iz = v / sqxy;
+    const std::int64_t p = v % sqxy;
+    const std::int64_t iy = p / (nx + 1);
+    const std::int64_t ix = p % (nx + 1);
+    const double z = e + ef * static_cast<double>(iz);
+    const double y = c + cd * static_cast<double>(iy);
+    const double x = a + ab * static_cast<double>(ix);
+    point = {x, y, z};
+    for (std::size_t i = 0; i < 3; i++)
+      geom(v - range_p[0], i) = point[i];
+  }
+
+  return geom;
+}
+//-----------------------------------------------------------------------------
+dolfinx::mesh::Mesh build_tet(MPI_Comm comm,
+                              const std::array<std::array<double, 3>, 2>& p,
+                              std::array<std::size_t, 3> n,
+                              const dolfinx::mesh::GhostMode ghost_mode,
+                              bool part_on_subset)
+{
+  dolfinx::common::Timer timer("Build BoxMesh");
+
+  int rank = dolfinx::MPI::rank(comm);
+  MPI_Comm nodecomm;
+  MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED, rank, MPI_INFO_NULL,
+                      &nodecomm);
+  int noderank = dolfinx::MPI::rank(nodecomm);
+  int nodesize = dolfinx::MPI::size(nodecomm);
+  MPI_Comm subcomm;
+
+  if (part_on_subset)
+  {
+    int color = (noderank == 0) ? 0 : MPI_UNDEFINED;
+    MPI_Comm_split(comm, color, rank, &subcomm);
+  }
+  else
+  {
+    MPI_Comm_dup(comm, &subcomm);
+    noderank = 0;
+  }
+
+  xt::xtensor<double, 2> geom({0, 3});
+  xt::xtensor<std::int64_t, 2> cells({0, 4});
+
+  if (noderank == 0)
+  {
+    geom = create_geom(subcomm, p, n);
+
+    const std::int64_t nx = n[0];
+    const std::int64_t ny = n[1];
+    const std::int64_t nz = n[2];
+    const std::int64_t n_cells = nx * ny * nz;
+    std::array range_c = dolfinx::MPI::local_range(
+        dolfinx::MPI::rank(subcomm), n_cells, dolfinx::MPI::size(subcomm));
+    const std::size_t cell_range = range_c[1] - range_c[0];
+    cells.resize({6 * cell_range, 4});
+
+    // Create tetrahedra
+    for (std::int64_t i = range_c[0]; i < range_c[1]; ++i)
+    {
+      const int iz = i / (nx * ny);
+      const int j = i % (nx * ny);
+      const int iy = j / nx;
+      const int ix = j % nx;
+
+      const std::int64_t v0 = iz * (nx + 1) * (ny + 1) + iy * (nx + 1) + ix;
+      const std::int64_t v1 = v0 + 1;
+      const std::int64_t v2 = v0 + (nx + 1);
+      const std::int64_t v3 = v1 + (nx + 1);
+      const std::int64_t v4 = v0 + (nx + 1) * (ny + 1);
+      const std::int64_t v5 = v1 + (nx + 1) * (ny + 1);
+      const std::int64_t v6 = v2 + (nx + 1) * (ny + 1);
+      const std::int64_t v7 = v3 + (nx + 1) * (ny + 1);
+
+      // Note that v0 < v1 < v2 < v3 < vmid
+      xt::xtensor_fixed<std::int64_t, xt::xshape<6, 4>> c
+          = {{v0, v1, v3, v7}, {v0, v1, v7, v5}, {v0, v5, v7, v4},
+             {v0, v3, v2, v7}, {v0, v6, v4, v7}, {v0, v2, v6, v7}};
+      std::size_t offset = 6 * (i - range_c[0]);
+      xt::view(cells, xt::range(offset, offset + 6), xt::all()) = c;
+    }
+  }
+
+  const std::function<const dolfinx::graph::AdjacencyList<std::int32_t>(
+      MPI_Comm, int, int, const dolfinx::graph::AdjacencyList<std::int64_t>&,
+      dolfinx::mesh::GhostMode)>
+      partitioner
+      = [&](MPI_Comm comm, int nparts, int tdim,
+            const dolfinx::graph::AdjacencyList<std::int64_t>& cells,
+            dolfinx::mesh::GhostMode mode) {
+          dolfinx::graph::AdjacencyList<std::int32_t> procs(0);
+
+          if (noderank == 0)
+            procs = dolfinx::mesh::partition_cells_graph(subcomm, nparts, tdim,
+                                                         cells, mode);
+
+          return procs;
+        };
+
+  dolfinx::fem::CoordinateElement element(dolfinx::mesh::CellType::tetrahedron,
+                                          1);
+  auto [data, offset] = dolfinx::graph::create_adjacency_data(cells);
+  return dolfinx::mesh::create_mesh(comm,
+                                    dolfinx::graph::AdjacencyList<std::int64_t>(
+                                        std::move(data), std::move(offset)),
+                                    element, geom, ghost_mode, partitioner);
+}
+
 // Calculate number of vertices, edges, facets, and cells for any given level
 // of refinement
 constexpr std::tuple<std::int64_t, std::int64_t, std::int64_t, std::int64_t>
@@ -70,7 +220,7 @@ std::int64_t num_pdofs(int i, int j, int k, int nrefine, int order)
 
 std::shared_ptr<dolfinx::mesh::Mesh>
 create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
-                 std::size_t dofs_per_node, int order)
+                 std::size_t dofs_per_node, int order, bool part_on_subset)
 {
   // Get number of processes
   const std::size_t num_processes = dolfinx::MPI::size(comm);
@@ -123,10 +273,8 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
   }
 
   auto mesh = std::make_shared<dolfinx::mesh::Mesh>(
-      dolfinx::generation::BoxMesh::create(
-          comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz},
-          dolfinx::mesh::CellType::tetrahedron,
-          dolfinx::mesh::GhostMode::none));
+      build_tet(comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz},
+                dolfinx::mesh::GhostMode::none, part_on_subset));
 
   if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
   {

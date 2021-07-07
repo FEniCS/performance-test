@@ -25,6 +25,7 @@ namespace po = boost::program_options;
 
 void solve(int argc, char* argv[])
 {
+  bool part_on_subset = false;
   po::options_description desc("Allowed options");
   desc.add_options()("help,h", "print usage message")(
       "problem_type", po::value<std::string>()->default_value("poisson"),
@@ -37,7 +38,9 @@ void solve(int argc, char* argv[])
       "output directory (no output unless this is set)")(
       "ndofs", po::value<std::size_t>()->default_value(50000),
       "number of degrees of freedom")(
-      "order", po::value<std::size_t>()->default_value(1), "polynomial order");
+      "order", po::value<std::size_t>()->default_value(1), "polynomial order")(
+      "partition_on_subset", po::bool_switch(&part_on_subset),
+      "Partition on one rank per node");
 
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv)
@@ -85,7 +88,7 @@ void solve(int argc, char* argv[])
   dolfinx::common::Timer t0("ZZZ Create Mesh");
   if (mesh_type == "cube")
     mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling,
-                            ndofs_per_node, order);
+                            ndofs_per_node, order, part_on_subset);
   else
     mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling,
                              ndofs_per_node);
@@ -118,6 +121,7 @@ void solve(int argc, char* argv[])
     const std::int64_t num_dofs
         = u->function_space()->dofmap()->index_map->size_global()
           * u->function_space()->dofmap()->index_map_bs();
+
     const int tdim = mesh->topology().dim();
     const std::int64_t num_cells
         = mesh->topology().index_map(tdim)->size_global();
@@ -172,8 +176,15 @@ void solve(int argc, char* argv[])
 
 int main(int argc, char* argv[])
 {
-  dolfinx::common::subsystem::init_logging(argc, argv);
+
   dolfinx::common::subsystem::init_mpi();
+  dolfinx::common::subsystem::init_logging(argc, argv);
+  // Set the logging thread name to show the process rank
+  int mpi_rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
+  std::string thread_name = "RANK " + std::to_string(mpi_rank);
+  loguru::set_thread_name(thread_name.c_str());
+
   dolfinx::common::subsystem::init_petsc(argc, argv);
 
   solve(argc, argv);
