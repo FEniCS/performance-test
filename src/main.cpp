@@ -18,6 +18,7 @@
 #include <dolfinx/fem/utils.h>
 #include <dolfinx/io/XDMFFile.h>
 #include <dolfinx/la/Vector.h>
+#include <fstream>
 #include <string>
 #include <utility>
 
@@ -112,9 +113,20 @@ void solve(int argc, char* argv[])
   else
     throw std::runtime_error("Unknown problem type: " + problem_type);
 
+  std::vector<int> dof_ghosts(num_processes, 0);
+  for (std::int32_t p : u->function_space()->dofmap()->index_map->ghost_owner_rank())
+    dof_ghosts[p]++;
+  
+  std::vector<int> dof_ghosts_all(num_processes * num_processes);
+  MPI_Gather(dof_ghosts.data(), dof_ghosts.size(), MPI_INT, dof_ghosts_all.data(), dof_ghosts.size(), MPI_INT,  0, MPI_COMM_WORLD);
+
   // Print simulation summary
   if (dolfinx::MPI::rank(MPI_COMM_WORLD) == 0)
   {
+    std::ofstream fd("dofconn.bin", std::ofstream::binary);
+    fd.write((char *)dof_ghosts_all.data(), dof_ghosts_all.size() * sizeof(int));
+    fd.close();
+
     char petsc_version[256];
     PetscGetVersion(petsc_version, 256);
 
@@ -125,6 +137,9 @@ void solve(int argc, char* argv[])
     const int tdim = mesh->topology().dim();
     const std::int64_t num_cells
         = mesh->topology().index_map(tdim)->size_global();
+
+    const std::int64_t num_f_ext =mesh->topology().index_map(tdim - 1)->num_ghosts();
+
     std::cout
         << "----------------------------------------------------------------"
         << std::endl;
@@ -137,6 +152,7 @@ void solve(int argc, char* argv[])
     std::cout << "  Scaling type:    " << scaling_type << std::endl;
     std::cout << "  Num processes:   " << num_processes << std::endl;
     std::cout << "  Num cells        " << num_cells << std::endl;
+    std::cout << "  Num ghost facet (proc 0): " << num_f_ext << std::endl;
     std::cout << "  Total degrees of freedom:               " << num_dofs
               << std::endl;
     std::cout << "  Average degrees of freedom per process: "
@@ -153,11 +169,20 @@ void solve(int argc, char* argv[])
   if (output)
   {
     dolfinx::common::Timer t6("ZZZ Output");
+    const int tdim = mesh->topology().dim();
+    std::vector<int> mt_idx(mesh->topology().index_map(tdim)->size_local());
+    std::iota(mt_idx.begin(), mt_idx.end(), 0);
+    std::vector<int> mt_val(mesh->topology().index_map(tdim)->size_local(),
+                            dolfinx::MPI::rank(MPI_COMM_WORLD));
+
+    dolfinx::mesh::MeshTags<int> partition(mesh, tdim, mt_idx, mt_val);
+
     std::string filename
         = output_dir + "/solution-" + std::to_string(num_processes) + ".xdmf";
     dolfinx::io::XDMFFile file(MPI_COMM_WORLD, filename, "w");
     file.write_mesh(*mesh);
     file.write_function(*u, 0.0);
+    file.write_meshtags(partition, "partition");
     t6.stop();
   }
 
