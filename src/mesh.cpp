@@ -75,6 +75,15 @@ create_geom(MPI_Comm comm, const std::array<std::array<double, 3>, 2>& p,
   return geom;
 }
 //-----------------------------------------------------------------------------
+dolfinx::graph::AdjacencyList<std::int32_t>
+partition_graph(const MPI_Comm comm, int nparts,
+                const dolfinx::graph::AdjacencyList<std::int64_t>& local_graph,
+                std::int32_t num_ghost_nodes, bool ghosting)
+{
+  return dolfinx::graph::scotch::partitioner(dolfinx::graph::scotch::strategy::none, 0.01, 1010)(comm, nparts, local_graph,
+                                      num_ghost_nodes, ghosting);
+}
+//-----------------------------------------------------------------------------
 dolfinx::mesh::Mesh build_tet(MPI_Comm comm,
                               const std::array<std::array<double, 3>, 2>& p,
                               std::array<std::size_t, 3> n,
@@ -91,9 +100,12 @@ dolfinx::mesh::Mesh build_tet(MPI_Comm comm,
   int nodesize = dolfinx::MPI::size(nodecomm);
   MPI_Comm subcomm;
 
+  // Number of cores per node to use for partitioning
+  int num_cores_per_node = 1;
+  
   if (part_on_subset)
   {
-    int color = (noderank == 0) ? 0 : MPI_UNDEFINED;
+    int color = (noderank < num_cores_per_node) ? 0 : MPI_UNDEFINED;
     MPI_Comm_split(comm, color, rank, &subcomm);
   }
   else
@@ -105,7 +117,7 @@ dolfinx::mesh::Mesh build_tet(MPI_Comm comm,
   xt::xtensor<double, 2> geom({0, 3});
   xt::xtensor<std::int64_t, 2> cells({0, 4});
 
-  if (noderank == 0)
+  if (noderank < num_cores_per_node)
   {
     geom = create_geom(subcomm, p, n);
 
@@ -116,6 +128,8 @@ dolfinx::mesh::Mesh build_tet(MPI_Comm comm,
     std::array range_c = dolfinx::MPI::local_range(
         dolfinx::MPI::rank(subcomm), n_cells, dolfinx::MPI::size(subcomm));
     const std::size_t cell_range = range_c[1] - range_c[0];
+    LOG(INFO) << "Cell range: " << range_c[0] << "-" << range_c[1] << "\n";
+    
     cells.resize({6 * cell_range, 4});
 
     // Create tetrahedra
@@ -153,10 +167,11 @@ dolfinx::mesh::Mesh build_tet(MPI_Comm comm,
             dolfinx::mesh::GhostMode mode) {
           dolfinx::graph::AdjacencyList<std::int32_t> procs(0);
 
-          if (noderank == 0)
+          if (noderank < num_cores_per_node)
+          {
             procs = dolfinx::mesh::partition_cells_graph(subcomm, nparts, tdim,
-                                                         cells, mode);
-
+                                                         cells, mode, partition_graph);
+          }
           return procs;
         };
 

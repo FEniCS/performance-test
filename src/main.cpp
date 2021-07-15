@@ -6,7 +6,9 @@
 
 #include "elasticity_problem.h"
 #include "mesh.h"
+#include "mem.h"
 #include "poisson_problem.h"
+#include <thread>
 #include <boost/program_options.hpp>
 #include <dolfinx/common/Timer.h>
 #include <dolfinx/common/subsystem.h>
@@ -117,15 +119,25 @@ void solve(int argc, char* argv[])
   for (std::int32_t p : u->function_space()->dofmap()->index_map->ghost_owner_rank())
     dof_ghosts[p]++;
   
-  std::vector<int> dof_ghosts_all(num_processes * num_processes);
-  MPI_Gather(dof_ghosts.data(), dof_ghosts.size(), MPI_INT, dof_ghosts_all.data(), dof_ghosts.size(), MPI_INT,  0, MPI_COMM_WORLD);
+  //  std::vector<int> dof_ghosts_all(num_processes * num_processes);
+  //  MPI_Gather(dof_ghosts.data(), dof_ghosts.size(), MPI_INT, dof_ghosts_all.data(), dof_ghosts.size(), MPI_INT,  0, MPI_COMM_WORLD);
 
+  const int tdim = mesh->topology().dim();
+  const std::int64_t num_local_cells = mesh->topology().index_map(tdim)->size_local();
+  const std::int64_t num_local_vertices = mesh->topology().index_map(0)->size_local();
+  const std::int64_t num_ghost_vertices = mesh->topology().index_map(0)->num_ghosts();
+  std::int64_t num_local_cells_all, num_local_vertices_all, num_ghost_vertices_all;
+  MPI_Reduce(&num_local_cells, &num_local_cells_all, 1, MPI_INT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
+  MPI_Reduce(&num_local_vertices, &num_local_vertices_all, 1, MPI_INT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
+  MPI_Reduce(&num_ghost_vertices, &num_ghost_vertices_all, 1, MPI_INT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
+  
+  
   // Print simulation summary
   if (dolfinx::MPI::rank(MPI_COMM_WORLD) == 0)
   {
-    std::ofstream fd("dofconn.bin", std::ofstream::binary);
-    fd.write((char *)dof_ghosts_all.data(), dof_ghosts_all.size() * sizeof(int));
-    fd.close();
+    //    std::ofstream fd("dofconn.bin", std::ofstream::binary);
+    //    fd.write((char *)dof_ghosts_all.data(), dof_ghosts_all.size() * sizeof(int));
+    //    fd.close();
 
     char petsc_version[256];
     PetscGetVersion(petsc_version, 256);
@@ -134,7 +146,6 @@ void solve(int argc, char* argv[])
         = u->function_space()->dofmap()->index_map->size_global()
           * u->function_space()->dofmap()->index_map_bs();
 
-    const int tdim = mesh->topology().dim();
     const std::int64_t num_cells
         = mesh->topology().index_map(tdim)->size_global();
 
@@ -151,10 +162,11 @@ void solve(int argc, char* argv[])
     std::cout << "  Problem type:    " << problem_type << std::endl;
     std::cout << "  Scaling type:    " << scaling_type << std::endl;
     std::cout << "  Num processes:   " << num_processes << std::endl;
-    std::cout << "  Num cells        " << num_cells << std::endl;
-    std::cout << "  Num ghost facet (proc 0): " << num_f_ext << std::endl;
-    std::cout << "  Total degrees of freedom:               " << num_dofs
-              << std::endl;
+    std::cout << "  Num global cells:             " << num_cells << std::endl;
+    std::cout << "  Num local cells all:          " << num_local_cells_all << std::endl;
+    std::cout << "  Num local vertices all:       " << num_local_vertices_all << std::endl;
+    std::cout << "  Num ghost vertices all:       " << num_ghost_vertices_all << std::endl;
+    std::cout << "  Total degrees of freedom:     " << num_dofs << std::endl;
     std::cout << "  Average degrees of freedom per process: "
               << num_dofs / dolfinx::MPI::size(MPI_COMM_WORLD) << std::endl;
     std::cout
@@ -181,7 +193,7 @@ void solve(int argc, char* argv[])
         = output_dir + "/solution-" + std::to_string(num_processes) + ".xdmf";
     dolfinx::io::XDMFFile file(MPI_COMM_WORLD, filename, "w");
     file.write_mesh(*mesh);
-    file.write_function(*u, 0.0);
+    // file.write_function(*u, 0.0);
     file.write_meshtags(partition, "partition");
     t6.stop();
   }
@@ -201,18 +213,30 @@ void solve(int argc, char* argv[])
 
 int main(int argc, char* argv[])
 {
-
   dolfinx::common::subsystem::init_mpi();
   dolfinx::common::subsystem::init_logging(argc, argv);
+
   // Set the logging thread name to show the process rank
   int mpi_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
   std::string thread_name = "RANK " + std::to_string(mpi_rank);
   loguru::set_thread_name(thread_name.c_str());
-
+  //  loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
+  
   dolfinx::common::subsystem::init_petsc(argc, argv);
 
-  solve(argc, argv);
+
+  const int rank = dolfinx::MPI::rank(MPI_COMM_WORLD);
+  if (rank == 0)
+  { 
+    bool quit_flag = false;
+    std::thread mem_thread(process_mem_usage, std::ref(quit_flag));
+    solve(argc, argv);
+    quit_flag = true;
+    mem_thread.join();
+  }
+  else
+    solve(argc, argv);
 
   dolfinx::common::subsystem::finalize_petsc();
   dolfinx::common::subsystem::finalize_mpi();
