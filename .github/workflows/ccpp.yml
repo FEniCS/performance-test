@@ -118,7 +118,9 @@ jobs:
           -ksp_rtol 1.0e-8 \
           -pc_type hypre \
           -pc_hypre_type boomeramg \
-          -pc_hypre_boomeramg_strong_threshold 0.5
+          -pc_hypre_boomeramg_strong_threshold 0.7 \
+          -pc_hypre_boomeramg_agg_nl 4 \
+          -pc_hypre_boomeramg_agg_num_paths 2
       - name: Run Poisson test (BoomerAMG, strong)
         run: |
           cd build/
@@ -132,7 +134,9 @@ jobs:
           -ksp_rtol 1.0e-8 \
           -pc_type hypre \
           -pc_hypre_type boomeramg \
-          -pc_hypre_boomeramg_strong_threshold 0.5
+          -pc_hypre_boomeramg_strong_threshold 0.7 \
+          -pc_hypre_boomeramg_agg_nl 4 \
+          -pc_hypre_boomeramg_agg_num_paths 2
       - name: Run elasticity test (GAMG, serial)
         run: |
           cd build/
