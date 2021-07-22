@@ -10,6 +10,7 @@
 #include <dolfinx/fem/ElementDofLayout.h>
 #include <dolfinx/generation/BoxMesh.h>
 #include <dolfinx/graph/AdjacencyList.h>
+#include <dolfinx/graph/scotch.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx/mesh/cell_types.h>
@@ -19,8 +20,8 @@
 
 namespace
 {
-// Calculate number of vertices, edges, facets, and cells for any given level
-// of refinement
+// Calculate number of vertices, edges, facets, and cells for any given
+// level of refinement
 constexpr std::tuple<std::int64_t, std::int64_t, std::int64_t, std::int64_t>
 num_entities(int i, int j, int k, int nrefine)
 {
@@ -68,9 +69,9 @@ std::int64_t num_pdofs(int i, int j, int k, int nrefine, int order)
 
 } // namespace
 
-std::shared_ptr<dolfinx::mesh::Mesh>
-create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
-                 std::size_t dofs_per_node, int order)
+dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
+                                     bool target_dofs_total,
+                                     std::size_t dofs_per_node, int order)
 {
   // Get number of processes
   const std::size_t num_processes = dolfinx::MPI::size(comm);
@@ -122,13 +123,22 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
     }
   }
 
-  auto mesh = std::make_shared<dolfinx::mesh::Mesh>(
-      dolfinx::generation::BoxMesh::create(
-          comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz},
-          dolfinx::mesh::CellType::tetrahedron,
-          dolfinx::mesh::GhostMode::none));
+  auto graph_part = dolfinx::graph::scotch::partitioner(
+      dolfinx::graph::scotch::strategy::scalability);
+  auto cell_part
+      = [graph_part](MPI_Comm comm, int nparts, int tdim,
+                     const dolfinx::graph::AdjacencyList<std::int64_t>& cells,
+                     dolfinx::mesh::GhostMode ghost_mode)
+  {
+    return dolfinx::mesh::partition_cells_graph(comm, nparts, tdim, cells,
+                                                ghost_mode, graph_part);
+  };
+  auto mesh = dolfinx::generation::BoxMesh::create(
+      comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz},
+      dolfinx::mesh::CellType::tetrahedron, dolfinx::mesh::GhostMode::none,
+      cell_part);
 
-  if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
+  if (dolfinx::MPI::rank(mesh.mpi_comm()) == 0)
   {
     std::cout << "UnitCube (" << Nx << "x" << Ny << "x" << Nz
               << ") to be refined " << r << " times\n";
@@ -136,9 +146,8 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
 
   for (int i = 0; i < r; ++i)
   {
-    mesh->topology_mutable().create_connectivity(3, 1);
-    mesh = std::make_shared<dolfinx::mesh::Mesh>(
-        dolfinx::refinement::refine(*mesh, false));
+    mesh.topology_mutable().create_connectivity(3, 1);
+    mesh = dolfinx::refinement::refine(mesh, false);
   }
 
   return mesh;
