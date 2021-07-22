@@ -14,11 +14,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: fenicsproject/test-env:openmpi
+    container: fenicsproject/test-env:latest-openmpi
 
     env:
-      CC: clang-10
-      CXX: clang++-10
+      CC: clang-12
+      CXX: clang++-12
 
       PETSC_ARCH: linux-gnu-real-64
       OMPI_ALLOW_RUN_AS_ROOT: 1
