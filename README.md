@@ -16,10 +16,10 @@ The source of the tests is in `src/` directory.
 
 ### Requirements
 
-- FEniCS/DOLFIN-X installation, with MPI, PETSc and HDF5 enabled
-  (development version of dolfinx **required**)
-- PETSc installation (development version **required**)
-- `libboost-program-options-dev`
+- FEniCSx/DOLFINx installation (development version of dolfinx
+  **required**)
+- PETSc installation
+- Boost Program Options
 
 
 ### Compilation
