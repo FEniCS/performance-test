@@ -86,11 +86,15 @@ void solve(int argc, char* argv[])
 
   dolfinx::common::Timer t0("ZZZ Create Mesh");
   if (mesh_type == "cube")
-    mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling,
-                            ndofs_per_node, order);
+  {
+    mesh = std::make_shared<dolfinx::mesh::Mesh>(create_cube_mesh(
+        MPI_COMM_WORLD, ndofs, strong_scaling, ndofs_per_node, order));
+  }
   else
+  {
     mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling,
                              ndofs_per_node);
+  }
   t0.stop();
 
   // Create mesh entity permutations outside of the assembler
