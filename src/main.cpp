@@ -95,13 +95,9 @@ void solve(int argc, char* argv[])
   }
   t0.stop();
 
-  // Create mesh entity permutations outside of the assembler
-  dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
-  mesh->topology_mutable().create_entity_permutations();
-  tperm.stop();
-
   if (problem_type == "poisson")
-  { // Create Poisson problem
+  {
+    // Create Poisson problem
     std::tie(b, u, solver_function) = poisson::problem(mesh, order);
   }
   else if (problem_type == "elasticity")
