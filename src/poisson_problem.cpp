@@ -112,7 +112,6 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
       *(bx.map()), bx.bs(), tcb::span<PetscScalar>(bx.mutable_array()));
   dolfinx::la::PETScVector b(b_vec, false);
 
-  MatZeroEntries(A->mat());
   dolfinx::common::Timer t4("ZZZ Assemble matrix");
   const std::vector constants_a = dolfinx::fem::pack_constants(*a);
   const dolfinx::array2d coeffs_a = dolfinx::fem::pack_coefficients(*a);
