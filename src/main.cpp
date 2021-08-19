@@ -95,6 +95,11 @@ void solve(int argc, char* argv[])
   }
   t0.stop();
 
+  dolfinx::common::Timer t_ent("ZZZ Create facets and facet->cell connectivity");
+  mesh->topology_mutable().create_entities(2);
+  mesh->topology_mutable().create_connectivity(2, 3);
+  t_ent.stop();
+
   if (problem_type == "poisson")
   {
     // Create Poisson problem
