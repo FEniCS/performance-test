@@ -10,7 +10,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Get DOLFIN configuration data (DOLFINConfig.cmake must be in
 # DOLFIN_CMAKE_CONFIG_PATH)
-find_package(Basix REQUIRED)
 find_package(DOLFINX REQUIRED)
 
 set(CMAKE_BUILD_TYPE "Release")
