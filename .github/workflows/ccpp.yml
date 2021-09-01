@@ -49,8 +49,8 @@ jobs:
       - name: Build dolfinx cpp
         run: |
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Developer -B build -S dolfinx/cpp/
-          cmake --build build-dir
-          cmake --install build-dir
+          cmake --build build
+          cmake --install build
       - name: Build performance test
         run: |
           mkdir build
