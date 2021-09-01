@@ -36,7 +36,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           path: ./dolfinx
-          repository: FEniCS/doflinx
+          repository: FEniCS/dolfinx
           ref: main
 
       - name: Install FEniCS Python components
