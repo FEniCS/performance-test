@@ -3,6 +3,10 @@ cmake_minimum_required(VERSION 3.16)
 set(PROJECT_NAME dolfinx-scaling-test)
 project(${PROJECT_NAME})
 
+include(GNUInstallDirs)
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
+
 # Use C++17
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -46,4 +50,4 @@ find_package(Boost 1.70 REQUIRED program_options)
 # Target libraries
 target_link_libraries(${PROJECT_NAME} dolfinx Boost::program_options)
 
-install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
+install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
