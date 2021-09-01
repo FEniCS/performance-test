@@ -53,14 +53,12 @@ jobs:
           cmake --install build
       - name: Build performance test
         run: |
-          mkdir build
-          cd build
-          cmake -G Ninja -DCMAKE_BUILD_TYPE=Release  ../src
-          ninja
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Developer -B build-dir -S src
+          cmake --build build-dir
+          cmake --install build-dir
       - name: Run Poisson test (BoomerAMG, serial)
         run: |
-          cd build/
-          ./dolfinx-scaling-test \
+          dolfinx-scaling-test \
           --problem_type poisson \
           --scaling_type weak \
           --ndofs 50000 \
@@ -75,8 +73,7 @@ jobs:
           -pc_hypre_boomeramg_agg_num_paths 2
       - name: Run Poisson test (BoomerAMG, weak)
         run: |
-          cd build/
-          mpirun -np 2 ./dolfinx-scaling-test \
+          mpirun -np 2 dolfinx-scaling-test \
           --problem_type poisson \
           --scaling_type weak \
           --ndofs 50000 \
@@ -91,8 +88,7 @@ jobs:
           -pc_hypre_boomeramg_agg_num_paths 2
       - name: Run Poisson test (BoomerAMG, 3rd order, weak)
         run: |
-          cd build/
-          mpirun -np 2 ./dolfinx-scaling-test \
+          mpirun -np 2 dolfinx-scaling-test \
           --problem_type poisson \
           --scaling_type weak \
           --ndofs 50000 \
@@ -108,8 +104,7 @@ jobs:
           -pc_hypre_boomeramg_agg_num_paths 2
       - name: Run Poisson test (BoomerAMG, weak, unstructured mesh)
         run: |
-          cd build/
-          mpirun -np 2 ./dolfinx-scaling-test \
+          mpirun -np 2 dolfinx-scaling-test \
           --problem_type poisson \
           --mesh_type unstructured \
           --scaling_type weak \
@@ -125,8 +120,7 @@ jobs:
           -pc_hypre_boomeramg_agg_num_paths 2
       - name: Run Poisson test (BoomerAMG, strong)
         run: |
-          cd build/
-          mpirun -np 2 ./dolfinx-scaling-test \
+          mpirun -np 2 dolfinx-scaling-test \
           --problem_type poisson \
           --scaling_type strong \
           --ndofs 1000000 \
@@ -141,8 +135,7 @@ jobs:
           -pc_hypre_boomeramg_agg_num_paths 2
       - name: Run elasticity test (GAMG, serial)
         run: |
-          cd build/
-          ./dolfinx-scaling-test \
+          dolfinx-scaling-test \
           --problem_type elasticity \
           --scaling_type weak \
           --ndofs 100000 \
@@ -158,8 +151,7 @@ jobs:
           -matptap_via scalable
       - name: Run elasticity test (GAMG, weak)
         run: |
-          cd build/
-          mpirun -np 2 ./dolfinx-scaling-test \
+          mpirun -np 2 dolfinx-scaling-test \
           --problem_type elasticity \
           --scaling_type weak \
           --ndofs 100000 \
@@ -175,8 +167,7 @@ jobs:
           -matptap_via scalable
       - name: Run elasticity test (GAMG, 3rd order, weak)
         run: |
-          cd build/
-          mpirun -np 2 ./dolfinx-scaling-test \
+          mpirun -np 2 dolfinx-scaling-test \
           --problem_type elasticity \
           --scaling_type weak \
           --ndofs 100000 \
@@ -193,8 +184,7 @@ jobs:
           -matptap_via scalable
       - name: Run elasticity test (GAMG, strong)
         run: |
-          cd build/
-          mpirun -np 2 ./dolfinx-scaling-test \
+          mpirun -np 2 dolfinx-scaling-test \
           --problem_type elasticity \
           --scaling_type strong \
           --ndofs 500000 \
