@@ -32,19 +32,26 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: Get DOLFINx
+        uses: actions/checkout@v2
+        with:
+          path: ./dolfinx
+          repository: FEniCS/doflinx
+          ref: main
+
       - name: Install FEniCS Python components
         run: |
           apt-get -qq update
           apt-get -y install libboost-program-options-dev
+          pip3 install ./basix/python
           pip3 install git+https://github.com/FEniCS/ufl.git
           pip3 install git+https://github.com/FEniCS/basix.git
           pip3 install git+https://github.com/FEniCS/ffcx
       - name: Build dolfinx cpp
         run: |
-          git clone -b main --single-branch https://github.com/FEniCS/dolfinx.git
-          cd $(mktemp -d)
-          cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS_RELEASE='-O2 -Wall -Wextra -pedantic -Werror'  $OLDPWD/dolfinx/cpp
-          ninja install
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Developer -B build -S dolfinx/cpp/
+          cmake --build build-dir
+          cmake --install build-dir
       - name: Build performance test
         run: |
           mkdir build
