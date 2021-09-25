@@ -7,7 +7,6 @@
 #include "elasticity_problem.h"
 #include "Elasticity.h"
 #include <dolfinx/common/Timer.h>
-#include <dolfinx/common/array2d.h>
 #include <dolfinx/fem/DirichletBC.h>
 #include <dolfinx/fem/DofMap.h>
 #include <dolfinx/fem/Form.h>
@@ -180,10 +179,10 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
 
   dolfinx::common::Timer t2("ZZZ Assemble matrix");
   const std::vector constants_a = dolfinx::fem::pack_constants(*a);
-  const dolfinx::array2d coeffs_a = dolfinx::fem::pack_coefficients(*a);
+  const auto coeffs_a = dolfinx::fem::pack_coefficients(*a);
   dolfinx::fem::assemble_matrix(
       dolfinx::la::PETScMatrix::set_block_fn(A->mat(), ADD_VALUES), *a,
-      tcb::make_span(constants_a), coeffs_a, {bc});
+      tcb::make_span(constants_a), {coeffs_a.first, coeffs_a.second}, {bc});
   MatAssemblyBegin(A->mat(), MAT_FLUSH_ASSEMBLY);
   MatAssemblyEnd(A->mat(), MAT_FLUSH_ASSEMBLY);
   dolfinx::fem::set_diagonal(
@@ -205,10 +204,12 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
 
   dolfinx::common::Timer t3("ZZZ Assemble vector");
   const std::vector constants_L = dolfinx::fem::pack_constants(*L);
-  const dolfinx::array2d coeffs_L = dolfinx::fem::pack_coefficients(*L);
-  dolfinx::fem::assemble_vector_petsc(b.vec(), *L, constants_L, coeffs_L);
+  const auto coeffs_L = dolfinx::fem::pack_coefficients(*L);
+  dolfinx::fem::assemble_vector_petsc(b.vec(), *L, constants_L,
+                                      {coeffs_L.first, coeffs_L.second});
   dolfinx::fem::apply_lifting_petsc(b.vec(), {a}, {constants_L},
-                                    {&coeffs_L}, {{bc}}, {}, 1.0);
+                                    {{coeffs_L.first, coeffs_L.second}}, {{bc}},
+                                    {}, 1.0);
   VecGhostUpdateBegin(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   VecGhostUpdateEnd(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   dolfinx::fem::set_bc_petsc(b.vec(), {bc}, nullptr);
