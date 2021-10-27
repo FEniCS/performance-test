@@ -98,8 +98,9 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
   std::vector fs_elasticity
       = {functionspace_form_Elasticity_a1, functionspace_form_Elasticity_a2,
          functionspace_form_Elasticity_a3};
-  auto V = dolfinx::fem::create_functionspace(*fs_elasticity.at(order - 1),
-                                              "v_0", mesh);
+  auto V = std::make_shared<dolfinx::fem::FunctionSpace>(
+      dolfinx::fem::create_functionspace(*fs_elasticity.at(order - 1), "v_0",
+                                         mesh));
 
   t0.stop();
 
@@ -115,9 +116,8 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
   // Find facets with bc applied
   const std::vector<std::int32_t> bc_facets = dolfinx::mesh::locate_entities(
       *mesh, tdim - 1,
-      [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1> {
-        return xt::isclose(xt::row(x, 1), 0.0);
-      });
+      [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1>
+      { return xt::isclose(xt::row(x, 1), 0.0); });
 
   // Find constrained dofs
   const std::vector<std::int32_t> bdofs
