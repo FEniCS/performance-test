@@ -36,8 +36,9 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
       = {functionspace_form_Poisson_a1, functionspace_form_Poisson_a2,
          functionspace_form_Poisson_a3};
 
-  auto V = dolfinx::fem::create_functionspace(*fs_poisson_a.at(order - 1),
-                                              "v_0", mesh);
+  auto V = std::make_shared<dolfinx::fem::FunctionSpace>(
+      dolfinx::fem::create_functionspace(*fs_poisson_a.at(order - 1), "v_0",
+                                         mesh));
 
   t0.stop();
 
@@ -78,10 +79,8 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
         return 10 * xt::exp(-(dx) / 0.02);
       });
 
-  g->interpolate(
-      [](const xt::xtensor<double, 2>& x) -> xt::xarray<PetscScalar> {
-        return xt::sin(5.0 * xt::row(x, 0));
-      });
+  g->interpolate([](const xt::xtensor<double, 2>& x) -> xt::xarray<PetscScalar>
+                 { return xt::sin(5.0 * xt::row(x, 0)); });
   t3.stop();
 
   std::vector form_poisson_L
