@@ -19,9 +19,12 @@
 #include <dolfinx/la/PETScMatrix.h>
 #include <dolfinx/la/PETScVector.h>
 #include <dolfinx/mesh/Mesh.h>
+#include <dolfinx/mesh/utils.h>
 #include <memory>
+#include <petscsys.h>
 #include <utility>
 #include <xtensor/xarray.hpp>
+#include <xtensor/xmath.hpp>
 #include <xtensor/xview.hpp>
 
 std::tuple<std::shared_ptr<dolfinx::la::Vector<PetscScalar>>,
