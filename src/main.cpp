@@ -20,6 +20,7 @@
 #include <dolfinx/la/Vector.h>
 #include <string>
 #include <utility>
+#include <petscsys.h>
 
 namespace po = boost::program_options;
 

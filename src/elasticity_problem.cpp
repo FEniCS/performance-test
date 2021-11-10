@@ -21,9 +21,12 @@
 #include <dolfinx/la/utils.h>
 #include <dolfinx/mesh/Geometry.h>
 #include <dolfinx/mesh/Mesh.h>
+#include <dolfinx/mesh/utils.h>
 #include <memory>
+#include <petscsys.h>
 #include <utility>
 #include <xtensor/xarray.hpp>
+#include <xtensor/xmath.hpp>
 #include <xtensor/xview.hpp>
 
 namespace
