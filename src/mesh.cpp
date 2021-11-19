@@ -124,11 +124,13 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
 
 #ifdef HAS_PARMETIS
   auto graph_part = dolfinx::graph::parmetis::partitioner();
-#elif HAS_SCOTCH
+#elif HAS_PTSCOTCH
   auto graph_part = dolfinx::graph::scotch::partitioner(
       dolfinx::graph::scotch::strategy::scalability);
 #elif HAS_KAHIP
     auto graph_part = dolfinx::graph::kahip::partitioner();
+#else
+    #error "No mesh partitioner has been selected"
 #endif
   
   auto cell_part
