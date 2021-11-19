@@ -9,7 +9,7 @@
 #include <dolfinx/fem/ElementDofLayout.h>
 #include <dolfinx/generation/BoxMesh.h>
 #include <dolfinx/graph/AdjacencyList.h>
-#include <dolfinx/graph/scotch.h>
+#include <dolfinx/graph/partitioners.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx/mesh/cell_types.h>
@@ -122,8 +122,17 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
     }
   }
 
+#ifdef HAS_PARMETIS
+  auto graph_part = dolfinx::graph::parmetis::partitioner();
+#elif HAS_PTSCOTCH
   auto graph_part = dolfinx::graph::scotch::partitioner(
       dolfinx::graph::scotch::strategy::scalability);
+#elif HAS_KAHIP
+    auto graph_part = dolfinx::graph::kahip::partitioner();
+#else
+    #error "No mesh partitioner has been selected"
+#endif
+  
   auto cell_part
       = [graph_part](MPI_Comm comm, int nparts, int tdim,
                      const dolfinx::graph::AdjacencyList<std::int64_t>& cells,
@@ -132,6 +141,8 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
     return dolfinx::mesh::partition_cells_graph(comm, nparts, tdim, cells,
                                                 ghost_mode, graph_part);
   };
+
+  
   auto mesh = dolfinx::generation::BoxMesh::create(
       comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz},
       dolfinx::mesh::CellType::tetrahedron, dolfinx::mesh::GhostMode::none,
