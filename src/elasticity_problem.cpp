@@ -185,7 +185,8 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
   const auto coeffs_a = dolfinx::fem::pack_coefficients(*a);
   dolfinx::fem::assemble_matrix(
       dolfinx::la::PETScMatrix::set_block_fn(A->mat(), ADD_VALUES), *a,
-      tcb::make_span(constants_a), {coeffs_a.first, coeffs_a.second}, {bc});
+      tcb::make_span(constants_a),
+      dolfinx::fem::make_coefficients_span(coeffs_a), {bc});
   MatAssemblyBegin(A->mat(), MAT_FLUSH_ASSEMBLY);
   MatAssemblyEnd(A->mat(), MAT_FLUSH_ASSEMBLY);
   dolfinx::fem::set_diagonal(
@@ -208,11 +209,11 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
   dolfinx::common::Timer t3("ZZZ Assemble vector");
   const std::vector constants_L = dolfinx::fem::pack_constants(*L);
   const auto coeffs_L = dolfinx::fem::pack_coefficients(*L);
-  dolfinx::fem::assemble_vector_petsc(b.vec(), *L, constants_L,
-                                      {coeffs_L.first, coeffs_L.second});
-  dolfinx::fem::apply_lifting_petsc(b.vec(), {a}, {constants_L},
-                                    {{coeffs_L.first, coeffs_L.second}}, {{bc}},
-                                    {}, 1.0);
+  dolfinx::fem::assemble_vector_petsc(
+      b.vec(), *L, constants_L, dolfinx::fem::make_coefficients_span(coeffs_L));
+  dolfinx::fem::apply_lifting_petsc(
+      b.vec(), {a}, {constants_L},
+      {dolfinx::fem::make_coefficients_span(coeffs_L)}, {{bc}}, {}, 1.0);
   VecGhostUpdateBegin(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   VecGhostUpdateEnd(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   dolfinx::fem::set_bc_petsc(b.vec(), {bc}, nullptr);
