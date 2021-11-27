@@ -128,11 +128,11 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
   auto graph_part = dolfinx::graph::scotch::partitioner(
       dolfinx::graph::scotch::strategy::scalability);
 #elif HAS_KAHIP
-    auto graph_part = dolfinx::graph::kahip::partitioner();
+  auto graph_part = dolfinx::graph::kahip::partitioner();
 #else
-    #error "No mesh partitioner has been selected"
+#error "No mesh partitioner has been selected"
 #endif
-  
+
   auto cell_part
       = [graph_part](MPI_Comm comm, int nparts, int tdim,
                      const dolfinx::graph::AdjacencyList<std::int64_t>& cells,
@@ -142,13 +142,12 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
                                                 ghost_mode, graph_part);
   };
 
-  
   auto mesh = dolfinx::generation::BoxMesh::create(
       comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz},
       dolfinx::mesh::CellType::tetrahedron, dolfinx::mesh::GhostMode::none,
       cell_part);
 
-  if (dolfinx::MPI::rank(mesh.mpi_comm()) == 0)
+  if (dolfinx::MPI::rank(mesh.comm()) == 0)
   {
     std::cout << "UnitCube (" << Nx << "x" << Ny << "x" << Nz
               << ") to be refined " << r << " times\n";
