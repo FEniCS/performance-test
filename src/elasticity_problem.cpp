@@ -33,7 +33,8 @@ namespace
 {
 // Function to compute the near nullspace for elasticity - it is made up
 // of the six rigid body modes
-dolfinx::la::VectorSpaceBasis
+// dolfinx::la::VectorSpaceBasis
+std::vector<dolfinx::la::Vector<PetscScalar>>
 build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
 {
   // Create vectors for nullspace basis
@@ -41,52 +42,45 @@ build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
   int bs = V.dofmap()->index_map_bs();
   const std::int32_t length_block = map->size_local() + map->num_ghosts();
   const std::int32_t length = bs * length_block;
-  xt::xtensor<PetscScalar, 2> basis = xt::zeros<PetscScalar>({length, 6});
+  //   std::array<dolfinx::la::Vector<PetscScalar>, 6> basis;
+  //   std::fill(basis.begin(), basis.end(),
+  //   dolfinx::la::Vector<PetscScalar>(map, bs));
+  std::vector<dolfinx::la::Vector<PetscScalar>> basis(
+      6, dolfinx::la::Vector<PetscScalar>(map, bs));
 
   // x0, x1, x2 translations
   for (int k = 0; k < 3; ++k)
   {
+    xtl::span<PetscScalar> x = basis[k].mutable_array();
     for (std::int32_t i = 0; i < length_block; ++i)
-      basis(bs * i + k, k) = 1.0;
+      x[bs * i + k] = 1.0;
   }
 
   // Rotations
+  auto x3 = basis[3].mutable_array();
+  auto x4 = basis[4].mutable_array();
+  auto x5 = basis[5].mutable_array();
+
   const xt::xtensor<double, 2> x = V.tabulate_dof_coordinates(false);
   auto& dofs = V.dofmap()->list().array();
   for (int i = 0; i < dofs.size(); ++i)
   {
-    basis(bs * dofs[i] + 0, 3) = -x(dofs[i], 1);
-    basis(bs * dofs[i] + 1, 3) = x(dofs[i], 0);
+    x3[bs * dofs[i] + 0] = -x(dofs[i], 1);
+    x3[bs * dofs[i] + 1] = x(dofs[i], 0);
 
-    basis(bs * dofs[i] + 0, 4) = x(dofs[i], 2);
-    basis(bs * dofs[i] + 2, 4) = -x(dofs[i], 0);
+    x4[bs * dofs[i] + 0] = x(dofs[i], 2);
+    x4[bs * dofs[i] + 2] = -x(dofs[i], 0);
 
-    basis(bs * dofs[i] + 2, 5) = x(dofs[i], 1);
-    basis(bs * dofs[i] + 1, 5) = -x(dofs[i], 2);
-  }
-
-  const std::int32_t size = map->size_local() * bs;
-  const std::int64_t size_global = map->size_global() * bs;
-  std::vector<std::shared_ptr<dolfinx::la::PETScVector>> basis_vec;
-  for (int i = 0; i < 6; ++i)
-  {
-    Vec vec0, vec1;
-    xt::xarray<PetscScalar> basis_row = xt::col(basis, i);
-    VecCreateMPIWithArray(V.mesh()->comm(), 3, size, size_global,
-                          basis_row.data(), &vec0);
-    VecDuplicate(vec0, &vec1);
-    VecCopy(vec0, vec1);
-    VecDestroy(&vec0);
-    basis_vec.push_back(
-        std::make_shared<dolfinx::la::PETScVector>(vec1, false));
+    x5[bs * dofs[i] + 2] = x(dofs[i], 1);
+    x5[bs * dofs[i] + 1] = -x(dofs[i], 2);
   }
 
   // Create vector space and orthonormalize
-  dolfinx::la::VectorSpaceBasis vector_space(basis_vec);
-  vector_space.orthonormalize();
-  if (!vector_space.is_orthonormal())
-    throw std::runtime_error("Space not orthonormal");
-  return vector_space;
+  dolfinx::la::orthonormalize(tcb::make_span(basis));
+  //   if (!dolfinx::la::is_orthonormal(basis))
+  //     throw std::runtime_error("Space not orthonormal");
+
+  return basis;
 }
 } // namespace
 
@@ -225,8 +219,20 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
   auto u = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
 
   // Build near-nullspace and attach to matrix
-  dolfinx::la::VectorSpaceBasis nullspace = build_near_nullspace(*V);
-  A->set_near_nullspace(nullspace);
+  std::vector<dolfinx::la::Vector<PetscScalar>> nullspace
+      = build_near_nullspace(*V);
+  auto map = V->dofmap()->index_map;
+  int bs = V->dofmap()->index_map_bs();
+  std::int32_t length = bs * map->size_local();
+  std::vector<xtl::span<const PetscScalar>> basis;
+  std::transform(
+      nullspace.cbegin(), nullspace.cend(), std::back_inserter(basis),
+      [length](auto& x) { return xtl::span(x.array().data(), length); });
+
+  //   A->set_near_nullspace(nullspace);
+  MatNullSpace ns = dolfinx::la::create_petsc_nullspace(mesh->comm(), basis);
+  A->set_near_nullspace(ns);
+  MatNullSpaceDestroy(&ns);
 
   t4.stop();
 
