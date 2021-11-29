@@ -17,7 +17,7 @@
 #include <dolfinx/la/PETScKrylovSolver.h>
 #include <dolfinx/la/PETScMatrix.h>
 #include <dolfinx/la/PETScVector.h>
-#include <dolfinx/la/VectorSpaceBasis.h>
+#include <dolfinx/la/Vector.h>
 #include <dolfinx/la/utils.h>
 #include <dolfinx/mesh/Geometry.h>
 #include <dolfinx/mesh/Mesh.h>
@@ -40,11 +40,8 @@ build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
   // Create vectors for nullspace basis
   auto map = V.dofmap()->index_map;
   int bs = V.dofmap()->index_map_bs();
-  const std::int32_t length_block = map->size_local() + map->num_ghosts();
-  const std::int32_t length = bs * length_block;
-  //   std::array<dolfinx::la::Vector<PetscScalar>, 6> basis;
-  //   std::fill(basis.begin(), basis.end(),
-  //   dolfinx::la::Vector<PetscScalar>(map, bs));
+  std::int32_t length_block = map->size_local() + map->num_ghosts();
+  std::int32_t length = bs * length_block;
   std::vector<dolfinx::la::Vector<PetscScalar>> basis(
       6, dolfinx::la::Vector<PetscScalar>(map, bs));
 
@@ -77,8 +74,11 @@ build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
 
   // Create vector space and orthonormalize
   dolfinx::la::orthonormalize(tcb::make_span(basis));
-  //   if (!dolfinx::la::is_orthonormal(basis))
-  //     throw std::runtime_error("Space not orthonormal");
+  if (!dolfinx::la::is_orthonormal(
+          tcb::span<const decltype(basis)::value_type>(basis)))
+  {
+    throw std::runtime_error("Space not orthonormal");
+  }
 
   return basis;
 }
