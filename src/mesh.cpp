@@ -346,23 +346,14 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   {
     // Trial step
     mesh->topology_mutable().create_entities(1);
+    std::vector<std::int32_t> marked_edges;
     const std::int32_t num_edges = mesh->topology().index_map(1)->size_local();
-    std::vector<std::int32_t> mesh_indices;
-    std::vector<std::int8_t> mesh_tags;
     for (int i = 0; i < num_edges; ++i)
-    {
       if (i % 2000 < nmarked)
-      {
-        mesh_indices.push_back(i);
-        mesh_tags.push_back(1);
-      }
-    }
-    dolfinx::mesh::MeshTags<std::int8_t> marker(mesh, 1, mesh_indices,
-                                                mesh_tags);
+        marked_edges.push_back(i);
 
-    mesh->topology_mutable().create_connectivity(1, 1);
     meshi = std::make_shared<dolfinx::mesh::Mesh>(
-        dolfinx::refinement::refine(*mesh, marker, false));
+        dolfinx::refinement::refine(*mesh, marked_edges, false));
 
     double actual_fraction
         = (double)(meshi->topology().index_map(0)->size_global()
