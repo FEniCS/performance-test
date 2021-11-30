@@ -33,8 +33,8 @@ namespace
 {
 // Function to compute the near nullspace for elasticity - it is made up
 // of the six rigid body modes
-std::vector<dolfinx::la::Vector<PetscScalar>>
-build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
+// std::vector<dolfinx::la::Vector<PetscScalar>>
+MatNullSpace build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
 {
   // Create vectors for nullspace basis
   auto map = V.dofmap()->index_map;
@@ -71,7 +71,7 @@ build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
     x5[bs * dofs[i] + 1] = -x(dofs[i], 2);
   }
 
-  // Create vector space and orthonormalize
+  // Orthonormalize basis
   dolfinx::la::orthonormalize(tcb::make_span(basis));
   if (!dolfinx::la::is_orthonormal(
           tcb::span<const decltype(basis)::value_type>(basis)))
@@ -79,7 +79,20 @@ build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
     throw std::runtime_error("Space not orthonormal");
   }
 
-  return basis;
+  // Build PETSc nullspace object
+  std::int32_t length0 = bs * map->size_local();
+  std::vector<xtl::span<const PetscScalar>> basis_local;
+  std::transform(basis.cbegin(), basis.cend(), std::back_inserter(basis_local),
+                 [length0](auto& x)
+                 { return xtl::span(x.array().data(), length0); });
+
+  MPI_Comm comm = V.mesh()->comm();
+  std::vector<Vec> v = dolfinx::la::petsc::create_vectors(comm, basis_local);
+  MatNullSpace ns = dolfinx::la::petsc::create_nullspace(comm, v);
+  for (auto _v : v)
+    VecDestroy(&_v);
+
+  return ns;
 }
 } // namespace
 
@@ -218,23 +231,9 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
   auto u = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
 
   // Build near-nullspace and attach to matrix
-  std::vector<dolfinx::la::Vector<PetscScalar>> nullspace
-      = build_near_nullspace(*V);
-
-  auto map = V->dofmap()->index_map;
-  int bs = V->dofmap()->index_map_bs();
-  std::int32_t length = bs * map->size_local();
-  std::vector<xtl::span<const PetscScalar>> basis;
-  std::transform(
-      nullspace.cbegin(), nullspace.cend(), std::back_inserter(basis),
-      [length](auto& x) { return xtl::span(x.array().data(), length); });
-
-  std::vector<Vec> v = dolfinx::la::petsc::create_vectors(mesh->comm(), basis);
-  MatNullSpace ns = dolfinx::la::petsc::create_nullspace(mesh->comm(), v);
+  MatNullSpace ns = build_near_nullspace(*V);
   MatSetNearNullSpace(A->mat(), ns);
   MatNullSpaceDestroy(&ns);
-  for (auto _v : v)
-    VecDestroy(&_v);
 
   t4.stop();
 
