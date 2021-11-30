@@ -37,7 +37,7 @@ jobs:
         with:
           path: ./dolfinx
           repository: FEniCS/dolfinx
-          ref: main
+          ref: garth/vector-space
 
       - name: Install FEniCS Python components
         run: |

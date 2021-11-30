@@ -33,7 +33,6 @@ namespace
 {
 // Function to compute the near nullspace for elasticity - it is made up
 // of the six rigid body modes
-// dolfinx::la::VectorSpaceBasis
 std::vector<dolfinx::la::Vector<PetscScalar>>
 build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
 {
@@ -113,8 +112,9 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
   // Find facets with bc applied
   const std::vector<std::int32_t> bc_facets = dolfinx::mesh::locate_entities(
       *mesh, tdim - 1,
-      [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1>
-      { return xt::isclose(xt::row(x, 1), 0.0); });
+      [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1> {
+        return xt::isclose(xt::row(x, 1), 0.0);
+      });
 
   // Find constrained dofs
   const std::vector<std::int32_t> bdofs
@@ -170,7 +170,7 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
   dolfinx::la::Vector<PetscScalar> bx(
       L->function_spaces()[0]->dofmap()->index_map,
       L->function_spaces()[0]->dofmap()->index_map_bs());
-  Vec b_vec = dolfinx::la::create_ghosted_vector(
+  Vec b_vec = dolfinx::la::create_petsc_ghosted_vector(
       *(bx.map()), bx.bs(), tcb::span<PetscScalar>(bx.mutable_array()));
   dolfinx::la::PETScVector b(b_vec, false);
 
@@ -221,6 +221,7 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
   // Build near-nullspace and attach to matrix
   std::vector<dolfinx::la::Vector<PetscScalar>> nullspace
       = build_near_nullspace(*V);
+
   auto map = V->dofmap()->index_map;
   int bs = V->dofmap()->index_map_bs();
   std::int32_t length = bs * map->size_local();
@@ -229,10 +230,12 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
       nullspace.cbegin(), nullspace.cend(), std::back_inserter(basis),
       [length](auto& x) { return xtl::span(x.array().data(), length); });
 
-  //   A->set_near_nullspace(nullspace);
-  MatNullSpace ns = dolfinx::la::create_petsc_nullspace(mesh->comm(), basis);
-  A->set_near_nullspace(ns);
+  std::vector<Vec> v = dolfinx::la::create_petsc_vectors(mesh->comm(), basis);
+  MatNullSpace ns = dolfinx::la::create_petsc_nullspace(mesh->comm(), v);
+  MatSetNearNullSpace(A->mat(), ns);
   MatNullSpaceDestroy(&ns);
+  for (auto _v : v)
+    VecDestroy(&_v);
 
   t4.stop();
 
@@ -249,7 +252,7 @@ elastic::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
     // Wrap dolfinx::la::Vector
     dolfinx::la::Vector<PetscScalar>& bnc
         = const_cast<dolfinx::la::Vector<PetscScalar>&>(b);
-    Vec b_petsc = dolfinx::la::create_ghosted_vector(
+    Vec b_petsc = dolfinx::la::create_petsc_ghosted_vector(
         *(b.map()), b.bs(), tcb::span<PetscScalar>(bnc.mutable_array()));
 
     // Solve
