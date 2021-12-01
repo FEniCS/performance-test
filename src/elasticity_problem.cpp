@@ -33,7 +33,6 @@ namespace
 {
 // Function to compute the near nullspace for elasticity - it is made up
 // of the six rigid body modes
-// std::vector<dolfinx::la::Vector<PetscScalar>>
 MatNullSpace build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
 {
   // Create vectors for nullspace basis
