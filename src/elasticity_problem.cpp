@@ -38,12 +38,11 @@ MatNullSpace build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
   // Create vectors for nullspace basis
   auto map = V.dofmap()->index_map;
   int bs = V.dofmap()->index_map_bs();
-  std::int32_t length_block = map->size_local() + map->num_ghosts();
-  std::int32_t length = bs * length_block;
   std::vector<dolfinx::la::Vector<PetscScalar>> basis(
       6, dolfinx::la::Vector<PetscScalar>(map, bs));
 
   // x0, x1, x2 translations
+  std::int32_t length_block = map->size_local() + map->num_ghosts();
   for (int k = 0; k < 3; ++k)
   {
     xtl::span<PetscScalar> x = basis[k].mutable_array();
@@ -79,18 +78,15 @@ MatNullSpace build_near_nullspace(const dolfinx::fem::FunctionSpace& V)
   }
 
   // Build PETSc nullspace object
-  std::int32_t length0 = bs * map->size_local();
+  std::int32_t length = bs * map->size_local();
   std::vector<xtl::span<const PetscScalar>> basis_local;
   std::transform(basis.cbegin(), basis.cend(), std::back_inserter(basis_local),
-                 [length0](auto& x)
-                 { return xtl::span(x.array().data(), length0); });
-
+                 [length](auto& x)
+                 { return xtl::span(x.array().data(), length); });
   MPI_Comm comm = V.mesh()->comm();
   std::vector<Vec> v = dolfinx::la::petsc::create_vectors(comm, basis_local);
   MatNullSpace ns = dolfinx::la::petsc::create_nullspace(comm, v);
-  for (auto _v : v)
-    VecDestroy(&_v);
-
+  std::for_each(v.begin(), v.end(), [](auto v) { VecDestroy(&v); });
   return ns;
 }
 } // namespace
