@@ -102,9 +102,9 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
       {}, {}));
 
   // Create matrices and vector, and assemble system
-  std::shared_ptr<dolfinx::la::PETScMatrix> A
-      = std::make_shared<dolfinx::la::PETScMatrix>(
-          dolfinx::fem::create_matrix(*a), false);
+  std::shared_ptr<dolfinx::la::petsc::Matrix> A
+      = std::make_shared<dolfinx::la::petsc::Matrix>(
+          dolfinx::fem::petsc::create_matrix(*a), false);
 
   // Wrap la::Vector with Petsc Vec
   dolfinx::la::Vector<PetscScalar> bx(
@@ -112,19 +112,19 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
       L->function_spaces()[0]->dofmap()->index_map_bs());
   Vec b_vec = dolfinx::la::petsc::create_vector_wrap(
       *(bx.map()), bx.bs(), tcb::span<PetscScalar>(bx.mutable_array()));
-  dolfinx::la::PETScVector b(b_vec, false);
+  dolfinx::la::petsc::Vector b(b_vec, false);
 
   dolfinx::common::Timer t4("ZZZ Assemble matrix");
   const std::vector constants_a = dolfinx::fem::pack_constants(*a);
   const auto coeffs_a = dolfinx::fem::pack_coefficients(*a);
   dolfinx::fem::assemble_matrix(
-      dolfinx::la::PETScMatrix::set_block_fn(A->mat(), ADD_VALUES), *a,
+      dolfinx::la::petsc::Matrix::set_block_fn(A->mat(), ADD_VALUES), *a,
       tcb::make_span(constants_a),
       dolfinx::fem::make_coefficients_span(coeffs_a), {bc});
   MatAssemblyBegin(A->mat(), MAT_FLUSH_ASSEMBLY);
   MatAssemblyEnd(A->mat(), MAT_FLUSH_ASSEMBLY);
   dolfinx::fem::set_diagonal(
-      dolfinx::la::PETScMatrix::set_fn(A->mat(), INSERT_VALUES), *V, {bc});
+      dolfinx::la::petsc::Matrix::set_fn(A->mat(), INSERT_VALUES), *V, {bc});
   MatAssemblyBegin(A->mat(), MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(A->mat(), MAT_FINAL_ASSEMBLY);
   t4.stop();
@@ -143,28 +143,27 @@ poisson::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh, int order)
   dolfinx::common::Timer t5("ZZZ Assemble vector");
   const std::vector constants_L = dolfinx::fem::pack_constants(*L);
   const auto coeffs_L = dolfinx::fem::pack_coefficients(*L);
-  dolfinx::fem::assemble_vector_petsc(
+  dolfinx::fem::petsc::assemble_vector(
       b.vec(), *L, constants_L, dolfinx::fem::make_coefficients_span(coeffs_L));
-  dolfinx::fem::apply_lifting_petsc(
+  dolfinx::fem::petsc::apply_lifting(
       b.vec(), {a}, {constants_L},
       {dolfinx::fem::make_coefficients_span(coeffs_L)}, {{bc}}, {}, 1.0);
   VecGhostUpdateBegin(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   VecGhostUpdateEnd(b.vec(), ADD_VALUES, SCATTER_REVERSE);
-  dolfinx::fem::set_bc_petsc(b.vec(), {bc}, nullptr);
+  dolfinx::fem::petsc::set_bc(b.vec(), {bc}, nullptr);
   t5.stop();
 
   t1.stop();
 
   // Create Function to hold solution
   auto u = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
-
   std::function<int(dolfinx::fem::Function<PetscScalar>&,
                     const dolfinx::la::Vector<PetscScalar>&)>
       solver_function = [A](dolfinx::fem::Function<PetscScalar>& u,
                             const dolfinx::la::Vector<PetscScalar>& b)
   {
     // Create solver
-    dolfinx::la::PETScKrylovSolver solver(MPI_COMM_WORLD);
+    dolfinx::la::petsc::KrylovSolver solver(MPI_COMM_WORLD);
     solver.set_from_options();
     solver.set_operator(A->mat());
 
