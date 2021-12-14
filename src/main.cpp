@@ -18,9 +18,9 @@
 #include <dolfinx/fem/utils.h>
 #include <dolfinx/io/XDMFFile.h>
 #include <dolfinx/la/Vector.h>
-#include <petscsys.h>
 #include <string>
 #include <utility>
+#include <petscsys.h>
 
 namespace po = boost::program_options;
 
@@ -29,92 +29,16 @@ void solve(int argc, char* argv[])
   po::options_description desc("Allowed options");
   desc.add_options()("help,h", "print usage message")(
       "problem_type", po::value<std::string>()->default_value("poisson"),
-      "problem (poisson or elasticity)")("mesh_type",
-                                         po::value<std::string>()
-                                             ->default_value("cube"),
-                                         "mesh (cube or unstructured)")("scalin"
-                                                                        "g_"
-                                                                        "type",
-                                                                        po::value<
-                                                                            std::
-                                                                                string>()
-                                                                            ->default_value(
-                                                                                "weak"),
-                                                                        "scalin"
-                                                                        "g "
-                                                                        "(weak "
-                                                                        "or "
-                                                                        "strong"
-                                                                        ")")("o"
-                                                                             "u"
-                                                                             "t"
-                                                                             "p"
-                                                                             "u"
-                                                                             "t",
-                                                                             po::value<
-                                                                                 std::
-                                                                                     string>()
-                                                                                 ->default_value(
-                                                                                     ""),
-                                                                             "o"
-                                                                             "u"
-                                                                             "t"
-                                                                             "p"
-                                                                             "u"
-                                                                             "t"
-                                                                             " "
-                                                                             "d"
-                                                                             "i"
-                                                                             "r"
-                                                                             "e"
-                                                                             "c"
-                                                                             "t"
-                                                                             "o"
-                                                                             "r"
-                                                                             "y"
-                                                                             " "
-                                                                             "("
-                                                                             "n"
-                                                                             "o"
-                                                                             " "
-                                                                             "o"
-                                                                             "u"
-                                                                             "t"
-                                                                             "p"
-                                                                             "u"
-                                                                             "t"
-                                                                             " "
-                                                                             "u"
-                                                                             "n"
-                                                                             "l"
-                                                                             "e"
-                                                                             "s"
-                                                                             "s"
-                                                                             " "
-                                                                             "t"
-                                                                             "h"
-                                                                             "i"
-                                                                             "s"
-                                                                             " "
-                                                                             "i"
-                                                                             "s"
-                                                                             " "
-                                                                             "s"
-                                                                             "e"
-                                                                             "t"
-                                                                             ")")("ndofs",
-                                                                                  po::value<
-                                                                                      std::
-                                                                                          size_t>()
-                                                                                      ->default_value(
-                                                                                          50000),
-                                                                                  "number of degrees of freedom")("order",
-                                                                                                                  po::value<
-                                                                                                                      std::
-                                                                                                                          size_t>()
-                                                                                                                      ->default_value(
-                                                                                                                          1),
-                                                                                                                  "polynomial order");
+      "problem (poisson or elasticity)")(
+      "mesh_type", po::value<std::string>()->default_value("cube"),
+      "mesh (cube or unstructured)")(
+      "scaling_type", po::value<std::string>()->default_value("weak"),
+      "scaling (weak or strong)")(
+      "output", po::value<std::string>()->default_value(""),
+      "output directory (no output unless this is set)")(
+      "ndofs", po::value<std::size_t>()->default_value(50000),
+      "number of degrees of freedom")(
+      "order", po::value<std::size_t>()->default_value(1), "polynomial order");
 
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv)
@@ -172,8 +96,7 @@ void solve(int argc, char* argv[])
   }
   t0.stop();
 
-  dolfinx::common::Timer t_ent(
-      "ZZZ Create facets and facet->cell connectivity");
+  dolfinx::common::Timer t_ent("ZZZ Create facets and facet->cell connectivity");
   mesh->topology_mutable().create_entities(2);
   mesh->topology_mutable().create_connectivity(2, 3);
   t_ent.stop();
