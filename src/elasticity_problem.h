@@ -9,6 +9,7 @@
 #include <dolfinx/fem/Function.h>
 #include <dolfinx/la/Vector.h>
 #include <memory>
+#include <petscsys.h>
 #include <utility>
 
 namespace dolfinx::mesh

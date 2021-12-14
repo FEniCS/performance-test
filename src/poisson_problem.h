@@ -10,6 +10,7 @@
 #include <dolfinx/la/Vector.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <memory>
+#include <petscsys.h>
 #include <utility>
 
 namespace poisson
