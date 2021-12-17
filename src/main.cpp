@@ -166,9 +166,8 @@ void solve(int argc, char* argv[])
   // Display timings
   dolfinx::list_timings(MPI_COMM_WORLD, {dolfinx::TimingType::wall});
 
-  PetscReal norm = 0.0;
-  VecNorm(u->vector(), NORM_2, &norm);
   // Report number of Krylov iterations
+  double norm = u->x()->norm();
   if (dolfinx::MPI::rank(MPI_COMM_WORLD) == 0)
   {
     std::cout << "*** Number of Krylov iterations: " << num_iter << std::endl;
