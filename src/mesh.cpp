@@ -7,12 +7,12 @@
 #include <dolfinx/common/log.h>
 #include <dolfinx/fem/CoordinateElement.h>
 #include <dolfinx/fem/ElementDofLayout.h>
-#include <dolfinx/generation/BoxMesh.h>
 #include <dolfinx/graph/AdjacencyList.h>
 #include <dolfinx/graph/partitioners.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx/mesh/cell_types.h>
+#include <dolfinx/mesh/generation.h>
 #include <dolfinx/refinement/refine.h>
 #include <memory>
 #include <xtensor/xfixed.hpp>
@@ -134,7 +134,7 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
 #endif
 
   auto cell_part = dolfinx::mesh::create_cell_partitioner(graph_part);
-  auto mesh = dolfinx::generation::BoxMesh::create(
+  auto mesh = dolfinx::mesh::create_box(
       comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz},
       dolfinx::mesh::CellType::tetrahedron, dolfinx::mesh::GhostMode::none,
       cell_part);
