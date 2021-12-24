@@ -15,9 +15,7 @@
 #include <dolfinx/fem/assembler.h>
 #include <dolfinx/fem/petsc.h>
 #include <dolfinx/fem/utils.h>
-#include <dolfinx/la/PETScKrylovSolver.h>
-#include <dolfinx/la/PETScMatrix.h>
-#include <dolfinx/la/PETScVector.h>
+#include <dolfinx/la/petsc.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/utils.h>
 #include <memory>
@@ -82,10 +80,8 @@ poisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
         return 10 * xt::exp(-(dx) / 0.02);
       });
 
-  g->interpolate(
-      [](const xt::xtensor<double, 2>& x) -> xt::xarray<PetscScalar> {
-        return xt::sin(5.0 * xt::row(x, 0));
-      });
+  g->interpolate([](const xt::xtensor<double, 2>& x) -> xt::xarray<PetscScalar>
+                 { return xt::sin(5.0 * xt::row(x, 0)); });
   t3.stop();
 
   std::vector form_poisson_L

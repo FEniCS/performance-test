@@ -14,10 +14,8 @@
 #include <dolfinx/fem/FunctionSpace.h>
 #include <dolfinx/fem/assembler.h>
 #include <dolfinx/fem/petsc.h>
-#include <dolfinx/la/PETScKrylovSolver.h>
-#include <dolfinx/la/PETScMatrix.h>
-#include <dolfinx/la/PETScVector.h>
 #include <dolfinx/la/Vector.h>
+#include <dolfinx/la/petsc.h>
 #include <dolfinx/la/utils.h>
 #include <dolfinx/mesh/Geometry.h>
 #include <dolfinx/mesh/Mesh.h>
@@ -119,9 +117,8 @@ elastic::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
   // Find facets with bc applied
   const std::vector<std::int32_t> bc_facets = mesh::locate_entities(
       *mesh, tdim - 1,
-      [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1> {
-        return xt::isclose(xt::row(x, 1), 0.0);
-      });
+      [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1>
+      { return xt::isclose(xt::row(x, 1), 0.0); });
 
   // Find constrained dofs
   const std::vector<std::int32_t> bdofs
