@@ -5,15 +5,14 @@
 #include "mesh.h"
 #include <dolfinx/common/MPI.h>
 #include <dolfinx/common/log.h>
-#include <dolfinx/common/types.h>
 #include <dolfinx/fem/CoordinateElement.h>
 #include <dolfinx/fem/ElementDofLayout.h>
-#include <dolfinx/generation/BoxMesh.h>
 #include <dolfinx/graph/AdjacencyList.h>
-#include <dolfinx/graph/scotch.h>
+#include <dolfinx/graph/partitioners.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx/mesh/cell_types.h>
+#include <dolfinx/mesh/generation.h>
 #include <dolfinx/refinement/refine.h>
 #include <memory>
 #include <xtensor/xfixed.hpp>
@@ -123,22 +122,24 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
     }
   }
 
+#ifdef HAS_PARMETIS
+  auto graph_part = dolfinx::graph::parmetis::partitioner();
+#elif HAS_PTSCOTCH
   auto graph_part = dolfinx::graph::scotch::partitioner(
       dolfinx::graph::scotch::strategy::scalability);
-  auto cell_part
-      = [graph_part](MPI_Comm comm, int nparts, int tdim,
-                     const dolfinx::graph::AdjacencyList<std::int64_t>& cells,
-                     dolfinx::mesh::GhostMode ghost_mode)
-  {
-    return dolfinx::mesh::partition_cells_graph(comm, nparts, tdim, cells,
-                                                ghost_mode, graph_part);
-  };
-  auto mesh = dolfinx::generation::BoxMesh::create(
+#elif HAS_KAHIP
+  auto graph_part = dolfinx::graph::kahip::partitioner();
+#else
+#error "No mesh partitioner has been selected"
+#endif
+
+  auto cell_part = dolfinx::mesh::create_cell_partitioner(graph_part);
+  auto mesh = dolfinx::mesh::create_box(
       comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz},
       dolfinx::mesh::CellType::tetrahedron, dolfinx::mesh::GhostMode::none,
       cell_part);
 
-  if (dolfinx::MPI::rank(mesh.mpi_comm()) == 0)
+  if (dolfinx::MPI::rank(mesh.comm()) == 0)
   {
     std::cout << "UnitCube (" << Nx << "x" << Ny << "x" << Nz
               << ") to be refined " << r << " times\n";
@@ -337,23 +338,14 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   {
     // Trial step
     mesh->topology_mutable().create_entities(1);
+    std::vector<std::int32_t> marked_edges;
     const std::int32_t num_edges = mesh->topology().index_map(1)->size_local();
-    std::vector<std::int32_t> mesh_indices;
-    std::vector<std::int8_t> mesh_tags;
     for (int i = 0; i < num_edges; ++i)
-    {
       if (i % 2000 < nmarked)
-      {
-        mesh_indices.push_back(i);
-        mesh_tags.push_back(1);
-      }
-    }
-    dolfinx::mesh::MeshTags<std::int8_t> marker(mesh, 1, mesh_indices,
-                                                mesh_tags);
+        marked_edges.push_back(i);
 
-    mesh->topology_mutable().create_connectivity(1, 1);
     meshi = std::make_shared<dolfinx::mesh::Mesh>(
-        dolfinx::refinement::refine(*mesh, marker, false));
+        dolfinx::refinement::refine(*mesh, marked_edges, false));
 
     double actual_fraction
         = (double)(meshi->topology().index_map(0)->size_global()

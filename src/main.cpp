@@ -22,6 +22,7 @@
 #include <dolfinx/la/Vector.h>
 #include <string>
 #include <utility>
+#include <petscsys.h>
 
 namespace po = boost::program_options;
 
@@ -97,13 +98,14 @@ void solve(int argc, char* argv[])
   }
   t0.stop();
 
-  // Create mesh entity permutations outside of the assembler
-  dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
-  mesh->topology_mutable().create_entity_permutations();
-  tperm.stop();
+  dolfinx::common::Timer t_ent("ZZZ Create facets and facet->cell connectivity");
+  mesh->topology_mutable().create_entities(2);
+  mesh->topology_mutable().create_connectivity(2, 3);
+  t_ent.stop();
 
   if (problem_type == "poisson")
-  { // Create Poisson problem
+  {
+    // Create Poisson problem
     std::tie(b, u, solver_function) = poisson::problem(mesh, order);
   }
   else if (problem_type == "elasticity")
@@ -166,9 +168,8 @@ void solve(int argc, char* argv[])
   // Display timings
   dolfinx::list_timings(MPI_COMM_WORLD, {dolfinx::TimingType::wall});
 
-  PetscReal norm = 0.0;
-  VecNorm(u->vector(), NORM_2, &norm);
   // Report number of Krylov iterations
+  double norm = u->x()->norm();
   if (dolfinx::MPI::rank(MPI_COMM_WORLD) == 0)
   {
     std::cout << "*** Number of Krylov iterations: " << num_iter << std::endl;
