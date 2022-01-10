@@ -14,6 +14,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Get DOLFIN configuration data (DOLFINConfig.cmake must be in
 # DOLFIN_CMAKE_CONFIG_PATH)
 find_package(DOLFINX REQUIRED)
+find_package(Threads)
 
 set(CMAKE_BUILD_TYPE "Release")
 
@@ -47,6 +48,6 @@ set(Boost_VERBOSE TRUE)
 find_package(Boost 1.70 REQUIRED program_options)
 
 # Target libraries
-target_link_libraries(${PROJECT_NAME} dolfinx Boost::program_options)
+target_link_libraries(${PROJECT_NAME} dolfinx Boost::program_options Threads::Threads)
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
