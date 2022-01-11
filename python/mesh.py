@@ -91,7 +91,7 @@ def create_cube_mesh(comm, target_dofs, target_dofs_total, dofs_per_node, order)
         print(f"UnitCube ({Nx}x{Ny}x{Nz}) to be refined {r} times")
 
     for i in range(r):
-        mesh.topology_mutable().create_connectivity(3, 1)
-        mesh = dolfinx.refinement.refine(mesh, false)
+        mesh.topology.create_entities(1)
+        mesh = dolfinx.mesh.refine(mesh, redistribute=False)
 
     return mesh
