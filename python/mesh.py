@@ -3,6 +3,7 @@ import dolfinx
 import dolfinx.graph
 import dolfinx.mesh
 
+
 def num_entities(i, j, k, nrefine):
     nv = (i + 1) * (j + 1) * (k + 1)
     ne = 0
@@ -42,7 +43,8 @@ def num_pdofs(i, j, k, nrefine, order):
         raise ValueError("Order not supported")
 
 
-def create_cube_mesh(comm, target_dofs, target_dofs_total, dofs_per_node, order):
+def create_cube_mesh(comm, target_dofs, target_dofs_total,
+                     dofs_per_node, order):
 
     num_processes = comm.Get_size()
 
@@ -71,7 +73,7 @@ def create_cube_mesh(comm, target_dofs, target_dofs_total, dofs_per_node, order)
     i0 = Nx - 10
     mindiff = 1000000
     for i in range(i0, i0 + 20):
-        for j in range(i - 5, i +5):
+        for j in range(i - 5, i + 5):
             for k in range(i - 5, i + 5):
                 diff = abs(num_pdofs(i, j, k, r, order) - N)
                 if (diff < mindiff):
