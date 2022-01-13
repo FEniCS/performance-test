@@ -22,7 +22,7 @@ namespace
 // Calculate number of vertices, edges, facets, and cells for any given
 // level of refinement
 constexpr std::tuple<std::int64_t, std::int64_t, std::int64_t, std::int64_t>
-num_entities(int i, int j, int k, int nrefine)
+num_entities(std::int64_t i, std::int64_t j, std::int64_t k, int nrefine)
 {
   std::int64_t nv = (i + 1) * (j + 1) * (k + 1);
   std::int64_t ne = 0;
@@ -47,7 +47,9 @@ num_entities(int i, int j, int k, int nrefine)
 
   return {nv, ne, nf, nc};
 }
-std::int64_t num_pdofs(int i, int j, int k, int nrefine, int order)
+
+std::int64_t num_pdofs(std::int64_t i, std::int64_t j, std::int64_t k,
+                       int nrefine, int order)
 {
   auto [nv, ne, nf, nc] = num_entities(i, j, k, nrefine);
 
@@ -91,7 +93,7 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
   while (nc < N)
   {
     ++Nx;
-    if (Nx > 100)
+    if (Nx > 1000)
     {
       Nx = 40;
       ++r;
