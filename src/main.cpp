@@ -133,7 +133,7 @@ void solve(int argc, char* argv[])
     std::cout << "Test problem summary" << std::endl;
     std::cout << "  dolfinx version: " << DOLFINX_VERSION_STRING << std::endl;
     std::cout << "  dolfinx hash:    " << DOLFINX_VERSION_GIT << std::endl;
-    std::cout << "  ufl hash:        " << UFC_SIGNATURE << std::endl;
+    std::cout << "  ufl hash:        " << UFCX_SIGNATURE << std::endl;
     std::cout << "  petsc version:   " << petsc_version << std::endl;
     std::cout << "  Problem type:    " << problem_type << std::endl;
     std::cout << "  Scaling type:    " << scaling_type << std::endl;
