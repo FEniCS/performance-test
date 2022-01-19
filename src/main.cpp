@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2019 Chris N. Richardson and Garth N. Wells
+// Copyright (C) 2017-2022 Chris N. Richardson and Garth N. Wells
 //
 // This file is part of FEniCS-miniapp (https://www.fenicsproject.org)
 //
@@ -18,11 +18,33 @@
 #include <dolfinx/fem/utils.h>
 #include <dolfinx/io/XDMFFile.h>
 #include <dolfinx/la/Vector.h>
+#include <iomanip>
 #include <string>
 #include <utility>
 #include <petscsys.h>
 
 namespace po = boost::program_options;
+
+std::string int64_to_human(std::int64_t n)
+{
+  double r = static_cast<double>(n);
+  const std::string name[] = {"", "thousand", "million", "billion", "trillion"};
+
+  int i = 0;
+  while (r > 1000.0)
+  {
+    r /= 1000.0;
+    i++;
+  }
+  if (i > 4)
+    throw std::runtime_error("number too big");
+
+  std::stringstream s;
+  if (i == 0)
+    return s.str();
+  s << " (" << std::setprecision(3) << r << " " << name[i] << ")";
+  return s.str();
+}
 
 void solve(int argc, char* argv[])
 {
@@ -127,6 +149,8 @@ void solve(int argc, char* argv[])
     const int tdim = mesh->topology().dim();
     const std::int64_t num_cells
         = mesh->topology().index_map(tdim)->size_global();
+    const std::string num_cells_human = int64_to_human(num_cells);
+    const std::string num_dofs_human = int64_to_human(num_dofs);
     std::cout
         << "----------------------------------------------------------------"
         << std::endl;
@@ -138,8 +162,8 @@ void solve(int argc, char* argv[])
     std::cout << "  Problem type:    " << problem_type << std::endl;
     std::cout << "  Scaling type:    " << scaling_type << std::endl;
     std::cout << "  Num processes:   " << num_processes << std::endl;
-    std::cout << "  Num cells        " << num_cells << std::endl;
-    std::cout << "  Total degrees of freedom:               " << num_dofs
+    std::cout << "  Num cells:       " << num_cells << num_cells_human << std::endl;
+    std::cout << "  Total degrees of freedom:               " << num_dofs << num_dofs_human
               << std::endl;
     std::cout << "  Average degrees of freedom per process: "
               << num_dofs / dolfinx::MPI::size(MPI_COMM_WORLD) << std::endl;
@@ -177,9 +201,24 @@ void solve(int argc, char* argv[])
 
 int main(int argc, char* argv[])
 {
-  dolfinx::common::subsystem::init_logging(argc, argv);
+  dolfinx::common::Timer t0("Init MPI");
   dolfinx::common::subsystem::init_mpi();
+  t0.stop();
+  dolfinx::common::Timer t1("Init logging");
+  dolfinx::common::subsystem::init_logging(argc, argv);
+  t1.stop();
+  dolfinx::common::Timer t2("Init PETSc");
   dolfinx::common::subsystem::init_petsc(argc, argv);
+  t2.stop();
+
+  // Set the logging thread name to show the process rank
+  // and enable on rank 0 (add more here if desired)
+  const int mpi_rank = dolfinx::MPI::rank(MPI_COMM_WORLD);
+  if (mpi_rank == 0)
+    loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
+
+  std::string thread_name = "RANK: " + std::to_string(mpi_rank);
+  loguru::set_thread_name(thread_name.c_str());
 
   solve(argc, argv);
 
