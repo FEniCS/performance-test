@@ -105,7 +105,8 @@ poisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
 
   common::Timer t4("ZZZ Assemble matrix");
   const std::vector constants_a = fem::pack_constants(*a);
-  const auto coeffs_a = fem::pack_coefficients(*a);
+  auto coeffs_a = fem::allocate_coefficient_storage(*a);
+  fem::pack_coefficients(*a, coeffs_a);
   fem::assemble_matrix(la::petsc::Matrix::set_block_fn(A->mat(), ADD_VALUES),
                        *a, tcb::make_span(constants_a),
                        fem::make_coefficients_span(coeffs_a), {bc});
@@ -123,7 +124,8 @@ poisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
   b.set(0);
   common::Timer t5("ZZZ Assemble vector");
   const std::vector constants_L = fem::pack_constants(*L);
-  const auto coeffs_L = fem::pack_coefficients(*L);
+  auto coeffs_L = fem::allocate_coefficient_storage(*L);
+  fem::pack_coefficients(*L, coeffs_L);
   fem::assemble_vector<PetscScalar>(b.mutable_array(), *L, constants_L,
                                     fem::make_coefficients_span(coeffs_L));
   fem::apply_lifting(b.mutable_array(), {a}, {constants_L},
