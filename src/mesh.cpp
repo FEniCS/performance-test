@@ -13,9 +13,12 @@
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx/mesh/cell_types.h>
 #include <dolfinx/mesh/generation.h>
+#include <dolfinx/mesh/graphbuild.h>
 #include <dolfinx/refinement/refine.h>
 #include <memory>
 #include <xtensor/xfixed.hpp>
+#include <xtensor/xio.hpp>
+#include <xtensor/xtensor.hpp>
 #include <xtensor/xview.hpp>
 
 namespace
@@ -153,6 +156,192 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
     mesh.topology_mutable().create_connectivity(3, 1);
     mesh = dolfinx::refinement::refine(mesh, false);
   }
+
+  return mesh;
+}
+//-----------------------------------------------------------------------------
+dolfinx::mesh::Mesh create_mesh_geometric(MPI_Comm comm,
+                                          std::size_t target_dofs,
+                                          bool target_dofs_total,
+                                          std::size_t dofs_per_node)
+{
+  double target = target_dofs / dofs_per_node;
+  const int mpi_size = dolfinx::MPI::size(comm);
+  const int mpi_rank = dolfinx::MPI::rank(comm);
+  if (!target_dofs_total)
+    target *= mpi_size;
+
+  // number of vertices on one edge
+  double N_edge = std::pow(target, 1.0 / 3.0);
+
+  // Get cube root of number of cores
+  const double px0 = std::pow(static_cast<double>(mpi_size), 1.0 / 3.0);
+  int px = static_cast<int>(px0 + 0.5);
+  if (px == 1)
+    throw std::runtime_error("Too few cores for geometric partitioning");
+
+  while (mpi_size % px > 0)
+  {
+    --px;
+    if (px == 1)
+      throw std::runtime_error(
+          "Unsuitable number of cores for geometric partitioning");
+  }
+
+  const int pypz = mpi_size / px;
+  const double py0 = std::pow(static_cast<double>(pypz), 0.5);
+  int py = static_cast<int>(py0 + 0.5);
+
+  while (pypz % py > 0)
+  {
+    --py;
+    if (py == 1)
+      throw std::runtime_error(
+          "Unsuitable number of cores for geometric partitioning");
+  }
+
+  int pz = pypz / py;
+
+  // Local number of cells in each direction
+  std::int64_t nx = N_edge / px;
+  std::int64_t ny = N_edge / py;
+  std::int64_t nz = N_edge / pz;
+
+  // Global size
+  std::int64_t NX = nx * px;
+  std::int64_t NY = ny * py;
+  std::int64_t NZ = nz * pz;
+
+  // Position in global space
+  int mx = mpi_rank / pypz;
+  int my = (mpi_rank % pypz) / pz;
+  int mz = (mpi_rank % pypz) % pz;
+
+  dolfinx::common::Timer timer("Build BoxMesh");
+  std::vector<std::int64_t> cells(6 * nx * ny * nz * 4);
+
+  // Create tetrahedra
+  std::size_t cp = 0;
+  for (std::int64_t i = 0; i < nx; ++i)
+    for (std::int64_t j = 0; j < ny; ++j)
+      for (std::int64_t k = 0; k < nz; ++k)
+      {
+        const int ix = mx * nx + i;
+        const int iy = my * ny + j;
+        const int iz = mz * nz + k;
+
+        const std::int64_t v0 = iz * (NX + 1) * (NY + 1) + iy * (NX + 1) + ix;
+        const std::int64_t v1 = v0 + 1;
+        const std::int64_t v2 = v0 + (NX + 1);
+        const std::int64_t v3 = v1 + (NX + 1);
+        const std::int64_t v4 = v0 + (NX + 1) * (NY + 1);
+        const std::int64_t v5 = v1 + (NX + 1) * (NY + 1);
+        const std::int64_t v6 = v2 + (NX + 1) * (NY + 1);
+        const std::int64_t v7 = v3 + (NX + 1) * (NY + 1);
+
+        // Note that v0 < v1 < v2 < v3 < vmid
+        xt::xtensor_fixed<std::int64_t, xt::xshape<6, 4>> c
+            = {{v0, v1, v3, v7}, {v0, v1, v7, v5}, {v0, v5, v7, v4},
+               {v0, v3, v2, v7}, {v0, v6, v4, v7}, {v0, v2, v6, v7}};
+
+        std::copy(c.begin(), c.end(), std::next(cells.begin(), cp));
+        cp += 24;
+      }
+
+  // dolfinx::fem::CoordinateElement element(CellType::tetrahedron, 1);
+  // auto [data, offset] = dolfinx::graph::create_adjacency_data(cells);
+
+  std::cout << "nx, ny, nz = " << nx << "," << ny << "," << nz << std::endl;
+
+  std::vector<std::int32_t> offsets(6 * nx * ny * nz + 1, 0);
+  for (std::size_t i = 0; i < offsets.size() - 1; ++i)
+    offsets[i + 1] = offsets[i] + 4;
+
+  dolfinx::fem::CoordinateElement element(dolfinx::mesh::CellType::tetrahedron,
+                                          1);
+
+  auto partitioner =
+      [](MPI_Comm comm, int, int tdim,
+         const dolfinx::graph::AdjacencyList<std::int64_t>& cell_topology,
+         dolfinx::mesh::GhostMode) {
+        // Find out the ghosting information
+        auto [graph, _]
+            = dolfinx::mesh::build_dual_graph(comm, cell_topology, tdim);
+
+        // FIXME: much of this is reverse engineering of data that is already
+        // known in the GraphBuilder
+
+        const int mpi_size = dolfinx::MPI::size(comm);
+        const int mpi_rank = dolfinx::MPI::rank(comm);
+        const std::int32_t local_size = graph.num_nodes();
+        std::vector<std::int32_t> local_sizes(mpi_size);
+        std::vector<std::int64_t> local_offsets(mpi_size + 1);
+
+        // Get the "local range" for all processes
+        MPI_Allgather(&local_size, 1, MPI_INT32_T, local_sizes.data(), 1,
+                      MPI_INT32_T, comm);
+        for (int i = 0; i < mpi_size; ++i)
+          local_offsets[i + 1] = local_offsets[i] + local_sizes[i];
+
+        // All cells should go to their currently assigned ranks (no change)
+        // but must also be sent to their ghost destinations, which are
+        // determined here.
+        std::vector<std::int32_t> destinations;
+        destinations.reserve(graph.num_nodes());
+        std::vector<std::int32_t> dest_offsets = {0};
+        dest_offsets.reserve(graph.num_nodes());
+        for (int i = 0; i < graph.num_nodes(); ++i)
+        {
+          destinations.push_back(mpi_rank);
+          for (int j = 0; j < graph.num_links(i); ++j)
+          {
+            std::int64_t index = graph.links(i)[j];
+            if (index < local_offsets[mpi_rank]
+                or index >= local_offsets[mpi_rank + 1])
+            {
+              // Ghosted cell - identify which process it should be sent to.
+              for (std::size_t k = 0; k < local_offsets.size(); ++k)
+              {
+                if (index >= local_offsets[k] and index < local_offsets[k + 1])
+                {
+                  destinations.push_back(k);
+                  break;
+                }
+              }
+            }
+          }
+          dest_offsets.push_back(destinations.size());
+        }
+
+        return dolfinx::graph::AdjacencyList<std::int32_t>(
+            std::move(destinations), std::move(dest_offsets));
+      };
+
+  std::int64_t npoints_global = (NX + 1) * (NY + 1) * (NZ + 1);
+  std::array<std::int64_t, 2> range
+      = dolfinx::MPI::local_range(mpi_rank, npoints_global, mpi_size);
+  int npoints = range[1] - range[0];
+
+  xt::xtensor<double, 2> geom = xt::zeros<double>({npoints, 3});
+  std::int64_t nlayer = (NX + 1) * (NY + 1);
+  for (std::size_t j = range[0]; j < range[1]; ++j)
+  {
+    std::int64_t ix = j / nlayer;
+    std::int64_t iy = (j % nlayer) / (NY + 1);
+    std::int64_t iz = (j % nlayer) % (NY + 1);
+    geom(j - range[0], 0)
+        = static_cast<double>(ix) / static_cast<double>(NX + 1);
+    geom(j - range[0], 1)
+        = static_cast<double>(iy) / static_cast<double>(NY + 1);
+    geom(j - range[0], 2)
+        = static_cast<double>(iz) / static_cast<double>(NZ + 1);
+  }
+
+  dolfinx::mesh::Mesh mesh = dolfinx::mesh::create_mesh(
+      comm,
+      dolfinx::graph::AdjacencyList<std::int64_t>(std::move(cells),
+                                                  std::move(offsets)),
+      element, geom, dolfinx::mesh::GhostMode::none, partitioner);
 
   return mesh;
 }

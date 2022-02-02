@@ -19,9 +19,9 @@
 #include <dolfinx/io/XDMFFile.h>
 #include <dolfinx/la/Vector.h>
 #include <iomanip>
+#include <petscsys.h>
 #include <string>
 #include <utility>
-#include <petscsys.h>
 
 namespace po = boost::program_options;
 
@@ -113,12 +113,15 @@ void solve(int argc, char* argv[])
   }
   else
   {
-    mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling,
-                             ndofs_per_node);
+    mesh = std::make_shared<dolfinx::mesh::Mesh>(create_mesh_geometric(
+        MPI_COMM_WORLD, ndofs, strong_scaling, ndofs_per_node));
+    //   mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling,
+    //                            ndofs_per_node);
   }
   t0.stop();
 
-  dolfinx::common::Timer t_ent("ZZZ Create facets and facet->cell connectivity");
+  dolfinx::common::Timer t_ent(
+      "ZZZ Create facets and facet->cell connectivity");
   mesh->topology_mutable().create_entities(2);
   mesh->topology_mutable().create_connectivity(2, 3);
   t_ent.stop();
@@ -162,9 +165,10 @@ void solve(int argc, char* argv[])
     std::cout << "  Problem type:    " << problem_type << std::endl;
     std::cout << "  Scaling type:    " << scaling_type << std::endl;
     std::cout << "  Num processes:   " << num_processes << std::endl;
-    std::cout << "  Num cells:       " << num_cells << num_cells_human << std::endl;
-    std::cout << "  Total degrees of freedom:               " << num_dofs << num_dofs_human
+    std::cout << "  Num cells:       " << num_cells << num_cells_human
               << std::endl;
+    std::cout << "  Total degrees of freedom:               " << num_dofs
+              << num_dofs_human << std::endl;
     std::cout << "  Average degrees of freedom per process: "
               << num_dofs / dolfinx::MPI::size(MPI_COMM_WORLD) << std::endl;
     std::cout
