@@ -16,6 +16,7 @@
 #include <dolfinx/refinement/refine.h>
 #include <memory>
 #include <xtensor/xfixed.hpp>
+#include <xtensor/xview.hpp>
 
 namespace
 {
