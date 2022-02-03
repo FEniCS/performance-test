@@ -51,12 +51,14 @@ std::string int64_to_human(std::int64_t n)
 void solve(int argc, char* argv[])
 {
   po::options_description desc("Allowed options");
+  bool mem_profile;
   desc.add_options()("help,h", "print usage message")(
       "problem_type", po::value<std::string>()->default_value("poisson"),
       "problem (poisson or elasticity)")(
       "mesh_type", po::value<std::string>()->default_value("cube"),
       "mesh (cube or unstructured)")(
-      "scaling_type", po::value<std::string>()->default_value("weak"),
+                                     "memory_profiling", po::bool_switch(&mem_profile)->default_value(false), "turn on memory logging")(
+                                     "scaling_type", po::value<std::string>()->default_value("weak"),
       "scaling (weak or strong)")(
       "output", po::value<std::string>()->default_value(""),
       "output directory (no output unless this is set)")(
@@ -85,7 +87,16 @@ void solve(int argc, char* argv[])
   const int order = vm["order"].as<std::size_t>();
   const std::string output_dir = vm["output"].as<std::string>();
   const bool output = (output_dir.size() > 0);
-
+  const int mpi_rank = dolfinx::MPI::rank(MPI_COMM_WORLD);
+  
+  bool quit_flag = false;
+  std::thread mem_thread;
+  
+  if (mem_profile and mpi_rank == 0)
+  {
+    mem_thread = std::thread(process_mem_usage, std::ref(quit_flag));
+  }
+  
   bool strong_scaling;
   if (scaling_type == "strong")
     strong_scaling = true;
@@ -201,6 +212,13 @@ void solve(int argc, char* argv[])
     std::cout << "*** Number of Krylov iterations: " << num_iter << std::endl;
     std::cout << "*** Solution norm:  " << norm << std::endl;
   }
+
+  if (mem_profile and mpi_rank == 0)
+  {
+    quit_flag = true;
+    mem_thread.join();
+  }
+
 }
 
 int main(int argc, char* argv[])
@@ -223,23 +241,9 @@ int main(int argc, char* argv[])
 
   std::string thread_name = "RANK: " + std::to_string(mpi_rank);
   loguru::set_thread_name(thread_name.c_str());
-
-  std::string thread_name
-      = "RANK: " + std::to_string(dolfinx::MPI::rank(MPI_COMM_WORLD));
-  loguru::set_thread_name(thread_name.c_str());
   loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
 
-  const int rank = dolfinx::MPI::rank(MPI_COMM_WORLD);
-  if (rank == 0)
-  {
-    bool quit_flag = false;
-    std::thread mem_thread(process_mem_usage, std::ref(quit_flag));
-    solve(argc, argv);
-    quit_flag = true;
-    mem_thread.join();
-  }
-  else
-    solve(argc, argv);
+  solve(argc, argv);
 
   dolfinx::common::subsystem::finalize_petsc();
   dolfinx::common::subsystem::finalize_mpi();
