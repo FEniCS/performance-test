@@ -212,6 +212,13 @@ dolfinx::mesh::Mesh create_mesh_geometric(MPI_Comm comm,
   std::int64_t NY = ny * py;
   std::int64_t NZ = nz * pz;
 
+  if (mpi_rank == 0)
+  {
+    std::cout << "Mesh size = " << NX * NY * NZ << std::endl;
+    std::cout << "Mesh size per core = " << NX * NY * NZ / mpi_size
+              << std::endl;
+  }
+
   // Position in global space
   int mx = mpi_rank / pypz;
   int my = (mpi_rank % pypz) / pz;
@@ -247,11 +254,6 @@ dolfinx::mesh::Mesh create_mesh_geometric(MPI_Comm comm,
         std::copy(c.begin(), c.end(), std::next(cells.begin(), cp));
         cp += 24;
       }
-
-  // dolfinx::fem::CoordinateElement element(CellType::tetrahedron, 1);
-  // auto [data, offset] = dolfinx::graph::create_adjacency_data(cells);
-
-  std::cout << "nx, ny, nz = " << nx << "," << ny << "," << nz << std::endl;
 
   std::vector<std::int32_t> offsets(6 * nx * ny * nz + 1, 0);
   for (std::size_t i = 0; i < offsets.size() - 1; ++i)
