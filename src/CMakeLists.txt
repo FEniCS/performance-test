@@ -21,14 +21,14 @@ set(CMAKE_BUILD_TYPE "Release")
 
 add_custom_command(
   OUTPUT Poisson.c
-  COMMAND ffcx ${CMAKE_CURRENT_SOURCE_DIR}/Poisson.ufl
-  DEPENDS Poisson.ufl
+  COMMAND ffcx ${CMAKE_CURRENT_SOURCE_DIR}/Poisson.py
+  DEPENDS Poisson.py
 )
 
 add_custom_command(
   OUTPUT Elasticity.c
-  COMMAND ffcx ${CMAKE_CURRENT_SOURCE_DIR}/Elasticity.ufl
-  DEPENDS Elasticity.ufl
+  COMMAND ffcx ${CMAKE_CURRENT_SOURCE_DIR}/Elasticity.py
+  DEPENDS Elasticity.py
 )
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
