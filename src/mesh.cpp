@@ -94,7 +94,7 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
   while (nc < N)
   {
     ++Nx;
-    if (Nx > 1000)
+    if (Nx > 100)
     {
       Nx = 40;
       ++r;
