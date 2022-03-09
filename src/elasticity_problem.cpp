@@ -178,8 +178,8 @@ elastic::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
                        fem::make_coefficients_span(coeffs_a), {bc});
   MatAssemblyBegin(A->mat(), MAT_FLUSH_ASSEMBLY);
   MatAssemblyEnd(A->mat(), MAT_FLUSH_ASSEMBLY);
-  fem::set_diagonal(la::petsc::Matrix::set_fn(A->mat(), INSERT_VALUES), *V,
-                    {bc});
+  fem::set_diagonal<PetscScalar>(
+      la::petsc::Matrix::set_fn(A->mat(), INSERT_VALUES), *V, {bc});
   MatAssemblyBegin(A->mat(), MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(A->mat(), MAT_FINAL_ASSEMBLY);
   t2.stop();
