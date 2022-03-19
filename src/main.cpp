@@ -5,6 +5,7 @@
 // SPDX-License-Identifier:    MIT
 
 #include "elasticity_problem.h"
+#include "mem.h"
 #include "mesh.h"
 #include "poisson_problem.h"
 #include <boost/program_options.hpp>
@@ -19,9 +20,10 @@
 #include <dolfinx/io/XDMFFile.h>
 #include <dolfinx/la/Vector.h>
 #include <iomanip>
-#include <string>
-#include <utility>
 #include <petscsys.h>
+#include <string>
+#include <thread>
+#include <utility>
 
 namespace po = boost::program_options;
 
@@ -49,12 +51,14 @@ std::string int64_to_human(std::int64_t n)
 void solve(int argc, char* argv[])
 {
   po::options_description desc("Allowed options");
+  bool mem_profile;
   desc.add_options()("help,h", "print usage message")(
       "problem_type", po::value<std::string>()->default_value("poisson"),
       "problem (poisson or elasticity)")(
       "mesh_type", po::value<std::string>()->default_value("cube"),
       "mesh (cube or unstructured)")(
-      "scaling_type", po::value<std::string>()->default_value("weak"),
+                                     "memory_profiling", po::bool_switch(&mem_profile)->default_value(false), "turn on memory logging")(
+                                     "scaling_type", po::value<std::string>()->default_value("weak"),
       "scaling (weak or strong)")(
       "output", po::value<std::string>()->default_value(""),
       "output directory (no output unless this is set)")(
@@ -83,7 +87,16 @@ void solve(int argc, char* argv[])
   const int order = vm["order"].as<std::size_t>();
   const std::string output_dir = vm["output"].as<std::string>();
   const bool output = (output_dir.size() > 0);
-
+  const int mpi_rank = dolfinx::MPI::rank(MPI_COMM_WORLD);
+  
+  bool quit_flag = false;
+  std::thread mem_thread;
+  
+  if (mem_profile and mpi_rank == 0)
+  {
+    mem_thread = std::thread(process_mem_usage, std::ref(quit_flag));
+  }
+  
   bool strong_scaling;
   if (scaling_type == "strong")
     strong_scaling = true;
@@ -118,7 +131,8 @@ void solve(int argc, char* argv[])
   }
   t0.stop();
 
-  dolfinx::common::Timer t_ent("ZZZ Create facets and facet->cell connectivity");
+  dolfinx::common::Timer t_ent(
+      "ZZZ Create facets and facet->cell connectivity");
   mesh->topology_mutable().create_entities(2);
   mesh->topology_mutable().create_connectivity(2, 3);
   t_ent.stop();
@@ -162,9 +176,10 @@ void solve(int argc, char* argv[])
     std::cout << "  Problem type:    " << problem_type << std::endl;
     std::cout << "  Scaling type:    " << scaling_type << std::endl;
     std::cout << "  Num processes:   " << num_processes << std::endl;
-    std::cout << "  Num cells:       " << num_cells << num_cells_human << std::endl;
-    std::cout << "  Total degrees of freedom:               " << num_dofs << num_dofs_human
+    std::cout << "  Num cells:       " << num_cells << num_cells_human
               << std::endl;
+    std::cout << "  Total degrees of freedom:               " << num_dofs
+              << num_dofs_human << std::endl;
     std::cout << "  Average degrees of freedom per process: "
               << num_dofs / dolfinx::MPI::size(MPI_COMM_WORLD) << std::endl;
     std::cout
@@ -197,6 +212,13 @@ void solve(int argc, char* argv[])
     std::cout << "*** Number of Krylov iterations: " << num_iter << std::endl;
     std::cout << "*** Solution norm:  " << norm << std::endl;
   }
+
+  if (mem_profile and mpi_rank == 0)
+  {
+    quit_flag = true;
+    mem_thread.join();
+  }
+
 }
 
 int main(int argc, char* argv[])
@@ -219,6 +241,7 @@ int main(int argc, char* argv[])
 
   std::string thread_name = "RANK: " + std::to_string(mpi_rank);
   loguru::set_thread_name(thread_name.c_str());
+  loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
 
   solve(argc, argv);
 
