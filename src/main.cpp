@@ -57,13 +57,18 @@ void solve(int argc, char* argv[])
       "problem (poisson or elasticity)")(
       "mesh_type", po::value<std::string>()->default_value("cube"),
       "mesh (cube or unstructured)")(
-                                     "memory_profiling", po::bool_switch(&mem_profile)->default_value(false), "turn on memory logging")(
-                                     "scaling_type", po::value<std::string>()->default_value("weak"),
-      "scaling (weak or strong)")(
+      "memory_profiling", po::bool_switch(&mem_profile)->default_value(false),
+      "turn on memory logging")("scaling_type",
+                                po::value<std::string>()->default_value("weak"),
+                                "scaling (weak or strong)")(
       "output", po::value<std::string>()->default_value(""),
       "output directory (no output unless this is set)")(
       "ndofs", po::value<std::size_t>()->default_value(50000),
       "number of degrees of freedom")(
+      "max_init_cells_per_dim", po::value<std::size_t>()->default_value(100),
+      "maximum number cells in each direction before refinement")(
+      "target_cells_per_rank", po::value<int>()->default_value(-1),
+      "target number of cells per rank for the graph partitioner")(
       "order", po::value<std::size_t>()->default_value(1), "polynomial order");
 
   po::variables_map vm;
@@ -84,19 +89,24 @@ void solve(int argc, char* argv[])
   const std::string mesh_type = vm["mesh_type"].as<std::string>();
   const std::string scaling_type = vm["scaling_type"].as<std::string>();
   const std::size_t ndofs = vm["ndofs"].as<std::size_t>();
+
+  const std::size_t max_cells_per_dim
+      = vm["max_init_cells_per_dim"].as<std::size_t>();
+  const int target_cells_per_rank = vm["target_cells_per_rank"].as<int>();
+
   const int order = vm["order"].as<std::size_t>();
   const std::string output_dir = vm["output"].as<std::string>();
   const bool output = (output_dir.size() > 0);
   const int mpi_rank = dolfinx::MPI::rank(MPI_COMM_WORLD);
-  
+
   bool quit_flag = false;
   std::thread mem_thread;
-  
+
   if (mem_profile and mpi_rank == 0)
   {
     mem_thread = std::thread(process_mem_usage, std::ref(quit_flag));
   }
-  
+
   bool strong_scaling;
   if (scaling_type == "strong")
     strong_scaling = true;
@@ -121,8 +131,9 @@ void solve(int argc, char* argv[])
   dolfinx::common::Timer t0("ZZZ Create Mesh");
   if (mesh_type == "cube")
   {
-    mesh = std::make_shared<dolfinx::mesh::Mesh>(create_cube_mesh(
-        MPI_COMM_WORLD, ndofs, strong_scaling, ndofs_per_node, order));
+    mesh = std::make_shared<dolfinx::mesh::Mesh>(
+        create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, ndofs_per_node,
+                         max_cells_per_dim, target_cells_per_rank, order));
   }
   else
   {
@@ -218,7 +229,6 @@ void solve(int argc, char* argv[])
     quit_flag = true;
     mem_thread.join();
   }
-
 }
 
 int main(int argc, char* argv[])

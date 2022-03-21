@@ -73,7 +73,9 @@ std::int64_t num_pdofs(std::int64_t i, std::int64_t j, std::int64_t k,
 
 dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
                                      bool target_dofs_total,
-                                     std::size_t dofs_per_node, int order)
+                                     std::size_t dofs_per_node,
+                                     std::size_t max_cells_per_dim,
+                                     int target_cells_per_rank, int order)
 {
   // Get number of processes
   const std::size_t num_processes = dolfinx::MPI::size(comm);
@@ -94,7 +96,7 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
   while (nc < N)
   {
     ++Nx;
-    if (Nx > 100)
+    if (Nx > max_cells_per_dim)
     {
       Nx = 40;
       ++r;
