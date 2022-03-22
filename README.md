@@ -133,6 +133,8 @@ mpirun -np 8 ./dolfinx-scaling-test \
 --problem_type poisson \
 --scaling_type strong \
 --ndofs 10000000 \
+--max_first_mesh_cells_per_dim 20
+--target_first_mesh_cells_part 100000
 -log_view \
 -ksp_view \
 -ksp_type cg \

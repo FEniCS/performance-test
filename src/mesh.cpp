@@ -138,11 +138,30 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
 #error "No mesh partitioner has been selected"
 #endif
 
+
+  MPI_Comm comm1 = comm;
+  const std::size_t ncells = 6 * Nx * Ny * Nz;
+  if (target_cells_per_rank > 0)
+  {
+    assert(target_cells_per_rank > 1);
+    std::size_t nranks
+        = std::max(ncells / target_cells_per_rank, std::size_t(1));
+    nranks = std::min(nranks, num_processes);
+
+    int rank = dolfinx::MPI::rank(comm);
+    // int color = rank == 0 ? 1 : MPI_UNDEFINED;
+    int color = rank < nranks ? 1 : MPI_UNDEFINED;
+    std::cout << "Split: " << rank << ", " << color << std::endl;
+    MPI_Comm_split(comm, color, 0, &comm1);
+  }
+
   auto cell_part = dolfinx::mesh::create_cell_partitioner(graph_part);
   auto mesh = dolfinx::mesh::create_box(
-      comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz},
+      comm, comm1, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz},
       dolfinx::mesh::CellType::tetrahedron, dolfinx::mesh::GhostMode::none,
       cell_part);
+
+  MPI_Comm_free(&comm1);
 
   if (dolfinx::MPI::rank(mesh.comm()) == 0)
   {

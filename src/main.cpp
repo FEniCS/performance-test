@@ -52,24 +52,24 @@ void solve(int argc, char* argv[])
 {
   po::options_description desc("Allowed options");
   bool mem_profile;
-  desc.add_options()("help,h", "print usage message")(
+  desc.add_options()("help,h", "Print usage message")(
       "problem_type", po::value<std::string>()->default_value("poisson"),
-      "problem (poisson or elasticity)")(
+      "Problem (poisson or elasticity)")(
       "mesh_type", po::value<std::string>()->default_value("cube"),
-      "mesh (cube or unstructured)")(
+      "Mesh (cube or unstructured)")(
       "memory_profiling", po::bool_switch(&mem_profile)->default_value(false),
-      "turn on memory logging")("scaling_type",
+      "Turn on memory logging")("scaling_type",
                                 po::value<std::string>()->default_value("weak"),
                                 "scaling (weak or strong)")(
       "output", po::value<std::string>()->default_value(""),
-      "output directory (no output unless this is set)")(
+      "Output directory (no output unless this is set)")(
       "ndofs", po::value<std::size_t>()->default_value(50000),
-      "number of degrees of freedom")(
-      "max_init_cells_per_dim", po::value<std::size_t>()->default_value(100),
-      "maximum number cells in each direction before refinement")(
-      "target_cells_per_rank", po::value<int>()->default_value(-1),
-      "target number of cells per rank for the graph partitioner")(
-      "order", po::value<std::size_t>()->default_value(1), "polynomial order");
+      "Number of degrees of freedom")(
+      "max_first_mesh_cells_per_dim", po::value<std::size_t>()->default_value(100),
+      "Maximum number cells in each direction before refinement")(
+      "target_first_mesh_cells_part", po::value<int>()->default_value(-1),
+      "Target number of cells per rank for the graph partitioner. Set to -1 to use all ranks.")(
+      "order", po::value<std::size_t>()->default_value(1), "Polynomial order");
 
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv)
@@ -91,8 +91,8 @@ void solve(int argc, char* argv[])
   const std::size_t ndofs = vm["ndofs"].as<std::size_t>();
 
   const std::size_t max_cells_per_dim
-      = vm["max_init_cells_per_dim"].as<std::size_t>();
-  const int target_cells_per_rank = vm["target_cells_per_rank"].as<int>();
+      = vm["max_first_mesh_cells_per_dim"].as<std::size_t>();
+  const int target_cells_per_rank = vm["target_first_mesh_cells_part"].as<int>();
 
   const int order = vm["order"].as<std::size_t>();
   const std::string output_dir = vm["output"].as<std::string>();
@@ -251,7 +251,7 @@ int main(int argc, char* argv[])
 
   std::string thread_name = "RANK: " + std::to_string(mpi_rank);
   loguru::set_thread_name(thread_name.c_str());
-  loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
+  // loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
 
   solve(argc, argv);
 
