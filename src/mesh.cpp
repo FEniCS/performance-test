@@ -90,12 +90,12 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
 
   // Choose Nx_max carefully. If too large, the base mesh may become too large
   // for the partitioner; likewise, if too small, it will fail on large
-  // core-counts.
+  // numbers of processes.
   const std::size_t Nx_max = 200;
 
   // Get initial guess for Nx, Ny, Nz, r
   Nx = 1;
-  std::int64_t ndof = 0;
+  std::int64_t ndofs = 0;
   while (ndofs < N)
   {
     // Increase base mesh size
