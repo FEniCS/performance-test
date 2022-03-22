@@ -90,10 +90,9 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
   std::size_t Nx, Ny, Nz;
   int r = 0;
 
-  // Choose Nx_max carefully. If too large, the base mesh may become too large
-  // for the partitioner; likewise, if too small, it will fail on large
-  // numbers of processes.
-  const std::size_t Nx_max = 200;
+  // Choose max_cells_per_dim carefully. If too large, the base mesh may
+  // become too large for the partitioner; likewise, if too small, it
+  // will fail on large numbers of processes.
 
   // Get initial guess for Nx, Ny, Nz, r
   Nx = 1;
@@ -153,20 +152,19 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
 #error "No mesh partitioner has been selected"
 #endif
 
-
   MPI_Comm comm1 = comm;
+  std::size_t nranks = num_processes;
   const std::size_t ncells = 6 * Nx * Ny * Nz;
   if (target_cells_per_rank > 0)
   {
     assert(target_cells_per_rank > 1);
-    std::size_t nranks
-        = std::max(ncells / target_cells_per_rank, std::size_t(1));
+    nranks = std::max(ncells / target_cells_per_rank, std::size_t(1));
     nranks = std::min(nranks, num_processes);
 
+    int ratio = num_processes / nranks;
+    std::cout << "Ratio: " << ratio << std::endl;
     int rank = dolfinx::MPI::rank(comm);
-    // int color = rank == 0 ? 1 : MPI_UNDEFINED;
-    int color = rank < nranks ? 1 : MPI_UNDEFINED;
-    std::cout << "Split: " << rank << ", " << color << std::endl;
+    int color = rank % ratio == 0 ? 1 : MPI_UNDEFINED;
     MPI_Comm_split(comm, color, 0, &comm1);
   }
 
@@ -181,7 +179,8 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
   if (dolfinx::MPI::rank(mesh.comm()) == 0)
   {
     std::cout << "UnitCube (" << Nx << "x" << Ny << "x" << Nz
-              << ") to be refined " << r << " times\n";
+              << ") to be refined " << r << " times using " << nranks << " of "
+              << num_processes << " MPI ranks." << std::endl;
   }
 
   for (int i = 0; i < r; ++i)
