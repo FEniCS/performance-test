@@ -65,7 +65,7 @@ void solve(int argc, char* argv[])
       "output directory (no output unless this is set)")(
       "ndofs", po::value<std::size_t>()->default_value(50000),
       "number of degrees of freedom")(
-      "max_init_cells_per_dim", po::value<std::size_t>()->default_value(100),
+      "max_init_cells_per_dim", po::value<std::size_t>()->default_value(200),
       "maximum number cells in each direction before refinement")(
       "target_cells_per_rank", po::value<int>()->default_value(-1),
       "target number of cells per rank for the graph partitioner")(
