@@ -46,27 +46,30 @@ poisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
 
   common::Timer t1("ZZZ Assemble");
 
-  common::Timer t2("ZZZ Create boundary conditions");
-  // Define boundary condition
-  auto u0 = std::make_shared<fem::Function<PetscScalar>>(V);
-  u0->x()->set(0);
+  std::shared_ptr<fem::DirichletBC<PetscScalar>> bc;
+  {
+    common::Timer t2("ZZZ Create boundary conditions");
 
-  // Find facets with bc applied
-  const int tdim = mesh->topology().dim();
-  const std::vector<std::int32_t> bc_facets = mesh::locate_entities(
-      *mesh, tdim - 1,
-      [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1>
-      {
-        auto x0 = xt::row(x, 0);
-        return xt::isclose(x0, 0.0) or xt::isclose(x0, 1.0);
-      });
+    // Define boundary condition
+    auto u0 = std::make_shared<fem::Function<PetscScalar>>(V);
+    u0->x()->set(0);
 
-  // Find constrained dofs
-  const std::vector<std::int32_t> bdofs
-      = fem::locate_dofs_topological(*V, tdim - 1, bc_facets);
+    // Find facets with bc applied
+    const int tdim = mesh->topology().dim();
+    const std::vector<std::int32_t> bc_facets = mesh::locate_entities(
+        *mesh, tdim - 1,
+        [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1>
+        {
+          auto x0 = xt::row(x, 0);
+          return xt::isclose(x0, 0.0) or xt::isclose(x0, 1.0);
+        });
 
-  auto bc = std::make_shared<fem::DirichletBC<PetscScalar>>(u0, bdofs);
-  t2.stop();
+    // Find constrained dofs
+    const std::vector<std::int32_t> bdofs
+        = fem::locate_dofs_topological(*V, tdim - 1, bc_facets);
+
+    bc = std::make_shared<fem::DirichletBC<PetscScalar>>(u0, bdofs);
+  }
 
   // Define coefficients
   common::Timer t3("ZZZ Create RHS function");
