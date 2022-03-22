@@ -88,26 +88,41 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
   std::size_t Nx, Ny, Nz;
   int r = 0;
 
+  // Choose Nx_max carefully. If too large, the base mesh may become too large
+  // for the partitioner; likewise, if too small, it will fail on large
+  // core-counts.
+  const std::size_t Nx_max = 200;
+
   // Get initial guess for Nx, Ny, Nz, r
   Nx = 1;
-  std::int64_t nc = 0;
-  while (nc < N)
+  std::int64_t ndof = 0;
+  while (ndofs < N)
   {
+    // Increase base mesh size
     ++Nx;
-    if (Nx > 100)
+    if (Nx > Nx_max)
     {
-      Nx = 40;
+      // Base mesh got too big, add a refinement level
+      // This will dramatically ~8x increase the number of dofs
       ++r;
+      while (ndofs > N)
+      {
+        // Shrink base mesh until dofs are back on target
+        --Nx;
+        ndofs = num_pdofs(Nx, Nx, Nx, r, order);
+      }
     }
-    nc = num_pdofs(Nx, Nx, Nx, r, order);
+    ndofs = num_pdofs(Nx, Nx, Nx, r, order);
   }
 
   Ny = Nx;
   Nz = Nx;
 
-  std::size_t i0 = Nx - 10;
+  // Optimise number of dofs by trying
+  // nearby mesh sizes +/- 5 or 10 in each dimension
+
   std::size_t mindiff = 1000000;
-  for (std::size_t i = i0; i < i0 + 20; ++i)
+  for (std::size_t i = Nx - 10; i < Nx + 10; ++i)
   {
     for (std::size_t j = i - 5; j < i + 5; ++j)
     {
