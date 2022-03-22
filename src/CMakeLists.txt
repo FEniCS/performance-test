@@ -47,6 +47,6 @@ set(Boost_VERBOSE TRUE)
 find_package(Boost 1.70 REQUIRED program_options)
 
 # Target libraries
-target_link_libraries(${PROJECT_NAME} dolfinx Boost::program_options pthread)
+target_link_libraries(${PROJECT_NAME} dolfinx Boost::program_options)
 
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
