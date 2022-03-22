@@ -102,9 +102,14 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
     ++Nx;
     if (Nx > Nx_max)
     {
-      // Base mesh got too big, add a refinement level
-      // This will dramatically ~8x increase the number of dofs
-      ++r;
+      // Base mesh got too big, so add refinement levels
+      // Each increase will dramatically (~8x) increase the number of dofs
+      while (ndofs < N)
+      {
+        // Keep on refining until we have overshot
+        ++r;
+        ndofs = num_pdofs(Nx, Nx, Nx, r, order);
+      }
       while (ndofs > N)
       {
         // Shrink base mesh until dofs are back on target
