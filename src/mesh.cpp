@@ -167,7 +167,6 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
     nranks = std::min(nranks, num_processes);
 
     int ratio = num_processes / nranks;
-    std::cout << "Ratio: " << ratio << std::endl;
     int rank = dolfinx::MPI::rank(comm);
     int color = rank % ratio == 0 ? 1 : MPI_UNDEFINED;
     MPI_Comm_split(comm, color, 0, &comm1);
