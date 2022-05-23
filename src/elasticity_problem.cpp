@@ -55,7 +55,6 @@ MatNullSpace build_near_nullspace(const fem::FunctionSpace& V)
   auto x4 = basis[4].mutable_array();
   auto x5 = basis[5].mutable_array();
 
-  // const xt::xtensor<double, 2> x = V.tabulate_dof_coordinates(false);
   const std::vector<double> x = V.tabulate_dof_coordinates(false);
   auto& dofs = V.dofmap()->list().array();
   for (int i = 0; i < dofs.size(); ++i)
