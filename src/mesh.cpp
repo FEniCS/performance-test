@@ -15,8 +15,8 @@
 #include <dolfinx/mesh/generation.h>
 #include <dolfinx/refinement/refine.h>
 #include <memory>
-#include <xtensor/xfixed.hpp>
-#include <xtensor/xview.hpp>
+#include <numbers>
+#include <span>
 
 namespace
 {
@@ -88,9 +88,9 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
   std::size_t Nx, Ny, Nz;
   int r = 0;
 
-  // Choose Nx_max carefully. If too large, the base mesh may become too large
-  // for the partitioner; likewise, if too small, it will fail on large
-  // numbers of processes.
+  // Choose Nx_max carefully. If too large, the base mesh may become too
+  // large for the partitioner; likewise, if too small, it will fail on
+  // large numbers of processes.
   const std::size_t Nx_max = 200;
 
   // Get initial guess for Nx, Ny, Nz, r
@@ -103,7 +103,8 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
     if (Nx > Nx_max)
     {
       // Base mesh got too big, so add refinement levels
-      // Each increase will dramatically (~8x) increase the number of dofs
+      // Each increase will dramatically (~8x) increase the number of
+      // dofs
       while (ndofs < N)
       {
         // Keep on refining until we have overshot
@@ -123,8 +124,8 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
   Ny = Nx;
   Nz = Nx;
 
-  // Optimise number of dofs by trying
-  // nearby mesh sizes +/- 5 or 10 in each dimension
+  // Optimise number of dofs by trying nearby mesh sizes +/- 5 or 10 in
+  // each dimension
 
   std::size_t mindiff = 1000000;
   for (std::size_t i = Nx - 10; i < Nx + 10; ++i)
@@ -165,7 +166,7 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
   if (dolfinx::MPI::rank(mesh.comm()) == 0)
   {
     std::cout << "UnitCube (" << Nx << "x" << Ny << "x" << Nz
-              << ") to be refined " << r << " times\n";
+              << ") to be refined " << r << " times" << std::endl;
   }
 
   for (int i = 0; i < r; ++i)
@@ -215,7 +216,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     ncells = n * 6 + n * lspur * 6;
   }
 
-  xt::xtensor<double, 2> geom = xt::zeros<double>({npoints, 3});
+  std::vector<double> x(npoints * 3);
   std::vector<std::int64_t> topo(4 * ncells);
   if (mpi_rank == 0)
   {
@@ -225,11 +226,11 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     // Add n 'cubes' to make a joined up ring.
     for (int i = 0; i < n; ++i)
     {
-      std::cout << "Adding cube " << i << "\n";
+      std::cout << "Adding cube " << i << std::endl;
       // Get the points for current cube
       std::array<int, 8> pts;
       for (int j = 0; j < pts.size(); ++j)
-        pts[j] = ((i * 4 + j) % (n * 4));
+        pts[j] = (i * 4 + j) % (n * 4);
 
       // Add to topology
       for (int k = 0; k < 6; ++k)
@@ -240,36 +241,40 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
       }
 
       // Calculate the position of points
-      double th = 2 * M_PI * i / n;
-      xt::xtensor_fixed<double, xt::xshape<3>> point
-          = {r0 * cos(th), r0 * sin(th), h0};
+      const double th = 2 * std::numbers::pi * i / n;
 
-      xt::row(geom, p++) = point;
-      point = {r0 * cos(th), r0 * sin(th), -h0};
-      xt::row(geom, p++) = point;
-      point = {r1 * cos(th), r1 * sin(th), -h1};
-      xt::row(geom, p++) = point;
-      point = {r1 * cos(th), r1 * sin(th), h1};
-      xt::row(geom, p++) = point;
+      std::array p0 = {r0 * std::cos(th), r0 * std::sin(th), h0};
+      std::copy(p0.begin(), p0.end(), std::next(x.begin(), 3 * p));
+
+      std::array p1 = {r0 * std::cos(th), r0 * std::sin(th), -h0};
+      std::copy(p1.begin(), p1.end(), std::next(x.begin(), 3 * (p + 1)));
+
+      std::array p2 = {r1 * std::cos(th), r1 * std::sin(th), -h1};
+      std::copy(p2.begin(), p2.end(), std::next(x.begin(), 3 * (p + 2)));
+
+      std::array p3 = {r1 * std::cos(th), r1 * std::sin(th), h1};
+      std::copy(p3.begin(), p3.end(), std::next(x.begin(), 3 * (p + 3)));
+
+      p += 4;
     }
 
     // Add spurs to ring
     for (int i = 0; i < n; ++i)
     {
-      std::cout << "Adding spur " << i << "\n";
+      std::cout << "Adding spur " << i << std::endl;
 
       // Intermediate angle between two faces
-      double th0 = 2 * M_PI * (i + .5) / n;
+      const double th0 = 2 * std::numbers::pi * (i + 0.5) / n;
 
       // Starting points on outer edge of ring
-      xt::xtensor_fixed<int, xt::xshape<8>> pts = {(i * 4 + 2) % (n * 4),
-                                                   (i * 4 + 3) % (n * 4),
-                                                   (i * 4 + 7) % (n * 4),
-                                                   (i * 4 + 6) % (n * 4),
-                                                   0,
-                                                   0,
-                                                   0,
-                                                   0};
+      std::array<int, 8> pts = {(i * 4 + 2) % (n * 4),
+                                (i * 4 + 3) % (n * 4),
+                                (i * 4 + 7) % (n * 4),
+                                (i * 4 + 6) % (n * 4),
+                                0,
+                                0,
+                                0,
+                                0};
 
       // Build each spur outwards
       for (int k = 0; k < lspur; ++k)
@@ -278,10 +283,11 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
         for (int j = 0; j < 4; ++j)
         {
           pts[j + 4] = p;
-          xt::row(geom, p) = xt::row(geom, pts[j]);
-          geom(p, 0) += l0 * cos(th0 + k * dth);
-          geom(p, 1) += l0 * sin(th0 + k * dth);
-          geom(p, 2) *= pow(tap, k);
+          std::span<double, 3> xp(x.data() + 3 * p, 3);
+          std::copy_n(std::next(x.begin(), 3 * pts[j]), 3, xp.begin());
+          xp[0] += l0 * std::cos(th0 + k * dth);
+          xp[1] += l0 * std::sin(th0 + k * dth);
+          xp[2] *= std::pow(tap, k);
           ++p;
         }
 
@@ -294,22 +300,35 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
         }
 
         // Outer face becomes inner face of next cube
-        using namespace xt::placeholders;
-        xt::view(pts, xt::range(0, 4)) = xt::view(pts, xt::range(-4, _));
+        std::span<int, 8> _pts(pts.data(), 8);
+        auto pts0 = _pts.first<4>();
+        auto pts1 = _pts.last<4>();
+        std::copy(pts1.begin(), pts1.end(), pts0.begin());
       }
     }
 
     // Check geometric sizes and rescale
-    xt::col(geom, 0) -= 0.9 * xt::amin(xt::col(geom, 0));
-    double scaling = 0.9 * xt::amax(xt::col(geom, 0))[0];
-    geom /= scaling;
+    double x0min(0), x0max(0), x1min(0), x1max(0), x2min(0), x2max(0);
+    for (std::size_t i = 0; i < x.size(); i += 3)
+    {
+      x0min = std::min(std::abs(x[i]), x0min);
+      x0max = std::max(std::abs(x[i]), x0max);
 
-    LOG(INFO) << "x range = " << xt::amin(xt::col(geom, 0))() << " - "
-              << xt::amax(xt::col(geom, 0))() << "\n";
-    LOG(INFO) << "y range = " << xt::amin(xt::col(geom, 1))() << " - "
-              << xt::amax(xt::col(geom, 1))() << "\n";
-    LOG(INFO) << "z range = " << xt::amin(xt::col(geom, 2))() << " - "
-              << xt::amax(xt::col(geom, 2))() << "\n";
+      x1min = std::min(std::abs(x[i + 1]), x1min);
+      x1max = std::max(std::abs(x[i + 1]), x1max);
+
+      x2min = std::min(std::abs(x[i + 2]), x2min);
+      x2max = std::max(std::abs(x[i + 2]), x2max);
+    }
+
+    for (std::size_t i = 0; i < x.size(); i += 3)
+      x[i] -= 0.9 * x0min;
+    std::transform(x.begin(), x.end(), x.begin(),
+                   [scale = 0.9 * x0max](auto x) { return x / scale; });
+
+    LOG(INFO) << "x range = " << x0min << " - " << x0max << std::endl;
+    LOG(INFO) << "y range = " << x1min << " - " << x1max << std::endl;
+    LOG(INFO) << "z range = " << x2min << " - " << x2max << std::endl;
   }
 
   // New Mesh
@@ -320,12 +339,11 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   dolfinx::fem::CoordinateElement element(dolfinx::mesh::CellType::tetrahedron,
                                           1);
 
-  auto mesh = std::make_shared<dolfinx::mesh::Mesh>(
-      dolfinx::mesh::create_mesh(comm,
-                                 dolfinx::graph::AdjacencyList<std::int64_t>(
-                                     std::move(topo), std::move(offsets)),
-                                 element, geom, {geom.shape(0), geom.shape(1)},
-                                 dolfinx::mesh::GhostMode::none));
+  auto mesh = std::make_shared<dolfinx::mesh::Mesh>(dolfinx::mesh::create_mesh(
+      comm,
+      dolfinx::graph::AdjacencyList<std::int64_t>(std::move(topo),
+                                                  std::move(offsets)),
+      element, x, {x.size() / 3, 3}, dolfinx::mesh::GhostMode::none));
 
   mesh->topology_mutable().create_entities(1);
 
@@ -378,9 +396,10 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
 
     if (mpi_rank == 0)
     {
-      std::cout << "Edges marked = " << nmarked << "/2000\n";
+      std::cout << "Edges marked = " << nmarked << "/2000" << std::endl;
       std::cout << "Step " << k
-                << " achieved actual fraction = " << actual_fraction << "\n";
+                << " achieved actual fraction = " << actual_fraction
+                << std::endl;
     }
 
     if (actual_fraction > fraction)
