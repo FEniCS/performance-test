@@ -177,7 +177,6 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
   return mesh;
 }
 //-----------------------------------------------------------------------------
-/*
 std::shared_ptr<dolfinx::mesh::Mesh>
 create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
                   bool target_dofs_total, std::size_t dofs_per_node)
@@ -216,7 +215,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     ncells = n * 6 + n * lspur * 6;
   }
 
-  std::vector<double> geom(npoints * 3);
+  xt::xtensor<double, 2> geom = xt::zeros<double>({npoints, 3});
   std::vector<std::int64_t> topo(4 * ncells);
   if (mpi_rank == 0)
   {
@@ -242,37 +241,16 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
 
       // Calculate the position of points
       double th = 2 * M_PI * i / n;
+      xt::xtensor_fixed<double, xt::xshape<3>> point
+          = {r0 * cos(th), r0 * sin(th), h0};
 
-      std::array p0 = {r0 * std::cos(th), r0 * std::sin(th), h0};
-      std::span<double, 3> row0(geom.data() + 3 * p, 3);
-      std::copy(p0.begin(), p0.end(), row0.begin());
-
-      std::array p1 = {r0 * std::cos(th), r0 * std::sin(th), -h0};
-      std::span<double, 3> row1(geom.data() + 3 * (p + 1), 3);
-      std::copy(p1.begin(), p1.end(), row1.begin());
-
-      std::array p2 = {r1 * std::cos(th), r1 * std::sin(th), -h1};
-      std::span<double, 3> row2(geom.data() + 3 * (p + 2), 3);
-      std::copy(p2.begin(), p2.end(), row2.begin());
-
-      std::array p3 = {r1 * std::cos(th), r1 * std::sin(th), h1};
-      std::span<double, 3> row3(geom.data() + 3 * (p + 3), 3);
-      std::copy(p3.begin(), p3.end(), row3.begin());
-
-      p += 4;
-
-      // xt::xtensor_fixed<double, xt::xshape<3>> point
-      //     = {r0 * std::cos(th), r0 * std : sin(th), h0};
-      // xt::row(geom, p++) = point;
-
-      // point = {r0 * cos(th), r0 * sin(th), -h0};
-      // xt::row(geom, p++) = point;
-
-      // point = {r1 * cos(th), r1 * sin(th), -h1};
-      // xt::row(geom, p++) = point;
-
-      // point = {r1 * cos(th), r1 * sin(th), h1};
-      // xt::row(geom, p++) = point;
+      xt::row(geom, p++) = point;
+      point = {r0 * cos(th), r0 * sin(th), -h0};
+      xt::row(geom, p++) = point;
+      point = {r1 * cos(th), r1 * sin(th), -h1};
+      xt::row(geom, p++) = point;
+      point = {r1 * cos(th), r1 * sin(th), h1};
+      xt::row(geom, p++) = point;
     }
 
     // Add spurs to ring
@@ -284,14 +262,14 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
       double th0 = 2 * M_PI * (i + .5) / n;
 
       // Starting points on outer edge of ring
-      std::array<int, 8> pts = {(i * 4 + 2) % (n * 4),
-                                (i * 4 + 3) % (n * 4),
-                                (i * 4 + 7) % (n * 4),
-                                (i * 4 + 6) % (n * 4),
-                                0,
-                                0,
-                                0,
-                                0};
+      xt::xtensor_fixed<int, xt::xshape<8>> pts = {(i * 4 + 2) % (n * 4),
+                                                   (i * 4 + 3) % (n * 4),
+                                                   (i * 4 + 7) % (n * 4),
+                                                   (i * 4 + 6) % (n * 4),
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   0};
 
       // Build each spur outwards
       for (int k = 0; k < lspur; ++k)
@@ -301,12 +279,9 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
         {
           pts[j + 4] = p;
           xt::row(geom, p) = xt::row(geom, pts[j]);
-          std::span<double, 3> row(geom.data() + 3 * p, 3);
-          std::span<const double, 3> row_j(geom.data() + 3 * pts[j], 3);
-
-          geom(p, 0) += l0 * std::cos(th0 + k * dth);
-          geom(p, 1) += l0 * std::sin(th0 + k * dth);
-          geom(p, 2) *= std::pow(tap, k);
+          geom(p, 0) += l0 * cos(th0 + k * dth);
+          geom(p, 1) += l0 * sin(th0 + k * dth);
+          geom(p, 2) *= pow(tap, k);
           ++p;
         }
 
@@ -345,11 +320,12 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   dolfinx::fem::CoordinateElement element(dolfinx::mesh::CellType::tetrahedron,
                                           1);
 
-  auto mesh = std::make_shared<dolfinx::mesh::Mesh>(dolfinx::mesh::create_mesh(
-      comm,
-      dolfinx::graph::AdjacencyList<std::int64_t>(std::move(topo),
-                                                  std::move(offsets)),
-      element, geom, dolfinx::mesh::GhostMode::none));
+  auto mesh = std::make_shared<dolfinx::mesh::Mesh>(
+      dolfinx::mesh::create_mesh(comm,
+                                 dolfinx::graph::AdjacencyList<std::int64_t>(
+                                     std::move(topo), std::move(offsets)),
+                                 element, geom, {geom.shape(0), geom.shape(1)},
+                                 dolfinx::mesh::GhostMode::none));
 
   mesh->topology_mutable().create_entities(1);
 
@@ -428,4 +404,3 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
 
   return meshi;
 }
-*/
