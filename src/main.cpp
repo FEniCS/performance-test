@@ -127,8 +127,8 @@ void solve(int argc, char* argv[])
   }
   else
   {
-    mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling,
-                             ndofs_per_node);
+    // mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling,
+    //                          ndofs_per_node);
   }
   t0.stop();
 
