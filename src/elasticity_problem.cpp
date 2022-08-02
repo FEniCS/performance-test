@@ -22,6 +22,7 @@
 #include <dolfinx/mesh/utils.h>
 #include <memory>
 #include <petscsys.h>
+#include <span>
 #include <utility>
 #include <xtensor/xarray.hpp>
 #include <xtensor/xmath.hpp>
@@ -45,7 +46,7 @@ MatNullSpace build_near_nullspace(const fem::FunctionSpace& V)
   std::int32_t length_block = map->size_local() + map->num_ghosts();
   for (int k = 0; k < 3; ++k)
   {
-    xtl::span<PetscScalar> x = basis[k].mutable_array();
+    std::span<PetscScalar> x = basis[k].mutable_array();
     for (std::int32_t i = 0; i < length_block; ++i)
       x[bs * i + k] = 1.0;
   }
@@ -55,33 +56,35 @@ MatNullSpace build_near_nullspace(const fem::FunctionSpace& V)
   auto x4 = basis[4].mutable_array();
   auto x5 = basis[5].mutable_array();
 
-  const xt::xtensor<double, 2> x = V.tabulate_dof_coordinates(false);
+  const std::vector<double> x = V.tabulate_dof_coordinates(false);
   auto& dofs = V.dofmap()->list().array();
   for (int i = 0; i < dofs.size(); ++i)
   {
-    x3[bs * dofs[i] + 0] = -x(dofs[i], 1);
-    x3[bs * dofs[i] + 1] = x(dofs[i], 0);
+    std::span<const double, 3> xd(x.data() + 3 * dofs[i], 3);
 
-    x4[bs * dofs[i] + 0] = x(dofs[i], 2);
-    x4[bs * dofs[i] + 2] = -x(dofs[i], 0);
+    x3[bs * dofs[i] + 0] = -xd[1];
+    x3[bs * dofs[i] + 1] = xd[0];
 
-    x5[bs * dofs[i] + 2] = x(dofs[i], 1);
-    x5[bs * dofs[i] + 1] = -x(dofs[i], 2);
+    x4[bs * dofs[i] + 0] = xd[2];
+    x4[bs * dofs[i] + 2] = -xd[0];
+
+    x5[bs * dofs[i] + 2] = xd[1];
+    x5[bs * dofs[i] + 1] = -xd[2];
   }
 
   // Orthonormalize basis
-  la::orthonormalize(tcb::make_span(basis));
-  if (!la::is_orthonormal(tcb::span<const decltype(basis)::value_type>(basis)))
+  la::orthonormalize(std::span(basis));
+  if (!la::is_orthonormal(std::span<const decltype(basis)::value_type>(basis)))
   {
     throw std::runtime_error("Space not orthonormal");
   }
 
   // Build PETSc nullspace object
   std::int32_t length = bs * map->size_local();
-  std::vector<xtl::span<const PetscScalar>> basis_local;
+  std::vector<std::span<const PetscScalar>> basis_local;
   std::transform(basis.cbegin(), basis.cend(), std::back_inserter(basis_local),
                  [length](auto& x)
-                 { return xtl::span(x.array().data(), length); });
+                 { return std::span(x.array().data(), length); });
   MPI_Comm comm = V.mesh()->comm();
   std::vector<Vec> v = la::petsc::create_vectors(comm, basis_local);
   MatNullSpace ns = la::petsc::create_nullspace(comm, v);
@@ -174,7 +177,7 @@ elastic::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
   auto coeffs_a = fem::allocate_coefficient_storage(*a);
   fem::pack_coefficients(*a, coeffs_a);
   fem::assemble_matrix(la::petsc::Matrix::set_block_fn(A->mat(), ADD_VALUES),
-                       *a, tcb::make_span(constants_a),
+                       *a, std::span(constants_a),
                        fem::make_coefficients_span(coeffs_a), {bc});
   MatAssemblyBegin(A->mat(), MAT_FLUSH_ASSEMBLY);
   MatAssemblyEnd(A->mat(), MAT_FLUSH_ASSEMBLY);
@@ -196,7 +199,7 @@ elastic::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
                                     fem::make_coefficients_span(coeffs_L));
   fem::apply_lifting(b.mutable_array(), {a}, {constants_L},
                      {fem::make_coefficients_span(coeffs_L)}, {{bc}}, {}, 1.0);
-  b.scatter_rev(common::IndexMap::Mode::add);
+  b.scatter_rev(std::plus<>());
   fem::set_bc(b.mutable_array(), {bc});
   t3.stop();
 

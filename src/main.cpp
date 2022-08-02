@@ -10,7 +10,7 @@
 #include "poisson_problem.h"
 #include <boost/program_options.hpp>
 #include <dolfinx/common/Timer.h>
-#include <dolfinx/common/subsystem.h>
+#include <dolfinx/common/log.h>
 #include <dolfinx/common/timing.h>
 #include <dolfinx/common/version.h>
 #include <dolfinx/fem/Form.h>
@@ -56,9 +56,15 @@ void solve(int argc, char* argv[])
       "problem_type", po::value<std::string>()->default_value("poisson"),
       "Problem (poisson or elasticity)")(
       "mesh_type", po::value<std::string>()->default_value("cube"),
+<<<<<<< HEAD
       "Mesh (cube or unstructured)")(
       "memory_profiling", po::bool_switch(&mem_profile)->default_value(false),
       "Turn on memory logging")("scaling_type",
+=======
+      "mesh (cube or unstructured)")(
+      "memory_profiling", po::bool_switch(&mem_profile)->default_value(false),
+      "turn on memory logging")("scaling_type",
+>>>>>>> main
                                 po::value<std::string>()->default_value("weak"),
                                 "scaling (weak or strong)")(
       "output", po::value<std::string>()->default_value(""),
@@ -81,7 +87,7 @@ void solve(int argc, char* argv[])
 
   if (vm.count("help"))
   {
-    std::cout << desc << "\n";
+    std::cout << desc << std::endl;;
     return;
   }
 
@@ -217,7 +223,7 @@ void solve(int argc, char* argv[])
   dolfinx::list_timings(MPI_COMM_WORLD, {dolfinx::TimingType::wall});
 
   // Report number of Krylov iterations
-  double norm = u->x()->norm();
+  double norm = dolfinx::la::norm(*(u->x()));
   if (dolfinx::MPI::rank(MPI_COMM_WORLD) == 0)
   {
     std::cout << "*** Number of Krylov iterations: " << num_iter << std::endl;
@@ -234,28 +240,36 @@ void solve(int argc, char* argv[])
 int main(int argc, char* argv[])
 {
   dolfinx::common::Timer t0("Init MPI");
-  dolfinx::common::subsystem::init_mpi();
+  MPI_Init(&argc, &argv);
   t0.stop();
+
   dolfinx::common::Timer t1("Init logging");
-  dolfinx::common::subsystem::init_logging(argc, argv);
+  dolfinx::init_logging(argc, argv);
   t1.stop();
+
   dolfinx::common::Timer t2("Init PETSc");
-  dolfinx::common::subsystem::init_petsc(argc, argv);
+  PetscInitialize(&argc, &argv, nullptr, nullptr);
   t2.stop();
 
-  // Set the logging thread name to show the process rank
-  // and enable on rank 0 (add more here if desired)
+  // Set the logging thread name to show the process rank and enable on
+  // rank 0 (add more here if desired)
   const int mpi_rank = dolfinx::MPI::rank(MPI_COMM_WORLD);
+  std::string thread_name = "RANK: " + std::to_string(mpi_rank);
+  loguru::set_thread_name(thread_name.c_str());
   if (mpi_rank == 0)
     loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
 
+<<<<<<< HEAD
   std::string thread_name = "RANK: " + std::to_string(mpi_rank);
   loguru::set_thread_name(thread_name.c_str());
   // loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
 
+=======
+>>>>>>> main
   solve(argc, argv);
 
-  dolfinx::common::subsystem::finalize_petsc();
-  dolfinx::common::subsystem::finalize_mpi();
+  PetscFinalize();
+  MPI_Finalize();
+
   return 0;
 }

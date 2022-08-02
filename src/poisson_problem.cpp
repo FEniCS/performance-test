@@ -133,7 +133,7 @@ poisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
                                     fem::make_coefficients_span(coeffs_L));
   fem::apply_lifting(b.mutable_array(), {a}, {constants_L},
                      {fem::make_coefficients_span(coeffs_L)}, {{bc}}, {}, 1.0);
-  b.scatter_rev(common::IndexMap::Mode::add);
+  b.scatter_rev(std::plus<>());
   fem::set_bc(b.mutable_array(), {bc});
   t5.stop();
 
