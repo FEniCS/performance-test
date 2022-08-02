@@ -90,16 +90,9 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
   std::size_t Nx, Ny, Nz;
   int r = 0;
 
-<<<<<<< HEAD
   // Choose max_cells_per_dim carefully. If too large, the base mesh may
   // become too large for the partitioner; likewise, if too small, it
   // will fail on large numbers of processes.
-=======
-  // Choose Nx_max carefully. If too large, the base mesh may become too
-  // large for the partitioner; likewise, if too small, it will fail on
-  // large numbers of processes.
-  const std::size_t Nx_max = 200;
->>>>>>> main
 
   // Get initial guess for Nx, Ny, Nz, r
   Nx = 1;
@@ -108,18 +101,10 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
   {
     // Increase base mesh size
     ++Nx;
-<<<<<<< HEAD
     if (Nx > max_cells_per_dim)
     {
       // Base mesh got too big, so add refinement levels
       // Each increase will dramatically (~8x) increase the number of dofs
-=======
-    if (Nx > Nx_max)
-    {
-      // Base mesh got too big, so add refinement levels
-      // Each increase will dramatically (~8x) increase the number of
-      // dofs
->>>>>>> main
       while (ndofs < N)
       {
         // Keep on refining until we have overshot
@@ -139,13 +124,8 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
   Ny = Nx;
   Nz = Nx;
 
-<<<<<<< HEAD
   // Optimise number of dofs by trying
   // nearby mesh sizes +/- 5 or 10 in each dimension
-=======
-  // Optimise number of dofs by trying nearby mesh sizes +/- 5 or 10 in
-  // each dimension
->>>>>>> main
 
   std::size_t mindiff = 1000000;
   for (std::size_t i = Nx - 10; i < Nx + 10; ++i)
@@ -203,12 +183,8 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
   if (dolfinx::MPI::rank(mesh.comm()) == 0)
   {
     std::cout << "UnitCube (" << Nx << "x" << Ny << "x" << Nz
-<<<<<<< HEAD
               << ") to be refined " << r << " times using " << nranks << " of "
               << num_processes << " MPI ranks." << std::endl;
-=======
-              << ") to be refined " << r << " times" << std::endl;
->>>>>>> main
   }
 
   for (int i = 0; i < r; ++i)

@@ -56,15 +56,9 @@ void solve(int argc, char* argv[])
       "problem_type", po::value<std::string>()->default_value("poisson"),
       "Problem (poisson or elasticity)")(
       "mesh_type", po::value<std::string>()->default_value("cube"),
-<<<<<<< HEAD
       "Mesh (cube or unstructured)")(
       "memory_profiling", po::bool_switch(&mem_profile)->default_value(false),
       "Turn on memory logging")("scaling_type",
-=======
-      "mesh (cube or unstructured)")(
-      "memory_profiling", po::bool_switch(&mem_profile)->default_value(false),
-      "turn on memory logging")("scaling_type",
->>>>>>> main
                                 po::value<std::string>()->default_value("weak"),
                                 "scaling (weak or strong)")(
       "output", po::value<std::string>()->default_value(""),
@@ -259,13 +253,10 @@ int main(int argc, char* argv[])
   if (mpi_rank == 0)
     loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
 
-<<<<<<< HEAD
   std::string thread_name = "RANK: " + std::to_string(mpi_rank);
   loguru::set_thread_name(thread_name.c_str());
   // loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
 
-=======
->>>>>>> main
   solve(argc, argv);
 
   PetscFinalize();
