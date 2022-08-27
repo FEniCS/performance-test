@@ -157,11 +157,11 @@ dolfinx::mesh::Mesh create_cube_mesh(MPI_Comm comm, std::size_t target_dofs,
 #error "No mesh partitioner has been selected"
 #endif
 
-  auto cell_part = dolfinx::mesh::create_cell_partitioner(graph_part);
+  auto cell_part = dolfinx::mesh::create_cell_partitioner(
+      dolfinx::mesh::GhostMode::none, graph_part);
   auto mesh = dolfinx::mesh::create_box(
       comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz},
-      dolfinx::mesh::CellType::tetrahedron, dolfinx::mesh::GhostMode::none,
-      cell_part);
+      dolfinx::mesh::CellType::tetrahedron, cell_part);
 
   if (dolfinx::MPI::rank(mesh.comm()) == 0)
   {
