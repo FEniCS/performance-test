@@ -37,7 +37,7 @@ jobs:
         with:
           path: ./dolfinx
           repository: FEniCS/dolfinx
-          ref: chris/eliminate-ghost-mode
+          ref: main
 
       - name: Install FEniCS Python components
         run: |
