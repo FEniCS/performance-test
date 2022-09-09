@@ -24,11 +24,9 @@
 #include <petscsys.h>
 #include <span>
 #include <utility>
-#include <xtensor/xarray.hpp>
-#include <xtensor/xmath.hpp>
-#include <xtensor/xview.hpp>
 
 using namespace dolfinx;
+using T = PetscScalar;
 
 namespace
 {
@@ -39,14 +37,13 @@ MatNullSpace build_near_nullspace(const fem::FunctionSpace& V)
   // Create vectors for nullspace basis
   auto map = V.dofmap()->index_map;
   int bs = V.dofmap()->index_map_bs();
-  std::vector<la::Vector<PetscScalar>> basis(6,
-                                             la::Vector<PetscScalar>(map, bs));
+  std::vector<la::Vector<T>> basis(6, la::Vector<T>(map, bs));
 
   // x0, x1, x2 translations
   std::int32_t length_block = map->size_local() + map->num_ghosts();
   for (int k = 0; k < 3; ++k)
   {
-    std::span<PetscScalar> x = basis[k].mutable_array();
+    std::span<T> x = basis[k].mutable_array();
     for (std::int32_t i = 0; i < length_block; ++i)
       x[bs * i + k] = 1.0;
   }
@@ -81,7 +78,7 @@ MatNullSpace build_near_nullspace(const fem::FunctionSpace& V)
 
   // Build PETSc nullspace object
   std::int32_t length = bs * map->size_local();
-  std::vector<std::span<const PetscScalar>> basis_local;
+  std::vector<std::span<const T>> basis_local;
   std::transform(basis.cbegin(), basis.cend(), std::back_inserter(basis_local),
                  [length](auto& x)
                  { return std::span(x.array().data(), length); });
@@ -93,10 +90,8 @@ MatNullSpace build_near_nullspace(const fem::FunctionSpace& V)
 }
 } // namespace
 
-std::tuple<std::shared_ptr<la::Vector<PetscScalar>>,
-           std::shared_ptr<fem::Function<PetscScalar>>,
-           std::function<int(fem::Function<PetscScalar>&,
-                             const la::Vector<PetscScalar>&)>>
+std::tuple<std::shared_ptr<la::Vector<T>>, std::shared_ptr<fem::Function<T>>,
+           std::function<int(fem::Function<T>&, const la::Vector<T>&)>>
 elastic::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
 {
   common::Timer t0("ZZZ FunctionSpace");
@@ -112,7 +107,7 @@ elastic::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
   common::Timer t0a("ZZZ Create boundary conditions");
 
   // Define boundary condition
-  auto u0 = std::make_shared<fem::Function<PetscScalar>>(V);
+  auto u0 = std::make_shared<fem::Function<T>>(V);
   u0->x()->set(0);
 
   const int tdim = mesh->topology().dim();
@@ -120,33 +115,51 @@ elastic::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
   // Find facets with bc applied
   const std::vector<std::int32_t> bc_facets = mesh::locate_entities(
       *mesh, tdim - 1,
-      [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1>
-      { return xt::isclose(xt::row(x, 1), 0.0); });
+      [](auto x)
+      {
+        constexpr double eps = 1.0e-8;
+        std::vector<std::int8_t> marker(x.extent(1), false);
+        for (std::size_t p = 0; p < x.extent(1); ++p)
+        {
+          double x1 = x(1, p);
+          if (std::abs(x1) < eps)
+            marker[p] = true;
+        }
+        return marker;
+      });
 
   // Find constrained dofs
   const std::vector<std::int32_t> bdofs
       = fem::locate_dofs_topological(*V, tdim - 1, bc_facets);
 
   // Bottom (x[1] = 0) surface
-  auto bc = std::make_shared<fem::DirichletBC<PetscScalar>>(u0, bdofs);
+  auto bc = std::make_shared<fem::DirichletBC<T>>(u0, bdofs);
 
   t0a.stop();
 
   common::Timer t0b("ZZZ Create RHS function");
 
   // Define coefficients
-  auto f = std::make_shared<fem::Function<PetscScalar>>(V);
+  auto f = std::make_shared<fem::Function<T>>(V);
   f->interpolate(
-      [](const xt::xtensor<double, 2>& x)
+      [](auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>>
       {
-        xt::xtensor<PetscScalar, 2> values(x.shape());
-        auto dx = xt::row(x, 0) - 0.5;
-        auto dz = xt::row(x, 2) - 0.5;
-        auto r = xt::sqrt(dx * dx + dz * dz);
-        xt::row(values, 0) = -dz * r * xt::row(x, 1);
-        xt::row(values, 1) = 1.0;
-        xt::row(values, 2) = dx * r * xt::row(x, 1);
-        return values;
+        std::vector<T> vdata(x.extent(0) * x.extent(1));
+        namespace stdex = std::experimental;
+        stdex::mdspan<double,
+                      stdex::extents<std::size_t, 3, stdex::dynamic_extent>>
+            v(vdata.data(), x.extent(0), x.extent(1));
+        for (std::size_t p = 0; p < x.extent(1); ++p)
+        {
+          double dx = x(0, p) - 0.5;
+          double dz = x(2, p) - 0.5;
+          double r = std::sqrt(dx * dx + dz * dz);
+          v(0, p) = -dz * r * x(1, p);
+          v(1, p) = 1.0;
+          v(2, p) = dx * r * x(1, p);
+        }
+
+        return {vdata, {v.extent(0), v.extent(1)}};
       });
 
   t0b.stop();
@@ -158,14 +171,11 @@ elastic::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
       = {form_Elasticity_L1, form_Elasticity_L2, form_Elasticity_L3};
   std::vector form_elasticity_a
       = {form_Elasticity_a1, form_Elasticity_a2, form_Elasticity_a3};
-  auto L
-      = std::make_shared<fem::Form<PetscScalar>>(fem::create_form<PetscScalar>(
-          *form_elasticity_L.at(order - 1), {V}, {{"w0", f}}, {}, {}));
-  auto a
-      = std::make_shared<fem::Form<PetscScalar>>(fem::create_form<PetscScalar>(
-          *form_elasticity_a.at(order - 1), {V, V},
-          std::vector<std::shared_ptr<const fem::Function<PetscScalar>>>{}, {},
-          {}));
+  auto L = std::make_shared<fem::Form<T>>(fem::create_form<T>(
+      *form_elasticity_L.at(order - 1), {V}, {{"w0", f}}, {}, {}));
+  auto a = std::make_shared<fem::Form<T>>(fem::create_form<T>(
+      *form_elasticity_a.at(order - 1), {V, V},
+      std::vector<std::shared_ptr<const fem::Function<T>>>{}, {}, {}));
   t0c.stop();
 
   // Create matrices and vector, and assemble system
@@ -181,22 +191,22 @@ elastic::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
                        fem::make_coefficients_span(coeffs_a), {bc});
   MatAssemblyBegin(A->mat(), MAT_FLUSH_ASSEMBLY);
   MatAssemblyEnd(A->mat(), MAT_FLUSH_ASSEMBLY);
-  fem::set_diagonal<PetscScalar>(
-      la::petsc::Matrix::set_fn(A->mat(), INSERT_VALUES), *V, {bc});
+  fem::set_diagonal<T>(la::petsc::Matrix::set_fn(A->mat(), INSERT_VALUES), *V,
+                       {bc});
   MatAssemblyBegin(A->mat(), MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(A->mat(), MAT_FINAL_ASSEMBLY);
   t2.stop();
 
   // Wrap la::Vector with Petsc Vec
-  la::Vector<PetscScalar> b(L->function_spaces()[0]->dofmap()->index_map,
-                            L->function_spaces()[0]->dofmap()->index_map_bs());
+  la::Vector<T> b(L->function_spaces()[0]->dofmap()->index_map,
+                  L->function_spaces()[0]->dofmap()->index_map_bs());
   b.set(0);
   common::Timer t3("ZZZ Assemble vector");
   const std::vector constants_L = fem::pack_constants(*L);
   auto coeffs_L = fem::allocate_coefficient_storage(*L);
   fem::pack_coefficients(*L, coeffs_L);
-  fem::assemble_vector<PetscScalar>(b.mutable_array(), *L, constants_L,
-                                    fem::make_coefficients_span(coeffs_L));
+  fem::assemble_vector<T>(b.mutable_array(), *L, constants_L,
+                          fem::make_coefficients_span(coeffs_L));
   fem::apply_lifting(b.mutable_array(), {a}, {constants_L},
                      {fem::make_coefficients_span(coeffs_L)}, {{bc}}, {}, 1.0);
   b.scatter_rev(std::plus<>());
@@ -206,7 +216,7 @@ elastic::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
   common::Timer t4("ZZZ Create near-nullspace");
 
   // Create Function to hold solution
-  auto u = std::make_shared<fem::Function<PetscScalar>>(V);
+  auto u = std::make_shared<fem::Function<T>>(V);
 
   // Build near-nullspace and attach to matrix
   MatNullSpace ns = build_near_nullspace(*V);
@@ -215,10 +225,8 @@ elastic::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
 
   t4.stop();
 
-  std::function<int(fem::Function<PetscScalar>&,
-                    const la::Vector<PetscScalar>&)>
-      solver_function
-      = [A](fem::Function<PetscScalar>& u, const la::Vector<PetscScalar>& b)
+  std::function<int(fem::Function<T>&, const la::Vector<T>&)> solver_function
+      = [A](fem::Function<T>& u, const la::Vector<T>& b)
   {
     // Create solver
     la::petsc::KrylovSolver solver(MPI_COMM_WORLD);
@@ -234,6 +242,5 @@ elastic::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
     return num_iter;
   };
 
-  return {std::make_shared<la::Vector<PetscScalar>>(std::move(b)), u,
-          solver_function};
+  return {std::make_shared<la::Vector<T>>(std::move(b)), u, solver_function};
 }
