@@ -25,6 +25,8 @@
 #include <thread>
 #include <utility>
 
+#include "CatalystAdaptor.h"
+
 namespace po = boost::program_options;
 
 std::string int64_to_human(std::int64_t n)
@@ -132,6 +134,7 @@ void solve(int argc, char* argv[])
   }
   t0.stop();
 
+  
   dolfinx::common::Timer t_ent(
       "ZZZ Create facets and facet->cell connectivity");
   mesh->topology_mutable().create_entities(2);
@@ -192,6 +195,8 @@ void solve(int argc, char* argv[])
   int num_iter = solver_function(*u, *b);
   t5.stop();
 
+  CatalystAdaptor::Execute(0, 0.0, *u);
+  
   if (output)
   {
     dolfinx::common::Timer t6("ZZZ Output");
@@ -235,6 +240,8 @@ int main(int argc, char* argv[])
   PetscInitialize(&argc, &argv, nullptr, nullptr);
   t2.stop();
 
+  CatalystAdaptor::Initialize("catalyst_pipeline.py");
+  
   // Set the logging thread name to show the process rank and enable on
   // rank 0 (add more here if desired)
   const int mpi_rank = dolfinx::MPI::rank(MPI_COMM_WORLD);
@@ -244,7 +251,8 @@ int main(int argc, char* argv[])
     loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
 
   solve(argc, argv);
-
+  
+  CatalystAdaptor::Finalize();
   PetscFinalize();
   MPI_Finalize();
 
