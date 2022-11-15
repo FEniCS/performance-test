@@ -12,13 +12,14 @@ E = 1.0e6
 nu = 0.3
 mu = E / (2.0 * (1.0 + nu))
 lmbda = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu))
+cell = tetrahedron
 
 # Load namespace
 ns = vars()
 
 forms = []
 for degree in range(1, 4):
-    element = VectorElement("Lagrange", tetrahedron, degree)
+    element = VectorElement("Lagrange", cell, degree)
 
     u, v = TrialFunction(element), TestFunction(element)
     f = Coefficient(element)
@@ -27,7 +28,7 @@ for degree in range(1, 4):
         return 0.5*(grad(v) + grad(v).T)
 
     def sigma(v):
-        return 2.0*mu*eps(v) + lmbda*tr(eps(v))*Identity(v.geometric_dimension())
+        return 2.0*mu*eps(v) + lmbda*tr(eps(v))*Identity(cell.geometric_dimension())
 
     # Add forms to namespace with names a1, a2, a3 etc.
     aname = 'a' + str(degree)

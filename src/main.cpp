@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier:    MIT
 
+#include "cgpoisson_problem.h"
 #include "elasticity_problem.h"
 #include "mem.h"
 #include "mesh.h"
@@ -54,7 +55,7 @@ void solve(int argc, char* argv[])
   bool mem_profile;
   desc.add_options()("help,h", "print usage message")(
       "problem_type", po::value<std::string>()->default_value("poisson"),
-      "problem (poisson or elasticity)")(
+      "problem (poisson, cgpoisson, or elasticity)")(
       "mesh_type", po::value<std::string>()->default_value("cube"),
       "mesh (cube or unstructured)")(
       "memory_profiling", po::bool_switch(&mem_profile)->default_value(false),
@@ -77,7 +78,8 @@ void solve(int argc, char* argv[])
 
   if (vm.count("help"))
   {
-    std::cout << desc << std::endl;;
+    std::cout << desc << std::endl;
+    ;
     return;
   }
 
@@ -142,6 +144,11 @@ void solve(int argc, char* argv[])
   {
     // Create Poisson problem
     std::tie(b, u, solver_function) = poisson::problem(mesh, order);
+  }
+  else if (problem_type == "cgpoisson")
+  {
+    // Create Poisson problem
+    std::tie(b, u, solver_function) = cgpoisson::problem(mesh, order);
   }
   else if (problem_type == "elasticity")
   {
