@@ -9,6 +9,7 @@
 #include "cg.h"
 #include <cfloat>
 #include <cmath>
+#include <dolfinx/common/Scatterer.h>
 #include <dolfinx/common/Timer.h>
 #include <dolfinx/fem/DirichletBC.h>
 #include <dolfinx/fem/Function.h>
@@ -154,9 +155,31 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
     const std::vector<T> constants;
     auto coeff = fem::allocate_coefficient_storage(*M);
 
+    auto V = M->function_spaces()[0];
+    auto idx_map = V->dofmap()->index_map;
+    int bs = V->dofmap()->bs();
+    common::Scatterer sct(*idx_map, bs);
+
+    std::vector<T> local_buffer(sct.local_buffer_size(), 0);
+    std::vector<T> remote_buffer(sct.remote_buffer_size(), 0);
+
+    auto pack_fn = [](const auto& in, const auto& idx, auto& out)
+    {
+      for (std::size_t i = 0; i < idx.size(); ++i)
+        out[i] = in[idx[i]];
+    };
+    auto unpack_fn = [](const auto& in, const auto& idx, auto& out, auto op)
+    {
+      for (std::size_t i = 0; i < idx.size(); ++i)
+        out[idx[i]] = op(out[idx[i]], in[i]);
+    };
+
+    auto type = common::Scatterer<>::type::p2p;
+    // std::vector<MPI_Request> request(1, MPI_REQUEST_NULL);
+    std::vector<MPI_Request> request = sct.create_request_vector(type);
+
     // Create function for computing the action of A on x (y = Ax)
-    auto action
-        = [&M, &un, &bc, &coeff, &constants](la::Vector<T>& x, la::Vector<T>& y)
+    auto action = [&](la::Vector<T>& x, la::Vector<T>& y)
     {
       // Zero y
       y.set(0.0);
@@ -174,10 +197,22 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
       fem::set_bc(y.mutable_array(), {bc}, 0.0);
 
       // Accumuate ghost values
-      y.scatter_rev(std::plus<T>());
+      // y.scatter_rev(std::plus<T>());
+
+      const std::int32_t local_size = bs * idx_map->size_local();
+      const std::int32_t num_ghosts = bs * idx_map->num_ghosts();
+      std::span<T> remote_data(y.mutable_array().data() + local_size,
+                               num_ghosts);
+      std::span<T> local_data(y.mutable_array().data(), local_size);
+      sct.scatter_rev_begin<T>(remote_data, remote_buffer, local_buffer,
+                               pack_fn, request, type);
+      sct.scatter_rev_end<T>(local_buffer, local_data, unpack_fn,
+                             std::plus<T>(), request);
 
       // Update ghost values
-      y.scatter_fwd();
+      sct.scatter_fwd_begin<T>(local_data, local_buffer, remote_buffer, pack_fn,
+                               request, type);
+      sct.scatter_fwd_end<T>(remote_buffer, remote_data, unpack_fn, request);
     };
 
     int num_it = linalg::cg(*u.x(), b, action, 100, 1e-6);
