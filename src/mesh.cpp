@@ -229,7 +229,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
       std::cout << "Adding cube " << i << std::endl;
       // Get the points for current cube
       std::array<int, 8> pts;
-      for (int j = 0; j < pts.size(); ++j)
+      for (std::size_t j = 0; j < pts.size(); ++j)
         pts[j] = (i * 4 + j) % (n * 4);
 
       // Add to topology
