@@ -6,6 +6,7 @@
 
 #include "cgpoisson_problem.h"
 #include "Poisson.h"
+#include "cg.h"
 #include <cfloat>
 #include <cmath>
 #include <dolfinx/common/Timer.h>
@@ -49,18 +50,20 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
 
   // Find facets with bc applied
   const int tdim = mesh->topology().dim();
-  const std::vector<std::int32_t> bc_facets
-      = mesh::locate_entities(*mesh, tdim - 1, [](auto x) {
-          constexpr double eps = 1.0e-8;
-          std::vector<std::int8_t> marker(x.extent(1), false);
-          for (std::size_t p = 0; p < x.extent(1); ++p)
-          {
-            double x0 = x(0, p);
-            if (std::abs(x0) < eps or std::abs(x0 - 1) < eps)
-              marker[p] = true;
-          }
-          return marker;
-        });
+  const std::vector<std::int32_t> bc_facets = mesh::locate_entities(
+      *mesh, tdim - 1,
+      [](auto x)
+      {
+        constexpr double eps = 1.0e-8;
+        std::vector<std::int8_t> marker(x.extent(1), false);
+        for (std::size_t p = 0; p < x.extent(1); ++p)
+        {
+          double x0 = x(0, p);
+          if (std::abs(x0) < eps or std::abs(x0 - 1) < eps)
+            marker[p] = true;
+        }
+        return marker;
+      });
 
   // Find constrained dofs
   const std::vector<std::int32_t> bdofs
@@ -74,7 +77,8 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
   auto f = std::make_shared<fem::Function<T>>(V);
   auto g = std::make_shared<fem::Function<T>>(V);
   f->interpolate(
-      [](auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>> {
+      [](auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>>
+      {
         std::vector<T> v(x.extent(1));
         for (std::size_t p = 0; p < x.extent(1); ++p)
         {
@@ -87,7 +91,8 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
         return {std::move(v), {v.size()}};
       });
   g->interpolate(
-      [](auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>> {
+      [](auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>>
+      {
         std::vector<T> f(x.extent(1));
         for (std::size_t p = 0; p < x.extent(1); ++p)
           f[p] = std::sin(5 * x(0, p));
@@ -99,29 +104,19 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
       = {form_Poisson_L1, form_Poisson_L2, form_Poisson_L3};
   std::vector form_poisson_a
       = {form_Poisson_a1, form_Poisson_a2, form_Poisson_a3};
+  std::vector form_poisson_M
+      = {form_Poisson_M1, form_Poisson_M2, form_Poisson_M3};
 
   // Define variational forms
   auto L = std::make_shared<fem::Form<T>>(fem::create_form<T>(
       *form_poisson_L.at(order - 1), {V}, {{"w0", f}, {"w1", g}}, {}, {}));
-  auto a = std::make_shared<fem::Form<T>>(fem::create_form<T>(
-      *form_poisson_a.at(order - 1), {V, V},
-      std::vector<std::shared_ptr<const fem::Function<T>>>{}, {}, {}));
+  // auto a = std::make_shared<fem::Form<T>>(fem::create_form<T>(
+  //     *form_poisson_a.at(order - 1), {V, V},
+  //     std::vector<std::shared_ptr<const fem::Function<T>>>{}, {}, {}));
 
-  // Create matrices and vector, and assemble system
-  std::shared_ptr<la::SparsityPattern> sp;
-  std::shared_ptr<la::MatrixCSR<T>> A = std::make_shared<la::MatrixCSR<T>>(*sp);
-
-  common::Timer t4("ZZZ Assemble matrix");
-  const std::vector constants_a = fem::pack_constants(*a);
-  auto coeffs_a = fem::allocate_coefficient_storage(*a);
-  fem::pack_coefficients(*a, coeffs_a);
-  fem::assemble_matrix<T>(A->mat_add_values(), *a, constants_a,
-                          fem::make_coefficients_span(coeffs_a), {bc});
-  A->finalize();
-  fem::set_diagonal<T>(A->mat_set_values(), *V, {bc});
-  A->finalize();
-
-  t4.stop();
+  auto un = std::make_shared<fem::Function<T>>(V);
+  auto M = std::make_shared<fem::Form<T>>(fem::create_form<T>(
+      *form_poisson_M.at(order - 1), {V}, {{"w0", un}}, {{}}, {}));
 
   // Create la::Vector
   la::Vector<T> b(L->function_spaces()[0]->dofmap()->index_map,
@@ -133,24 +128,61 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
   fem::pack_coefficients(*L, coeffs_L);
   fem::assemble_vector<T>(b.mutable_array(), *L, constants_L,
                           fem::make_coefficients_span(coeffs_L));
-  fem::apply_lifting(b.mutable_array(), {a}, {constants_L},
-                     {fem::make_coefficients_span(coeffs_L)}, {{bc}}, {}, 1.0);
-  b.scatter_rev(std::plus<>());
-  fem::set_bc(b.mutable_array(), {bc});
-  t5.stop();
 
-  t1.stop();
+  // Apply lifting to account for Dirichlet boundary condition
+  // b <- b - A * x_bc
+  fem::set_bc(un->x()->mutable_array(), {bc}, -1.0);
+  fem::assemble_vector(b.mutable_array(), *M);
 
+  // Communicate ghost values
+  b.scatter_rev(std::plus<T>());
+
+  // Set BC dofs to zero (effectively zeroes columns of A)
+  fem::set_bc(b.mutable_array(), {bc}, 0.0);
+  b.scatter_fwd();
+
+  // Pack coefficients and constants
+
+  if (un->x()->array().size() != b.array().size())
+    throw std::runtime_error("error");
   // Create Function to hold solution
   auto u = std::make_shared<fem::Function<T>>(V);
 
   std::function<int(fem::Function<T>&, const la::Vector<T>&)> solver_function
-      = [A](fem::Function<T>& u, const la::Vector<T>& b) {
-          // CG solver
-          int num_iter = 0;
+      = [M, un, bc](fem::Function<T>& u, const la::Vector<T>& b)
+  {
+    const std::vector<T> constants;
+    auto coeff = fem::allocate_coefficient_storage(*M);
 
-          return num_iter;
-        };
+    // Create function for computing the action of A on x (y = Ax)
+    auto action
+        = [&M, &un, &bc, &coeff, &constants](la::Vector<T>& x, la::Vector<T>& y)
+    {
+      // Zero y
+      y.set(0.0);
+
+      // Update coefficient un (just copy data from x to un)
+      std::copy(x.array().begin(), x.array().end(),
+                un->x()->mutable_array().begin());
+
+      // Compute action of A on x
+      fem::pack_coefficients(*M, coeff);
+      fem::assemble_vector(y.mutable_array(), *M, std::span<const T>(constants),
+                           fem::make_coefficients_span(coeff));
+
+      // Set BC dofs to zero (effectively zeroes rows of A)
+      fem::set_bc(y.mutable_array(), {bc}, 0.0);
+
+      // Accumuate ghost values
+      y.scatter_rev(std::plus<T>());
+
+      // Update ghost values
+      y.scatter_fwd();
+    };
+
+    int num_it = linalg::cg(*u.x(), b, action, 100, 1e-6);
+    return num_it;
+  };
 
   return {std::make_shared<la::Vector<T>>(std::move(b)), u, solver_function};
 }

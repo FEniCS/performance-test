@@ -15,10 +15,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # DOLFIN_CMAKE_CONFIG_PATH)
 find_package(DOLFINX REQUIRED)
 
-set(CMAKE_BUILD_TYPE "Release")
+# set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_CXX_FLAGS "-Ofast -march=native ${CMAKE_CXX_FLAGS} -DNDEBUG -Wall")
+set(CMAKE_C_FLAGS "-Ofast -march=native ${CMAKE_C_FLAGS} -DNDEBUG -Wall")
 
 # Compile UFL files
-
 add_custom_command(
   OUTPUT Poisson.c
   COMMAND ffcx ${CMAKE_CURRENT_SOURCE_DIR}/Poisson.py
@@ -42,11 +43,12 @@ ${CMAKE_CURRENT_BINARY_DIR}/Poisson.c)
 if(DEFINED ENV{BOOST_ROOT} OR DEFINED BOOST_ROOT)
   set(Boost_NO_SYSTEM_PATHS on)
 endif()
-set(Boost_USE_MULTITHREADED $ENV{BOOST_USE_MULTITHREADED})
+# set(Boost_USE_MULTITHREADED $ENV{BOOST_USE_MULTITHREADED})
 set(Boost_VERBOSE TRUE)
 find_package(Boost 1.70 REQUIRED program_options)
 
 # Target libraries
-target_link_libraries(${PROJECT_NAME} dolfinx Boost::program_options)
+target_link_libraries(${PROJECT_NAME} dolfinx Boost::program_options pthread)
 
+message(STATUS ${CMAKE_CXX_FLAGS})
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
