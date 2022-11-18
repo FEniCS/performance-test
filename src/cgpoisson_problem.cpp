@@ -29,7 +29,8 @@ using T = PetscScalar;
 
 std::tuple<std::shared_ptr<la::Vector<T>>, std::shared_ptr<fem::Function<T>>,
            std::function<int(fem::Function<T>&, const la::Vector<T>&)>>
-cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
+cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order,
+                   std::string scatterer)
 {
   common::Timer t0("ZZZ FunctionSpace");
 
@@ -150,7 +151,7 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
   auto u = std::make_shared<fem::Function<T>>(V);
 
   std::function<int(fem::Function<T>&, const la::Vector<T>&)> solver_function
-      = [M, un, bc](fem::Function<T>& u, const la::Vector<T>& b)
+      = [M, un, bc, scatterer](fem::Function<T>& u, const la::Vector<T>& b)
   {
     const std::vector<T> constants;
     auto coeff = fem::allocate_coefficient_storage(*M);
@@ -174,8 +175,12 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
         out[idx[i]] = op(out[idx[i]], in[i]);
     };
 
-    auto type = common::Scatterer<>::type::p2p;
-    // std::vector<MPI_Request> request(1, MPI_REQUEST_NULL);
+    common::Scatterer<>::type type;
+    if (scatterer == "neighbor")
+      type = common::Scatterer<>::type::neighbor;
+    if (scatterer == "p2p")
+      type = common::Scatterer<>::type::p2p;
+
     std::vector<MPI_Request> request = sct.create_request_vector(type);
 
     // Create function for computing the action of A on x (y = Ax)

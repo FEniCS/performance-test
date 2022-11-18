@@ -66,7 +66,9 @@ void solve(int argc, char* argv[])
       "output directory (no output unless this is set)")(
       "ndofs", po::value<std::size_t>()->default_value(50000),
       "number of degrees of freedom")(
-      "order", po::value<std::size_t>()->default_value(1), "polynomial order");
+      "order", po::value<std::size_t>()->default_value(1), "polynomial order")(
+      "scatterer", po::value<std::string>()->default_value("neighbor"),
+      "scatterer for CG (neighbor or p2p)");
 
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv)
@@ -88,6 +90,7 @@ void solve(int argc, char* argv[])
   const std::string scaling_type = vm["scaling_type"].as<std::string>();
   const std::size_t ndofs = vm["ndofs"].as<std::size_t>();
   const int order = vm["order"].as<std::size_t>();
+  const std::string scatterer = vm["scatterer"].as<std::string>();
   const std::string output_dir = vm["output"].as<std::string>();
   const bool output = (output_dir.size() > 0);
   const int mpi_rank = dolfinx::MPI::rank(MPI_COMM_WORLD);
@@ -148,7 +151,8 @@ void solve(int argc, char* argv[])
   else if (problem_type == "cgpoisson")
   {
     // Create Poisson problem
-    std::tie(b, u, solver_function) = cgpoisson::problem(mesh, order);
+    std::tie(b, u, solver_function)
+        = cgpoisson::problem(mesh, order, scatterer);
   }
   else if (problem_type == "elasticity")
   {
