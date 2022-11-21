@@ -14,6 +14,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Get DOLFIN configuration data (DOLFINConfig.cmake must be in
 # DOLFIN_CMAKE_CONFIG_PATH)
 find_package(DOLFINX REQUIRED)
+find_package(CUDA REQUIRED)
 
 # set(CMAKE_BUILD_TYPE "Release")
 set(CMAKE_CXX_FLAGS "-Ofast ${CMAKE_CXX_FLAGS} -g -Wall")
@@ -47,8 +48,10 @@ endif()
 set(Boost_VERBOSE TRUE)
 find_package(Boost 1.70 REQUIRED program_options)
 
+set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES 75)
+
 # Target libraries
-target_link_libraries(${PROJECT_NAME} dolfinx Boost::program_options pthread)
+target_link_libraries(${PROJECT_NAME} dolfinx Boost::program_options pthread ${CUDA_LIBRARIES} ${CUDA_CUBLAS_LIBRARIES})
 
 message(STATUS ${CMAKE_CXX_FLAGS})
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

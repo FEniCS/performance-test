@@ -6,7 +6,8 @@
 
 #include "cgpoisson_problem.h"
 #include "Poisson.h"
-#include "cg.h"
+#include "solvers/cg.h"
+#include "cuda_allocator.h"
 #include <cfloat>
 #include <cmath>
 #include <dolfinx/common/Scatterer.h>
@@ -27,13 +28,24 @@
 using namespace dolfinx;
 using T = PetscScalar;
 
-std::tuple<std::shared_ptr<la::Vector<T>>, std::shared_ptr<fem::Function<T>>,
-           std::function<int(fem::Function<T>&, const la::Vector<T>&)>>
+using cuda_vector = la::Vector<PetscScalar, CUDA::allocator<PetscScalar>>;
+
+std::tuple<std::shared_ptr<cuda_vector>, std::shared_ptr<cuda_vector>,
+           std::function<int(cuda_vector&, const cuda_vector&)>>
 cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order,
                    std::string scatterer)
 {
-  common::Timer t0("ZZZ FunctionSpace");
+  MPI_Comm comm = mesh->comm();
+  int rank = dolfinx::MPI::rank(comm);
 
+  int num_gpus = 0;
+  cudaGetDeviceCount(&num_gpus);
+
+  cublasHandle_t handle;
+  cublasCreate(&handle);
+  cudaSetDevice(rank);
+
+  common::Timer t0("ZZZ FunctionSpace");
   std::vector fs_poisson_a
       = {functionspace_form_Poisson_a1, functionspace_form_Poisson_a2,
          functionspace_form_Poisson_a3};
@@ -121,8 +133,15 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order,
       *form_poisson_M.at(order - 1), {V}, {{"w0", un}}, {{}}, {}));
 
   // Create la::Vector
-  la::Vector<T> b(L->function_spaces()[0]->dofmap()->index_map,
-                  L->function_spaces()[0]->dofmap()->index_map_bs());
+  CUDA::allocator<PetscScalar> data_allocator;
+
+  cuda_vector b(L->function_spaces()[0]->dofmap()->index_map,
+                L->function_spaces()[0]->dofmap()->index_map_bs(),
+                data_allocator);
+
+  cuda_vector b_(L->function_spaces()[0]->dofmap()->index_map,
+                 L->function_spaces()[0]->dofmap()->index_map_bs(),
+                 data_allocator);
   b.set(0);
   common::Timer t5("ZZZ Assemble vector");
   const std::vector constants_L = fem::pack_constants(*L);
@@ -150,9 +169,11 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order,
   // Create Function to hold solution
   auto u = std::make_shared<fem::Function<T>>(V);
 
-  std::function<int(fem::Function<T>&, const la::Vector<T>&)> solver_function
-      = [M, un, bc, scatterer](fem::Function<T>& u, const la::Vector<T>& b)
+  std::function<int(cuda_vector&, const cuda_vector&)> solver_function
+      = [=](cuda_vector& u, const cuda_vector& b)
   {
+    CUDA::allocator<std::int32_t> ind_alloc;
+
     const std::vector<T> constants;
     auto coeff = fem::allocate_coefficient_storage(*M);
 
@@ -161,7 +182,8 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order,
     int bs = V->dofmap()->bs();
     common::Scatterer sct(*idx_map, bs);
 
-    std::vector<T> local_buffer(sct.local_buffer_size(), 0);
+    std::vector<T, decltype(data_allocator)> local_buffer(
+        sct.local_buffer_size(), 0);
     std::vector<T> remote_buffer(sct.remote_buffer_size(), 0);
 
     auto pack_fn = [](const auto& in, const auto& idx, auto& out)
@@ -183,8 +205,11 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order,
 
     std::vector<MPI_Request> request = sct.create_request_vector(type);
 
+    auto [indices, num_owned] = bc->dof_indices();
+    CUDA::allocator<std::int32_t> data_alloc;
+
     // Create function for computing the action of A on x (y = Ax)
-    auto action = [&](la::Vector<T>& x, la::Vector<T>& y)
+    auto action = [&](cuda_vector& x, cuda_vector& y)
     {
       // Zero y
       y.set(0.0);
@@ -194,15 +219,13 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order,
                 un->x()->mutable_array().begin());
 
       // Compute action of A on x
-      fem::pack_coefficients(*M, coeff);
-      fem::assemble_vector(y.mutable_array(), *M, std::span<const T>(constants),
-                           fem::make_coefficients_span(coeff));
+      // fem::pack_coefficients(*M, coeff);
+      // fem::assemble_vector(y.mutable_array(), *M, std::span<const
+      // T>(constants),
+      //                      fem::make_coefficients_span(coeff));
 
       // Set BC dofs to zero (effectively zeroes rows of A)
-      fem::set_bc(y.mutable_array(), {bc}, 0.0);
-
-      // Accumuate ghost values
-      // y.scatter_rev(std::plus<T>());
+      // fem::set_bc(y.mutable_array(), {bc}, 0.0);
 
       const std::int32_t local_size = bs * idx_map->size_local();
       const std::int32_t num_ghosts = bs * idx_map->num_ghosts();
@@ -220,9 +243,10 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order,
       sct.scatter_fwd_end<T>(remote_buffer, remote_data, unpack_fn, request);
     };
 
-    int num_it = linalg::cg(*u.x(), b, action, 100, 1e-6);
+    int num_it = linalg::cg(handle, u, b, action, 100, 1e-6);
     return num_it;
   };
 
-  return {std::make_shared<la::Vector<T>>(std::move(b)), u, solver_function};
+  return {std::make_shared<cuda_vector>(std::move(b)),
+          std::make_shared<cuda_vector>(std::move(b_)), solver_function};
 }

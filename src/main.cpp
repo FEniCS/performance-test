@@ -142,7 +142,9 @@ void solve(int argc, char* argv[])
   mesh->topology_mutable().create_entities(2);
   mesh->topology_mutable().create_connectivity(2, 3);
   t_ent.stop();
-
+  int num_iter;
+  double norm;
+  std::tie(b, u, solver_function) = poisson::problem(mesh, order);
   if (problem_type == "poisson")
   {
     // Create Poisson problem
@@ -151,8 +153,9 @@ void solve(int argc, char* argv[])
   else if (problem_type == "cgpoisson")
   {
     // Create Poisson problem
-    std::tie(b, u, solver_function)
-        = cgpoisson::problem(mesh, order, scatterer);
+    auto [b, u, solver_function] = cgpoisson::problem(mesh, order, scatterer);
+    num_iter = solver_function(*u, *b);
+    norm = dolfinx::la::norm(*u);
   }
   else if (problem_type == "elasticity")
   {
@@ -199,9 +202,9 @@ void solve(int argc, char* argv[])
         << std::endl;
   }
 
-  dolfinx::common::Timer t5("ZZZ Solve");
-  int num_iter = solver_function(*u, *b);
-  t5.stop();
+  // dolfinx::common::Timer t5("ZZZ Solve");
+  // int num_iter = solver_function(*u, *b);
+  // t5.stop();
 
   if (output)
   {
@@ -218,7 +221,6 @@ void solve(int argc, char* argv[])
   dolfinx::list_timings(MPI_COMM_WORLD, {dolfinx::TimingType::wall});
 
   // Report number of Krylov iterations
-  double norm = dolfinx::la::norm(*(u->x()));
   if (dolfinx::MPI::rank(MPI_COMM_WORLD) == 0)
   {
     std::cout << "*** Number of Krylov iterations: " << num_iter << std::endl;
