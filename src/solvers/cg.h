@@ -53,6 +53,7 @@ void axpy(cublasHandle_t handle, Scalar alpha, const Vector& x, Vector& y)
     static_assert(dependent_false<T>::value);
 
   assert_cuda(status);
+  cudaDeviceSynchronize();
 }
 
 template <typename Vector>
@@ -76,7 +77,63 @@ Vector::value_type inner_product(cublasHandle_t handle, Vector& x, Vector& y)
   else
     static_assert(dependent_false<T>::value);
   assert_cuda(status);
+  cudaDeviceSynchronize();
   return result;
+}
+
+template <typename Scalar, typename Vector>
+void scale(cublasHandle_t handle, Scalar alpha, Vector& x)
+{
+  using T = typename Vector::value_type;
+  T* _x = x.mutable_array().data();
+  std::size_t n = x.map()->size_local();
+
+  T _alpha = static_cast<T>(alpha);
+  cublasStatus_t status;
+
+  if constexpr (std::is_same<T, double>())
+    status = cublasDscal(handle, n, &_alpha, _x, 1);
+  else if constexpr (std::is_same<T, float>())
+    status = cublasSscal(handle, n, &_alpha, _x, 1);
+  else
+    static_assert(dependent_false<T>::value);
+  assert_cuda(status);
+  cudaDeviceSynchronize();
+}
+
+template <typename Vector1, typename Vector2>
+void copy(cublasHandle_t handle, const Vector1& x, Vector2& y)
+{
+
+  using T = typename Vector1::value_type;
+  assert(x.array().size() == y.array().size());
+
+  const T* _x = x.array().data();
+  T* _y = y.mutable_array().data();
+  std::size_t n = x.map()->size_local();
+
+  cublasStatus_t status;
+
+  if constexpr (std::is_same<T, double>())
+    status = cublasDcopy(handle, n, _x, 1, _y, 1);
+  else if constexpr (std::is_same<T, float>())
+    status = cublasScopy(handle, n, _x, 1, _y, 1);
+  else
+    static_assert(dependent_false<T>::value);
+
+  assert_cuda(status);
+  cudaDeviceSynchronize();
+}
+
+template <typename Vector>
+void print(const Vector& x, int n = 0)
+{
+  auto array = x.array();
+  if (n == 0)
+    n = array.size();
+
+  std::for_each_n(array.begin(), n, [](auto e) { std::cout << e << " "; });
+  std::cout << std::endl;
 }
 
 /// Solve problem A.x = b using the Conjugate Gradient method
@@ -133,11 +190,18 @@ int cg(cublasHandle_t handle, Vector& x, const Vector& b,
     const T beta = rnorm_new / rnorm;
     rnorm = rnorm_new;
 
+    std::cout << "alpha :" << alpha << std::endl;
+    std::cout << "beta :" << beta << std::endl;
+    std::cout << "rnorm :" << rnorm << std::endl;
+
+
     if (rnorm / rnorm0 < rtol2)
       break;
 
     // Update p (p <- beta*p + r)
-    // axpy(p, beta, p, r);
+    // p = beta*p
+    scale(handle, beta, p);
+    // p = p + r
     axpy(handle, T(1), p, r);
   }
 

@@ -1,13 +1,14 @@
 cmake_minimum_required(VERSION 3.16)
 
 set(PROJECT_NAME dolfinx-scaling-test)
-project(${PROJECT_NAME})
+project(${PROJECT_NAME} LANGUAGES C CXX CUDA)
 
 include(GNUInstallDirs)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 # Use C++20
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CUDA_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -15,6 +16,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # DOLFIN_CMAKE_CONFIG_PATH)
 find_package(DOLFINX REQUIRED)
 find_package(CUDA REQUIRED)
+
 
 # set(CMAKE_BUILD_TYPE "Release")
 set(CMAKE_CXX_FLAGS "-Ofast ${CMAKE_CXX_FLAGS} -g -Wall")
@@ -34,9 +36,17 @@ add_custom_command(
 )
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/" ".")
 
 # Executable
-add_executable(${PROJECT_NAME} main.cpp mesh.cpp elasticity_problem.cpp cgpoisson_problem.cpp poisson_problem.cpp mem.cpp
+add_executable(${PROJECT_NAME} 
+main.cpp 
+${CMAKE_CURRENT_SOURCE_DIR}/solvers/scatter.cu
+mesh.cpp 
+elasticity_problem.cpp 
+cgpoisson_problem.cpp 
+poisson_problem.cpp 
+mem.cpp
 ${CMAKE_CURRENT_BINARY_DIR}/Elasticity.c
 ${CMAKE_CURRENT_BINARY_DIR}/Poisson.c)
 
@@ -52,6 +62,7 @@ set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES 75)
 
 # Target libraries
 target_link_libraries(${PROJECT_NAME} dolfinx Boost::program_options pthread ${CUDA_LIBRARIES} ${CUDA_CUBLAS_LIBRARIES})
+target_include_directories(${PROJECT_NAME} PUBLIC SYSTEM ${CUDA_INCLUDE_DIRS})
 
 message(STATUS ${CMAKE_CXX_FLAGS})
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

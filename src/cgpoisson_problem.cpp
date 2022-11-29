@@ -6,8 +6,9 @@
 
 #include "cgpoisson_problem.h"
 #include "Poisson.h"
-#include "solvers/cg.h"
 #include "cuda_allocator.h"
+#include "solvers/cg.h"
+#include "solvers/scatter.hpp"
 #include <cfloat>
 #include <cmath>
 #include <dolfinx/common/Scatterer.h>
@@ -124,9 +125,6 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order,
   // Define variational forms
   auto L = std::make_shared<fem::Form<T>>(fem::create_form<T>(
       *form_poisson_L.at(order - 1), {V}, {{"w0", f}, {"w1", g}}, {}, {}));
-  // auto a = std::make_shared<fem::Form<T>>(fem::create_form<T>(
-  //     *form_poisson_a.at(order - 1), {V, V},
-  //     std::vector<std::shared_ptr<const fem::Function<T>>>{}, {}, {}));
 
   auto un = std::make_shared<fem::Function<T>>(V);
   auto M = std::make_shared<fem::Form<T>>(fem::create_form<T>(
@@ -135,14 +133,11 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order,
   // Create la::Vector
   CUDA::allocator<PetscScalar> data_allocator;
 
-  cuda_vector b(L->function_spaces()[0]->dofmap()->index_map,
-                L->function_spaces()[0]->dofmap()->index_map_bs(),
-                data_allocator);
+  auto map = L->function_spaces()[0]->dofmap()->index_map;
+  auto bs = L->function_spaces()[0]->dofmap()->index_map_bs();
+  cuda_vector b(map, bs, data_allocator);
+  cuda_vector b_(map, bs, data_allocator);
 
-  cuda_vector b_(L->function_spaces()[0]->dofmap()->index_map,
-                 L->function_spaces()[0]->dofmap()->index_map_bs(),
-                 data_allocator);
-  b.set(0);
   common::Timer t5("ZZZ Assemble vector");
   const std::vector constants_L = fem::pack_constants(*L);
   auto coeffs_L = fem::allocate_coefficient_storage(*L);
@@ -172,78 +167,64 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order,
   std::function<int(cuda_vector&, const cuda_vector&)> solver_function
       = [=](cuda_vector& u, const cuda_vector& b)
   {
-    CUDA::allocator<std::int32_t> ind_alloc;
+    using ind_allocator_t = CUDA::allocator<std::int32_t>;
+    ind_allocator_t ind_alloc;
 
-    const std::vector<T> constants;
-    auto coeff = fem::allocate_coefficient_storage(*M);
+    using data_allocator_t = CUDA::allocator<T>;
+    data_allocator_t data_alloc;
 
-    auto V = M->function_spaces()[0];
     auto idx_map = V->dofmap()->index_map;
     int bs = V->dofmap()->bs();
-    common::Scatterer sct(*idx_map, bs);
-
-    std::vector<T, decltype(data_allocator)> local_buffer(
-        sct.local_buffer_size(), 0);
-    std::vector<T> remote_buffer(sct.remote_buffer_size(), 0);
+    common::Scatterer<ind_allocator_t> sct(*idx_map, bs, ind_alloc);
+    std::vector<T, data_allocator_t> local_buffer(sct.local_buffer_size(), 0,
+                                                  data_alloc);
+    std::vector<T, data_allocator_t> remote_buffer(sct.remote_buffer_size(), 0,
+                                                   data_alloc);
 
     auto pack_fn = [](const auto& in, const auto& idx, auto& out)
     {
-      for (std::size_t i = 0; i < idx.size(); ++i)
-        out[i] = in[idx[i]];
+      //   out[i] = in[idx[i]];
+      gather<T>(idx.size(), idx.data(), in.data(), out.data(), 512);
     };
     auto unpack_fn = [](const auto& in, const auto& idx, auto& out, auto op)
     {
-      for (std::size_t i = 0; i < idx.size(); ++i)
-        out[idx[i]] = op(out[idx[i]], in[i]);
+      //   out[idx[i]] = op(out[idx[i]], in[i]);
+      scatter<T>(idx.size(), idx.data(), in.data(), out.data(), 512);
     };
 
-    common::Scatterer<>::type type;
+    common::Scatterer<ind_allocator_t>::type type;
     if (scatterer == "neighbor")
-      type = common::Scatterer<>::type::neighbor;
+      type = common::Scatterer<ind_allocator_t>::type::neighbor;
     if (scatterer == "p2p")
-      type = common::Scatterer<>::type::p2p;
+      type = common::Scatterer<ind_allocator_t>::type::p2p;
 
     std::vector<MPI_Request> request = sct.create_request_vector(type);
 
     auto [indices, num_owned] = bc->dof_indices();
-    CUDA::allocator<std::int32_t> data_alloc;
 
     // Create function for computing the action of A on x (y = Ax)
     auto action = [&](cuda_vector& x, cuda_vector& y)
     {
-      // Zero y
-      y.set(0.0);
+      linalg::copy(handle, x, y);
 
-      // Update coefficient un (just copy data from x to un)
-      std::copy(x.array().begin(), x.array().end(),
-                un->x()->mutable_array().begin());
+      // const std::int32_t local_size = bs * idx_map->size_local();
+      // const std::int32_t num_ghosts = bs * idx_map->num_ghosts();
+      // std::span<T> remote_data(y.mutable_array().data() + local_size,
+      //                          num_ghosts);
+      // std::span<T> local_data(y.mutable_array().data(), local_size);
+      // sct.scatter_rev_begin<T>(remote_data, remote_buffer, local_buffer,
+      //                          pack_fn, request, type);
+      // sct.scatter_rev_end<T>(local_buffer, local_data, unpack_fn,
+      //                        std::plus<T>(), request);
 
-      // Compute action of A on x
-      // fem::pack_coefficients(*M, coeff);
-      // fem::assemble_vector(y.mutable_array(), *M, std::span<const
-      // T>(constants),
-      //                      fem::make_coefficients_span(coeff));
-
-      // Set BC dofs to zero (effectively zeroes rows of A)
-      // fem::set_bc(y.mutable_array(), {bc}, 0.0);
-
-      const std::int32_t local_size = bs * idx_map->size_local();
-      const std::int32_t num_ghosts = bs * idx_map->num_ghosts();
-      std::span<T> remote_data(y.mutable_array().data() + local_size,
-                               num_ghosts);
-      std::span<T> local_data(y.mutable_array().data(), local_size);
-      sct.scatter_rev_begin<T>(remote_data, remote_buffer, local_buffer,
-                               pack_fn, request, type);
-      sct.scatter_rev_end<T>(local_buffer, local_data, unpack_fn,
-                             std::plus<T>(), request);
-
-      // Update ghost values
-      sct.scatter_fwd_begin<T>(local_data, local_buffer, remote_buffer, pack_fn,
-                               request, type);
-      sct.scatter_fwd_end<T>(remote_buffer, remote_data, unpack_fn, request);
+      // // Update ghost values
+      // sct.scatter_fwd_begin<T>(local_data, local_buffer, remote_buffer,
+      // pack_fn,
+      //                          request, type);
+      // sct.scatter_fwd_end<T>(remote_buffer, remote_data, unpack_fn, request);
     };
 
-    int num_it = linalg::cg(handle, u, b, action, 100, 1e-6);
+    int num_it = linalg::cg(handle, u, b, action, 5, 1e-6);
     return num_it;
   };
 

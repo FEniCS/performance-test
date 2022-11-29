@@ -253,8 +253,8 @@ int main(int argc, char* argv[])
   const int mpi_rank = dolfinx::MPI::rank(MPI_COMM_WORLD);
   std::string thread_name = "RANK: " + std::to_string(mpi_rank);
   loguru::set_thread_name(thread_name.c_str());
-  if (mpi_rank == 0)
-    loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
+  // if (mpi_rank == 0)
+  //   loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
 
   solve(argc, argv);
 
