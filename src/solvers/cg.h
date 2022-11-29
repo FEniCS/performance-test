@@ -33,7 +33,7 @@ namespace linalg
 /// @param[in] alpha
 /// @param[in] x
 template <typename Scalar, typename Vector>
-void axpy(cublasHandle_t handle, Scalar alpha, const Vector& x, Vector& y)
+void axpy(cublasHandle_t handle, Scalar alpha, Vector& y, const Vector& x)
 {
   using T = typename Vector::value_type;
 
@@ -158,7 +158,8 @@ int cg(cublasHandle_t handle, Vector& x, const Vector& b,
   Vector r(b), y(b);
 
   // Compute initial residual r0 = b - Ax0
-  action(x, y);              // y = Ax0
+  action(x, y); // y = Ax0
+  std::cout << "ynorm " << inner_product(handle, y, y) << std::endl;
   axpy(handle, T(-1), r, y); // r = (-1)*y + b
 
   // Create p work vector
@@ -190,10 +191,9 @@ int cg(cublasHandle_t handle, Vector& x, const Vector& b,
     const T beta = rnorm_new / rnorm;
     rnorm = rnorm_new;
 
-    std::cout << "alpha :" << alpha << std::endl;
-    std::cout << "beta :" << beta << std::endl;
-    std::cout << "rnorm :" << rnorm << std::endl;
-
+    std::cout << "alpha" << alpha << std::endl;
+    std::cout << "beta" << beta << std::endl;
+    std::cout << "rnorm" << rnorm << std::endl;
 
     if (rnorm / rnorm0 < rtol2)
       break;

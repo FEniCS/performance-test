@@ -8,6 +8,7 @@
 #include "Poisson.h"
 #include "cuda_allocator.h"
 #include "solvers/cg.h"
+#include "solvers/poisson.hpp"
 #include "solvers/scatter.hpp"
 #include <cfloat>
 #include <cmath>
@@ -200,28 +201,71 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order,
 
     std::vector<MPI_Request> request = sct.create_request_vector(type);
 
-    auto [indices, num_owned] = bc->dof_indices();
+    auto mesh = V->mesh();
+    std::int32_t ncells = mesh->topology().index_map(3)->size_local();
+
+    auto dofmap = V->dofmap()->list().array();
+    std::vector<std::int32_t, ind_allocator_t> dofmap_dev(dofmap.size(),
+                                                          ind_alloc);
+    cudaMemcpy(dofmap_dev.data(), dofmap.data(),
+               dofmap.size() * sizeof(std::int32_t), cudaMemcpyHostToDevice);
+
+    std::vector<double, data_allocator_t> w(dofmap.size(), data_alloc);
+    std::vector<double, data_allocator_t> A(dofmap.size(), data_alloc);
+
+    auto gdmap = mesh->geometry().dofmap().array();
+    std::vector<std::int32_t, ind_allocator_t> gdmap_dev(gdmap.size() * 3,
+                                                         ind_alloc);
+
+    for (std::size_t i = 0; i < gdmap.size(); i++)
+      for (int j = 0; j < 3; j++)
+        gdmap_dev[i * 3 + j] = gdmap[i] * 3 + j;
+
+    auto _geom = mesh->geometry().x();
+    std::vector<double, data_allocator_t> geometry_data(_geom.size(),
+                                                        data_alloc);
+    cudaMemcpy(geometry_data.data(), _geom.data(),
+               geometry_data.size() * sizeof(double), cudaMemcpyHostToDevice);
+
+    std::vector<double, data_allocator_t> coordinate_dofs(gdmap_dev.size(),
+                                                          data_alloc);
+    gather(gdmap_dev.size(), gdmap_dev.data(), geometry_data.data(),
+           coordinate_dofs.data(), 512);
+
+    int ndofs_cell = V->element()->space_dimension();
 
     // Create function for computing the action of A on x (y = Ax)
     auto action = [&](cuda_vector& x, cuda_vector& y)
     {
-      linalg::copy(handle, x, y);
+      cudaMemset(A.data(), T(0), A.size() * sizeof(T));
+      auto _y = y.mutable_array();
+      cudaMemset(_y.data(), T(0), _y.size() * sizeof(T));
 
-      // const std::int32_t local_size = bs * idx_map->size_local();
-      // const std::int32_t num_ghosts = bs * idx_map->num_ghosts();
-      // std::span<T> remote_data(y.mutable_array().data() + local_size,
-      //                          num_ghosts);
-      // std::span<T> local_data(y.mutable_array().data(), local_size);
-      // sct.scatter_rev_begin<T>(remote_data, remote_buffer, local_buffer,
-      //                          pack_fn, request, type);
-      // sct.scatter_rev_end<T>(local_buffer, local_data, unpack_fn,
-      //                        std::plus<T>(), request);
+      cudaDeviceSynchronize();
+      gather(dofmap_dev.size(), dofmap_dev.data(), x.array().data(), w.data(),
+             512);
+      cudaDeviceSynchronize();
+      poisson(ncells, A.data(), w.data(), coordinate_dofs.data(), ndofs_cell,
+              512);
+      cudaDeviceSynchronize();
+      scatter(dofmap_dev.size(), dofmap_dev.data(), A.data(),
+              y.mutable_array().data(), 512);
+      cudaDeviceSynchronize();
 
-      // // Update ghost values
-      // sct.scatter_fwd_begin<T>(local_data, local_buffer, remote_buffer,
-      // pack_fn,
-      //                          request, type);
-      // sct.scatter_fwd_end<T>(remote_buffer, remote_data, unpack_fn, request);
+      const std::int32_t local_size = bs * idx_map->size_local();
+      const std::int32_t num_ghosts = bs * idx_map->num_ghosts();
+      T* y_data = y.mutable_array().data();
+      std::span<T> remote_data(y_data + local_size, num_ghosts);
+      std::span<T> local_data(y_data, local_size);
+      sct.scatter_rev_begin<T>(remote_data, remote_buffer, local_buffer,
+                               pack_fn, request, type);
+      sct.scatter_rev_end<T>(local_buffer, local_data, unpack_fn,
+                             std::plus<T>(), request);
+
+      // Update ghost values
+      sct.scatter_fwd_begin<T>(local_data, local_buffer, remote_buffer, pack_fn,
+                               request, type);
+      sct.scatter_fwd_end<T>(remote_buffer, remote_data, unpack_fn, request);
     };
 
     int num_it = linalg::cg(handle, u, b, action, 5, 1e-6);

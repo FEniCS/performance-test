@@ -42,6 +42,8 @@ include_directories("${CMAKE_CURRENT_SOURCE_DIR}/" ".")
 add_executable(${PROJECT_NAME} 
 main.cpp 
 ${CMAKE_CURRENT_SOURCE_DIR}/solvers/scatter.cu
+${CMAKE_CURRENT_SOURCE_DIR}/solvers/poisson.cu
+
 mesh.cpp 
 elasticity_problem.cpp 
 cgpoisson_problem.cpp 
