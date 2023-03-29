@@ -27,7 +27,7 @@ using T = PetscScalar;
 
 std::tuple<std::shared_ptr<la::Vector<T>>, std::shared_ptr<fem::Function<T>>,
            std::function<int(fem::Function<T>&, const la::Vector<T>&)>>
-poisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
+poisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
 {
   common::Timer t0("ZZZ FunctionSpace");
 
@@ -35,7 +35,7 @@ poisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
       = {functionspace_form_Poisson_a1, functionspace_form_Poisson_a2,
          functionspace_form_Poisson_a3};
 
-  auto V = std::make_shared<fem::FunctionSpace>(
+  auto V = std::make_shared<fem::FunctionSpace<double>>(
       fem::create_functionspace(*fs_poisson_a.at(order - 1), "v_0", mesh));
 
   t0.stop();
@@ -65,8 +65,8 @@ poisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
       });
 
   // Find constrained dofs
-  const std::vector<std::int32_t> bdofs
-      = fem::locate_dofs_topological(*V, tdim - 1, bc_facets);
+  const std::vector<std::int32_t> bdofs = fem::locate_dofs_topological(
+      V->mesh()->topology_mutable(), *V->dofmap(), tdim - 1, bc_facets);
 
   auto bc = std::make_shared<fem::DirichletBC<T>>(u0, bdofs);
   t2.stop();
@@ -140,10 +140,11 @@ poisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
   fem::pack_coefficients(*L, coeffs_L);
   fem::assemble_vector<T>(b.mutable_array(), *L, constants_L,
                           fem::make_coefficients_span(coeffs_L));
-  fem::apply_lifting(b.mutable_array(), {a}, {constants_L},
-                     {fem::make_coefficients_span(coeffs_L)}, {{bc}}, {}, 1.0);
+  fem::apply_lifting<T, double>(b.mutable_array(), {a}, {constants_L},
+                                {fem::make_coefficients_span(coeffs_L)}, {{bc}},
+                                {}, 1.0);
   b.scatter_rev(std::plus<>());
-  fem::set_bc(b.mutable_array(), {bc});
+  fem::set_bc<T, double>(b.mutable_array(), {bc});
   t5.stop();
 
   t1.stop();

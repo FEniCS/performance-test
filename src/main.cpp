@@ -115,7 +115,7 @@ void solve(int argc, char* argv[])
   const std::size_t num_processes = dolfinx::MPI::size(MPI_COMM_WORLD);
 
   // Assemble problem
-  std::shared_ptr<dolfinx::mesh::Mesh> mesh;
+  std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh;
   std::shared_ptr<dolfinx::la::Vector<PetscScalar>> b;
   std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u;
   std::function<int(dolfinx::fem::Function<PetscScalar>&,
@@ -127,7 +127,7 @@ void solve(int argc, char* argv[])
   dolfinx::common::Timer t0("ZZZ Create Mesh");
   if (mesh_type == "cube")
   {
-    mesh = std::make_shared<dolfinx::mesh::Mesh>(create_cube_mesh(
+    mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(create_cube_mesh(
         MPI_COMM_WORLD, ndofs, strong_scaling, ndofs_per_node, order));
   }
   else

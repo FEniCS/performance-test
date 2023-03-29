@@ -32,7 +32,7 @@ namespace
 {
 // Function to compute the near nullspace for elasticity - it is made up
 // of the six rigid body modes
-MatNullSpace build_near_nullspace(const fem::FunctionSpace& V)
+MatNullSpace build_near_nullspace(const fem::FunctionSpace<double>& V)
 {
   // Create vectors for nullspace basis
   auto map = V.dofmap()->index_map;
@@ -92,14 +92,14 @@ MatNullSpace build_near_nullspace(const fem::FunctionSpace& V)
 
 std::tuple<std::shared_ptr<la::Vector<T>>, std::shared_ptr<fem::Function<T>>,
            std::function<int(fem::Function<T>&, const la::Vector<T>&)>>
-elastic::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
+elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
 {
   common::Timer t0("ZZZ FunctionSpace");
 
   std::vector fs_elasticity
       = {functionspace_form_Elasticity_a1, functionspace_form_Elasticity_a2,
          functionspace_form_Elasticity_a3};
-  auto V = std::make_shared<fem::FunctionSpace>(
+  auto V = std::make_shared<fem::FunctionSpace<double>>(
       fem::create_functionspace(*fs_elasticity.at(order - 1), "v_0", mesh));
 
   t0.stop();
@@ -129,8 +129,8 @@ elastic::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
       });
 
   // Find constrained dofs
-  const std::vector<std::int32_t> bdofs
-      = fem::locate_dofs_topological(*V, tdim - 1, bc_facets);
+  const std::vector<std::int32_t> bdofs = fem::locate_dofs_topological(
+      V->mesh()->topology_mutable(), *V->dofmap(), tdim - 1, bc_facets);
 
   // Bottom (x[1] = 0) surface
   auto bc = std::make_shared<fem::DirichletBC<T>>(u0, bdofs);
@@ -171,9 +171,9 @@ elastic::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
       = {form_Elasticity_L1, form_Elasticity_L2, form_Elasticity_L3};
   std::vector form_elasticity_a
       = {form_Elasticity_a1, form_Elasticity_a2, form_Elasticity_a3};
-  auto L = std::make_shared<fem::Form<T>>(fem::create_form<T>(
+  auto L = std::make_shared<fem::Form<T, double>>(fem::create_form<T>(
       *form_elasticity_L.at(order - 1), {V}, {{"w0", f}}, {}, {}));
-  auto a = std::make_shared<fem::Form<T>>(fem::create_form<T>(
+  auto a = std::make_shared<fem::Form<T, double>>(fem::create_form<T>(
       *form_elasticity_a.at(order - 1), {V, V},
       std::vector<std::shared_ptr<const fem::Function<T>>>{}, {}, {}));
   t0c.stop();
@@ -207,10 +207,11 @@ elastic::problem(std::shared_ptr<mesh::Mesh> mesh, int order)
   fem::pack_coefficients(*L, coeffs_L);
   fem::assemble_vector<T>(b.mutable_array(), *L, constants_L,
                           fem::make_coefficients_span(coeffs_L));
-  fem::apply_lifting(b.mutable_array(), {a}, {constants_L},
-                     {fem::make_coefficients_span(coeffs_L)}, {{bc}}, {}, 1.0);
+  fem::apply_lifting<T, double>(b.mutable_array(), {a}, {constants_L},
+                                {fem::make_coefficients_span(coeffs_L)}, {{bc}},
+                                {}, 1.0);
   b.scatter_rev(std::plus<>());
-  fem::set_bc(b.mutable_array(), {bc});
+  fem::set_bc<T, double>(b.mutable_array(), {bc});
   t3.stop();
 
   common::Timer t4("ZZZ Create near-nullspace");
