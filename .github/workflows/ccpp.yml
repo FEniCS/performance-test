@@ -17,8 +17,6 @@ jobs:
     container: fenicsproject/test-env:nightly-openmpi
 
     env:
-      CC: clang
-      CXX: clang++
 
       PETSC_ARCH: linux-gnu-real-64
       OMPI_ALLOW_RUN_AS_ROOT: 1
