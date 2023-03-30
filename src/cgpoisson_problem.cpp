@@ -4,10 +4,12 @@
 //
 // SPDX-License-Identifier:    MIT
 
-#include "poisson_problem.h"
+#include "cgpoisson_problem.h"
 #include "Poisson.h"
+#include "cg.h"
 #include <cfloat>
 #include <cmath>
+#include <dolfinx/common/Scatterer.h>
 #include <dolfinx/common/Timer.h>
 #include <dolfinx/fem/DirichletBC.h>
 #include <dolfinx/fem/Function.h>
@@ -15,7 +17,7 @@
 #include <dolfinx/fem/assembler.h>
 #include <dolfinx/fem/petsc.h>
 #include <dolfinx/fem/utils.h>
-#include <dolfinx/la/petsc.h>
+#include <dolfinx/la/MatrixCSR.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/utils.h>
 #include <memory>
@@ -27,7 +29,8 @@ using T = PetscScalar;
 
 std::tuple<std::shared_ptr<la::Vector<T>>, std::shared_ptr<fem::Function<T>>,
            std::function<int(fem::Function<T>&, const la::Vector<T>&)>>
-poisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
+cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
+                   std::string scatterer)
 {
   common::Timer t0("ZZZ FunctionSpace");
 
@@ -103,32 +106,19 @@ poisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
       = {form_Poisson_L1, form_Poisson_L2, form_Poisson_L3};
   std::vector form_poisson_a
       = {form_Poisson_a1, form_Poisson_a2, form_Poisson_a3};
+  std::vector form_poisson_M
+      = {form_Poisson_M1, form_Poisson_M2, form_Poisson_M3};
 
   // Define variational forms
   auto L = std::make_shared<fem::Form<T>>(fem::create_form<T>(
       *form_poisson_L.at(order - 1), {V}, {{"w0", f}, {"w1", g}}, {}, {}));
-  auto a = std::make_shared<fem::Form<T>>(fem::create_form<T>(
-      *form_poisson_a.at(order - 1), {V, V},
-      std::vector<std::shared_ptr<const fem::Function<T>>>{}, {}, {}));
+  // auto a = std::make_shared<fem::Form<T>>(fem::create_form<T>(
+  //     *form_poisson_a.at(order - 1), {V, V},
+  //     std::vector<std::shared_ptr<const fem::Function<T>>>{}, {}, {}));
 
-  // Create matrices and vector, and assemble system
-  std::shared_ptr<la::petsc::Matrix> A = std::make_shared<la::petsc::Matrix>(
-      fem::petsc::create_matrix(*a), false);
-
-  common::Timer t4("ZZZ Assemble matrix");
-  const std::vector constants_a = fem::pack_constants(*a);
-  auto coeffs_a = fem::allocate_coefficient_storage(*a);
-  fem::pack_coefficients(*a, coeffs_a);
-  fem::assemble_matrix<T>(la::petsc::Matrix::set_block_fn(A->mat(), ADD_VALUES),
-                          *a, constants_a,
-                          fem::make_coefficients_span(coeffs_a), {bc});
-  MatAssemblyBegin(A->mat(), MAT_FLUSH_ASSEMBLY);
-  MatAssemblyEnd(A->mat(), MAT_FLUSH_ASSEMBLY);
-  fem::set_diagonal<T>(la::petsc::Matrix::set_fn(A->mat(), INSERT_VALUES), *V,
-                       {bc});
-  MatAssemblyBegin(A->mat(), MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(A->mat(), MAT_FINAL_ASSEMBLY);
-  t4.stop();
+  auto un = std::make_shared<fem::Function<T>>(V);
+  auto M = std::make_shared<fem::Form<T>>(fem::create_form<T>(
+      *form_poisson_M.at(order - 1), {V}, {{"w0", un}}, {{}}, {}));
 
   // Create la::Vector
   la::Vector<T> b(L->function_spaces()[0]->dofmap()->index_map,
@@ -140,32 +130,98 @@ poisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
   fem::pack_coefficients(*L, coeffs_L);
   fem::assemble_vector<T>(b.mutable_array(), *L, constants_L,
                           fem::make_coefficients_span(coeffs_L));
-  fem::apply_lifting<T, double>(b.mutable_array(), {a}, {constants_L},
-                                {fem::make_coefficients_span(coeffs_L)}, {{bc}},
-                                {}, 1.0);
-  b.scatter_rev(std::plus<>());
-  fem::set_bc<T, double>(b.mutable_array(), {bc});
-  t5.stop();
 
-  t1.stop();
+  // Apply lifting to account for Dirichlet boundary condition
+  // b <- b - A * x_bc
+  fem::set_bc<T, double>(un->x()->mutable_array(), {bc}, -1.0);
+  fem::assemble_vector(b.mutable_array(), *M);
 
+  // Communicate ghost values
+  b.scatter_rev(std::plus<T>());
+
+  // Set BC dofs to zero (effectively zeroes columns of A)
+  fem::set_bc<T, double>(b.mutable_array(), {bc}, 0.0);
+  b.scatter_fwd();
+
+  // Pack coefficients and constants
+
+  if (un->x()->array().size() != b.array().size())
+    throw std::runtime_error("error");
   // Create Function to hold solution
   auto u = std::make_shared<fem::Function<T>>(V);
+
   std::function<int(fem::Function<T>&, const la::Vector<T>&)> solver_function
-      = [A](fem::Function<T>& u, const la::Vector<T>& b)
+      = [M, un, bc, scatterer](fem::Function<T>& u, const la::Vector<T>& b)
   {
-    // Create solver
-    la::petsc::KrylovSolver solver(MPI_COMM_WORLD);
-    solver.set_from_options();
-    solver.set_operator(A->mat());
+    const std::vector<T> constants;
+    auto coeff = fem::allocate_coefficient_storage(*M);
 
-    // Wrap la::Vector
-    la::petsc::Vector _b(la::petsc::create_vector_wrap(b), false);
-    la::petsc::Vector x(la::petsc::create_vector_wrap(*u.x()), false);
+    auto V = M->function_spaces()[0];
+    auto idx_map = V->dofmap()->index_map;
+    int bs = V->dofmap()->bs();
+    common::Scatterer sct(*idx_map, bs);
 
-    // Solve
-    int num_iter = solver.solve(x.vec(), _b.vec());
-    return num_iter;
+    std::vector<T> local_buffer(sct.local_buffer_size(), 0);
+    std::vector<T> remote_buffer(sct.remote_buffer_size(), 0);
+
+    auto pack_fn = [](const auto& in, const auto& idx, auto& out)
+    {
+      for (std::size_t i = 0; i < idx.size(); ++i)
+        out[i] = in[idx[i]];
+    };
+    auto unpack_fn = [](const auto& in, const auto& idx, auto& out, auto op)
+    {
+      for (std::size_t i = 0; i < idx.size(); ++i)
+        out[idx[i]] = op(out[idx[i]], in[i]);
+    };
+
+    common::Scatterer<>::type type;
+    if (scatterer == "neighbor")
+      type = common::Scatterer<>::type::neighbor;
+    if (scatterer == "p2p")
+      type = common::Scatterer<>::type::p2p;
+
+    std::vector<MPI_Request> request = sct.create_request_vector(type);
+
+    // Create function for computing the action of A on x (y = Ax)
+    auto action = [&](la::Vector<T>& x, la::Vector<T>& y)
+    {
+      // Zero y
+      y.set(0.0);
+
+      // Update coefficient un (just copy data from x to un)
+      std::copy(x.array().begin(), x.array().end(),
+                un->x()->mutable_array().begin());
+
+      // Compute action of A on x
+      fem::pack_coefficients(*M, coeff);
+      fem::assemble_vector(y.mutable_array(), *M, std::span<const T>(constants),
+                           fem::make_coefficients_span(coeff));
+
+      // Set BC dofs to zero (effectively zeroes rows of A)
+      fem::set_bc<T, double>(y.mutable_array(), {bc}, 0.0);
+
+      // Accumuate ghost values
+      // y.scatter_rev(std::plus<T>());
+
+      const std::int32_t local_size = bs * idx_map->size_local();
+      const std::int32_t num_ghosts = bs * idx_map->num_ghosts();
+      std::span<T> remote_data(y.mutable_array().data() + local_size,
+                               num_ghosts);
+      std::span<T> local_data(y.mutable_array().data(), local_size);
+      sct.scatter_rev_begin<T>(remote_data, remote_buffer, local_buffer,
+                               pack_fn, request, type);
+      sct.scatter_rev_end<T>(local_buffer, local_data, unpack_fn,
+                             std::plus<T>(), request);
+
+      // Update ghost values
+      sct.scatter_fwd_begin<T>(local_data, local_buffer, remote_buffer, pack_fn,
+                               request, type);
+      sct.scatter_fwd_end<T>(remote_buffer, remote_data, unpack_fn, request);
+    };
+
+    int num_it = linalg::cg(*u.x(), b, action, 100, 1e-6);
+    return num_it;
   };
 
   return {std::make_shared<la::Vector<T>>(std::move(b)), u, solver_function};

@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier:    MIT
 
+#include "cgpoisson_problem.h"
 #include "elasticity_problem.h"
 #include "mem.h"
 #include "mesh.h"
@@ -54,7 +55,7 @@ void solve(int argc, char* argv[])
   bool mem_profile;
   desc.add_options()("help,h", "print usage message")(
       "problem_type", po::value<std::string>()->default_value("poisson"),
-      "problem (poisson or elasticity)")(
+      "problem (poisson, cgpoisson, or elasticity)")(
       "mesh_type", po::value<std::string>()->default_value("cube"),
       "mesh (cube or unstructured)")(
       "memory_profiling", po::bool_switch(&mem_profile)->default_value(false),
@@ -65,7 +66,9 @@ void solve(int argc, char* argv[])
       "output directory (no output unless this is set)")(
       "ndofs", po::value<std::size_t>()->default_value(50000),
       "number of degrees of freedom")(
-      "order", po::value<std::size_t>()->default_value(1), "polynomial order");
+      "order", po::value<std::size_t>()->default_value(1), "polynomial order")(
+      "scatterer", po::value<std::string>()->default_value("neighbor"),
+      "scatterer for CG (neighbor or p2p)");
 
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv)
@@ -77,7 +80,8 @@ void solve(int argc, char* argv[])
 
   if (vm.count("help"))
   {
-    std::cout << desc << std::endl;;
+    std::cout << desc << std::endl;
+    ;
     return;
   }
 
@@ -86,6 +90,7 @@ void solve(int argc, char* argv[])
   const std::string scaling_type = vm["scaling_type"].as<std::string>();
   const std::size_t ndofs = vm["ndofs"].as<std::size_t>();
   const int order = vm["order"].as<std::size_t>();
+  const std::string scatterer = vm["scatterer"].as<std::string>();
   const std::string output_dir = vm["output"].as<std::string>();
   const bool output = (output_dir.size() > 0);
   const int mpi_rank = dolfinx::MPI::rank(MPI_COMM_WORLD);
@@ -110,7 +115,7 @@ void solve(int argc, char* argv[])
   const std::size_t num_processes = dolfinx::MPI::size(MPI_COMM_WORLD);
 
   // Assemble problem
-  std::shared_ptr<dolfinx::mesh::Mesh> mesh;
+  std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh;
   std::shared_ptr<dolfinx::la::Vector<PetscScalar>> b;
   std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u;
   std::function<int(dolfinx::fem::Function<PetscScalar>&,
@@ -122,7 +127,7 @@ void solve(int argc, char* argv[])
   dolfinx::common::Timer t0("ZZZ Create Mesh");
   if (mesh_type == "cube")
   {
-    mesh = std::make_shared<dolfinx::mesh::Mesh>(create_cube_mesh(
+    mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(create_cube_mesh(
         MPI_COMM_WORLD, ndofs, strong_scaling, ndofs_per_node, order));
   }
   else
@@ -142,6 +147,12 @@ void solve(int argc, char* argv[])
   {
     // Create Poisson problem
     std::tie(b, u, solver_function) = poisson::problem(mesh, order);
+  }
+  else if (problem_type == "cgpoisson")
+  {
+    // Create Poisson problem
+    std::tie(b, u, solver_function)
+        = cgpoisson::problem(mesh, order, scatterer);
   }
   else if (problem_type == "elasticity")
   {
