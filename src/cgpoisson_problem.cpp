@@ -29,7 +29,7 @@ using T = PetscScalar;
 
 std::tuple<std::shared_ptr<la::Vector<T>>, std::shared_ptr<fem::Function<T>>,
            std::function<int(fem::Function<T>&, const la::Vector<T>&)>>
-cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order,
+cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
                    std::string scatterer)
 {
   common::Timer t0("ZZZ FunctionSpace");
@@ -38,7 +38,7 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order,
       = {functionspace_form_Poisson_a1, functionspace_form_Poisson_a2,
          functionspace_form_Poisson_a3};
 
-  auto V = std::make_shared<fem::FunctionSpace>(
+  auto V = std::make_shared<fem::FunctionSpace<double>>(
       fem::create_functionspace(*fs_poisson_a.at(order - 1), "v_0", mesh));
 
   t0.stop();
@@ -68,8 +68,8 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order,
       });
 
   // Find constrained dofs
-  const std::vector<std::int32_t> bdofs
-      = fem::locate_dofs_topological(*V, tdim - 1, bc_facets);
+  const std::vector<std::int32_t> bdofs = fem::locate_dofs_topological(
+      V->mesh()->topology_mutable(), *V->dofmap(), tdim - 1, bc_facets);
 
   auto bc = std::make_shared<fem::DirichletBC<T>>(u0, bdofs);
   t2.stop();
@@ -133,14 +133,14 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order,
 
   // Apply lifting to account for Dirichlet boundary condition
   // b <- b - A * x_bc
-  fem::set_bc(un->x()->mutable_array(), {bc}, -1.0);
+  fem::set_bc<T, double>(un->x()->mutable_array(), {bc}, -1.0);
   fem::assemble_vector(b.mutable_array(), *M);
 
   // Communicate ghost values
   b.scatter_rev(std::plus<T>());
 
   // Set BC dofs to zero (effectively zeroes columns of A)
-  fem::set_bc(b.mutable_array(), {bc}, 0.0);
+  fem::set_bc<T, double>(b.mutable_array(), {bc}, 0.0);
   b.scatter_fwd();
 
   // Pack coefficients and constants
@@ -199,7 +199,7 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh> mesh, int order,
                            fem::make_coefficients_span(coeff));
 
       // Set BC dofs to zero (effectively zeroes rows of A)
-      fem::set_bc(y.mutable_array(), {bc}, 0.0);
+      fem::set_bc<T, double>(y.mutable_array(), {bc}, 0.0);
 
       // Accumuate ghost values
       // y.scatter_rev(std::plus<T>());
