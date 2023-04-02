@@ -139,8 +139,8 @@ void solve(int argc, char* argv[])
 
   dolfinx::common::Timer t_ent(
       "ZZZ Create facets and facet->cell connectivity");
-  mesh->topology_mutable().create_entities(2);
-  mesh->topology_mutable().create_connectivity(2, 3);
+  mesh->topology_mutable()->create_entities(2);
+  mesh->topology_mutable()->create_connectivity(2, 3);
   t_ent.stop();
 
   if (problem_type == "poisson")
@@ -172,9 +172,9 @@ void solve(int argc, char* argv[])
     const std::int64_t num_dofs
         = u->function_space()->dofmap()->index_map->size_global()
           * u->function_space()->dofmap()->index_map_bs();
-    const int tdim = mesh->topology().dim();
+    const int tdim = mesh->topology()->dim();
     const std::int64_t num_cells
-        = mesh->topology().index_map(tdim)->size_global();
+        = mesh->topology()->index_map(tdim)->size_global();
     const std::string num_cells_human = int64_to_human(num_cells);
     const std::string num_dofs_human = int64_to_human(num_dofs);
     std::cout

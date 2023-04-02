@@ -51,7 +51,7 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
   u0->x()->set(0);
 
   // Find facets with bc applied
-  const int tdim = mesh->topology().dim();
+  const int tdim = mesh->topology()->dim();
   const std::vector<std::int32_t> bc_facets = mesh::locate_entities(
       *mesh, tdim - 1,
       [](auto x)
@@ -69,7 +69,7 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
 
   // Find constrained dofs
   const std::vector<std::int32_t> bdofs = fem::locate_dofs_topological(
-      V->mesh()->topology_mutable(), *V->dofmap(), tdim - 1, bc_facets);
+      *V->mesh()->topology_mutable(), *V->dofmap(), tdim - 1, bc_facets);
 
   auto bc = std::make_shared<fem::DirichletBC<T>>(u0, bdofs);
   t2.stop();

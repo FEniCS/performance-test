@@ -171,7 +171,7 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
 
   for (int i = 0; i < r; ++i)
   {
-    mesh.topology_mutable().create_connectivity(3, 1);
+    mesh.topology_mutable()->create_connectivity(3, 1);
     mesh = dolfinx::refinement::refine(mesh, false);
   }
 
@@ -343,23 +343,23 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
       dolfinx::mesh::create_mesh(comm,
                                  dolfinx::graph::AdjacencyList<std::int64_t>(
                                      std::move(topo), std::move(offsets)),
-                                 element, x, {x.size() / 3, 3},
+                                 {element}, x, {x.size() / 3, 3},
                                  dolfinx::mesh::GhostMode::none));
 
-  mesh->topology_mutable().create_entities(1);
+  mesh->topology_mutable()->create_entities(1);
 
-  while (mesh->topology().index_map(0)->size_global()
-             + mesh->topology().index_map(1)->size_global()
+  while (mesh->topology()->index_map(0)->size_global()
+             + mesh->topology()->index_map(1)->size_global()
          < target)
   {
     mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(
         dolfinx::refinement::refine(*mesh, false));
-    mesh->topology_mutable().create_entities(1);
+    mesh->topology_mutable()->create_entities(1);
   }
 
   double fraction
-      = (double)(target - mesh->topology().index_map(0)->size_global())
-        / mesh->topology().index_map(1)->size_global();
+      = (double)(target - mesh->topology()->index_map(0)->size_global())
+        / mesh->topology()->index_map(1)->size_global();
 
   if (mpi_rank == 0)
   {
@@ -380,9 +380,9 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   for (int k = 0; k < 5; ++k)
   {
     // Trial step
-    mesh->topology_mutable().create_entities(1);
+    mesh->topology_mutable()->create_entities(1);
     std::vector<std::int32_t> marked_edges;
-    const std::int32_t num_edges = mesh->topology().index_map(1)->size_local();
+    const std::int32_t num_edges = mesh->topology()->index_map(1)->size_local();
     for (int i = 0; i < num_edges; ++i)
       if (i % 2000 < nmarked)
         marked_edges.push_back(i);
@@ -391,9 +391,9 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
         dolfinx::refinement::refine(*mesh, marked_edges, false));
 
     double actual_fraction
-        = (double)(meshi->topology().index_map(0)->size_global()
-                   - mesh->topology().index_map(0)->size_global())
-          / mesh->topology().index_map(1)->size_global();
+        = (double)(meshi->topology()->index_map(0)->size_global()
+                   - mesh->topology()->index_map(0)->size_global())
+          / mesh->topology()->index_map(1)->size_global();
 
     if (mpi_rank == 0)
     {
