@@ -115,6 +115,7 @@ poisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
   std::shared_ptr<la::petsc::Matrix> A = std::make_shared<la::petsc::Matrix>(
       fem::petsc::create_matrix(*a), false);
 
+  
   common::Timer t4("ZZZ Assemble matrix");
   const std::vector constants_a = fem::pack_constants(*a);
   auto coeffs_a = fem::allocate_coefficient_storage(*a);
@@ -130,6 +131,14 @@ poisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
   MatAssemblyEnd(A->mat(), MAT_FINAL_ASSEMBLY);
   t4.stop();
 
+  common::Timer tgpu("ZZZ Send to GPU");
+  // MATMPIAIJHIPSPARSE
+  Mat B;
+  MatConvert(A->mat(), MATMPIAIJHIPSPARSE, MAT_INITIAL_MATRIX, &B);
+  A = std::make_shared<la::petsc::Matrix>(B, false);
+  tgpu.stop();
+  
+  
   // Create la::Vector
   la::Vector<T> b(L->function_spaces()[0]->dofmap()->index_map,
                   L->function_spaces()[0]->dofmap()->index_map_bs());
