@@ -54,8 +54,8 @@ MatNullSpace build_near_nullspace(const fem::FunctionSpace<double>& V)
   auto x5 = basis[5].mutable_array();
 
   const std::vector<double> x = V.tabulate_dof_coordinates(false);
-  auto& dofs = V.dofmap()->list().array();
-  for (std::size_t i = 0; i < dofs.size(); ++i)
+  const std::int32_t* dofs = V.dofmap()->map().data_handle();
+  for (std::size_t i = 0; i < V.dofmap()->map().size(); ++i)
   {
     std::span<const double, 3> xd(x.data() + 3 * dofs[i], 3);
 

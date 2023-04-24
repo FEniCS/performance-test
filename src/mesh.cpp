@@ -336,8 +336,8 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   for (std::size_t i = 0; i < offsets.size() - 1; ++i)
     offsets[i + 1] = offsets[i] + 4;
 
-  dolfinx::fem::CoordinateElement element(dolfinx::mesh::CellType::tetrahedron,
-                                          1);
+  dolfinx::fem::CoordinateElement<double> element(
+      dolfinx::mesh::CellType::tetrahedron, 1);
 
   auto mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(
       dolfinx::mesh::create_mesh(comm,
