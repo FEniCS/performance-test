@@ -9,6 +9,7 @@
 
 namespace dolfinx::fem
 {
+template <std::floating_point T>
 class CoordinateElement;
 }
 
