@@ -70,8 +70,8 @@ MatNullSpace build_near_nullspace(const fem::FunctionSpace<double>& V)
   }
 
   // Orthonormalize basis
-  la::orthonormalize(std::span(basis));
-  if (!la::is_orthonormal(std::span<const decltype(basis)::value_type>(basis)))
+  la::orthonormalize(std::vector<std::reference_wrapper<la::Vector<T>>>(basis.begin(), basis.end()));
+  if (!la::is_orthonormal(std::vector<std::reference_wrapper<const la::Vector<T>>>(basis.begin(), basis.end())))
   {
     throw std::runtime_error("Space not orthonormal");
   }
