@@ -4,7 +4,8 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from ufl import (Coefficient, FiniteElement, TestFunction, TrialFunction, action, ds,
+import basix.ufl
+from ufl import (Coefficient, FunctionSpace, TestFunction, TrialFunction, Mesh, action, ds,
                  dx, grad, inner, tetrahedron)
 
 # Load namespace
@@ -12,13 +13,15 @@ ns = vars()
 
 forms = []
 for degree in range(1, 4):
-    element = FiniteElement("Lagrange", tetrahedron, degree)
+    element = basix.ufl.element("Lagrange", "tetrahedron", degree)
+    domain = Mesh(basix.ufl.element("Lagrange", "tetrahedron", degree, shape=(3,)))
+    space = FunctionSpace(domain, element)
 
-    u = TrialFunction(element)
-    v = TestFunction(element)
-    f = Coefficient(element)
-    g = Coefficient(element)
-    un = Coefficient(element)
+    u = TrialFunction(space)
+    v = TestFunction(space)
+    f = Coefficient(space)
+    g = Coefficient(space)
+    un = Coefficient(space)
 
     aname = 'a' + str(degree)
     Lname = 'L' + str(degree)
