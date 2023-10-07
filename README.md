@@ -1,7 +1,7 @@
-# Performance test codes for FEniCS/DOLFIN-X
+# Performance test codes for FEniCSx/DOLFINx
 
 This repository contains solvers for testing the parallel performance of
-DOLFIN-X and the underlying linear solvers. It tests elliptic equations
+DOLFINx and the underlying linear solvers. It tests elliptic equations
 - Poisson equation and elasticity - in three dimensions.
 
 Representative performance data is available at
@@ -16,7 +16,7 @@ The source of the tests is in `src/` directory.
 
 ### Requirements
 
-- FEniCSx/DOLFINx installation (development version of dolfinx
+- FEniCSx/DOLFINx installation (development version of DOLFINx
   **required**)
 - PETSc installation
 - Boost Program Options
