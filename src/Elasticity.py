@@ -4,8 +4,9 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from ufl import (Coefficient, Identity, TestFunction, TrialFunction,
-                 VectorElement, dx, grad, inner, tetrahedron, tr)
+import basix.ufl
+from ufl import (Coefficient, Identity, FunctionSpace, Mesh, TestFunction, TrialFunction,
+                 dx, grad, inner, tetrahedron, tr)
 
 # Elasticity parameters
 E = 1.0e6
@@ -19,10 +20,12 @@ ns = vars()
 
 forms = []
 for degree in range(1, 4):
-    element = VectorElement("Lagrange", cell, degree)
+    element = basix.ufl.element("Lagrange", "tetrahedron", degree, shape=(3, ))
+    domain = Mesh(element)
+    space = FunctionSpace(domain, element)
 
-    u, v = TrialFunction(element), TestFunction(element)
-    f = Coefficient(element)
+    u, v = TrialFunction(space), TestFunction(space)
+    f = Coefficient(space)
 
     def eps(v):
         return 0.5*(grad(v) + grad(v).T)
