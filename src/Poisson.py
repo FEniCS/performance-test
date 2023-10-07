@@ -14,7 +14,7 @@ ns = vars()
 forms = []
 for degree in range(1, 4):
     element = basix.ufl.element("Lagrange", "tetrahedron", degree)
-    domain = Mesh(basix.ufl.element("Lagrange", "tetrahedron", degree, shape=(3,)))
+    domain = Mesh(basix.ufl.element("Lagrange", "tetrahedron", 1, shape=(3,)))
     space = FunctionSpace(domain, element)
 
     u = TrialFunction(space)
