@@ -1,13 +1,13 @@
-# Performance test codes for FEniCS/DOLFIN-X
+# Performance test codes for FEniCSx/DOLFINx
 
 This repository contains solvers for testing the parallel performance of
-DOLFIN-X and the underlying linear solvers. It tests elliptic equations
+DOLFINx and the underlying linear solvers. It tests elliptic equations
 - Poisson equation and elasticity - in three dimensions.
 
 Representative performance data is available at
 https://fenics.github.io/performance-test-results/.
 
-[![FEniCS Performance Test CI](https://github.com/FEniCS/performance-test/workflows/FEniCS%20Performance%20Test%20CI/badge.svg)](https://github.com/FEniCS/performance-test/actions?query=branch%3Amaster)
+[![FEniCS Performance Test CI](https://github.com/FEniCS/performance-test/workflows/FEniCS%20Performance%20Test%20CI/badge.svg)](https://github.com/FEniCS/performance-test/actions?query=branch%3Amain)
 
 ## Building
 
@@ -16,12 +16,11 @@ The source of the tests is in `src/` directory.
 
 ### Requirements
 
-- FEniCS/DOLFIN-X installation, with MPI, PETSc and HDF5 enabled
-  (development version of dolfinx **required**)
-- PETSc installation (development version **required**)
-- `libboost-program-options-dev`
-The development versions of dolfinx and PETSc have a number of fixes
-that are necessary to run the tests successfully, and for performance.
+- FEniCSx/DOLFINx installation (development version of DOLFINx
+  **required**)
+- PETSc installation
+- Boost Program Options
+
 
 ### Compilation
 
@@ -36,10 +35,12 @@ In the `src/` directory, build the program:
 Options for the test are:
 
 - Problem type (`--problem_type`): `poisson` or `elasticity`
-- Scaling type (`--scaling_type`): `strong` (fixed problem size) or `weak`
-  (fixed problem size per process)
+- Scaling type (`--scaling_type`): `strong` (fixed problem size) or
+  `weak` (fixed problem size per process)
 - Number of degrees-of-freedom (`--ndofs`): total (in case of strong
   scaling) or per process (for weak scaling)
+- Order (`--order`): polynomial order (1, 2, or 3) - only on cube mesh,
+  defaults to 1.
 - File output (`--output`): `true` or `false` (IO performance depends
   heavily on the underlying filesystem)
 - Data output directory (`--output_dir`): directory to write solution
@@ -59,8 +60,8 @@ performance.
 
 For elasticity, a conjugate gradient (CG) solver with a smoothed
 aggregation algebraic multigrid (GAMG) preconditioner is recommended.
-For a weak scaling test with 8 MPI processes and 500k
-degrees-of-freedom per process:
+For a weak scaling test with 8 MPI processes and 500k degrees-of-freedom
+per process:
 
 ```
 mpirun -np 8 ./dolfinx-scaling-test \
@@ -120,7 +121,9 @@ mpirun -np 8 ./dolfinx-scaling-test \
 -ksp_rtol 1.0e-8 \
 -pc_type hypre \
 -pc_hypre_type boomeramg \
--pc_hypre_boomeramg_strong_threshold 0.5 \
+-pc_hypre_boomeramg_strong_threshold 0.7 \
+-pc_hypre_boomeramg_agg_nl 4 \
+-pc_hypre_boomeramg_agg_num_paths 2 \
 -options_left
 ```
 For a strong scaling test, with 8 MPI processes and 10M
@@ -136,7 +139,9 @@ mpirun -np 8 ./dolfinx-scaling-test \
 -ksp_rtol 1.0e-8 \
 -pc_type hypre \
 -pc_hypre_type boomeramg \
--pc_hypre_boomeramg_strong_threshold 0.5 \
+-pc_hypre_boomeramg_strong_threshold 0.7 \
+-pc_hypre_boomeramg_agg_nl 4 \
+-pc_hypre_boomeramg_agg_num_paths 2 \
 -options_left
 ```
 

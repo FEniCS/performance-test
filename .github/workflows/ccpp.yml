@@ -6,7 +6,7 @@ on:
       - '**'
   pull_request:
     branches:
-      - master
+      - main
   schedule:
     # * is a special character in YAML so you have to quote this string
     - cron: "0 3 * * 0,3"
@@ -14,11 +14,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: fenicsproject/test-env:openmpi
+    container: fenicsproject/test-env:nightly-openmpi
 
     env:
-      CC: clang-10
-      CXX: clang++-10
 
       PETSC_ARCH: linux-gnu-real-64
       OMPI_ALLOW_RUN_AS_ROOT: 1
@@ -32,39 +30,34 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Get Basix and install
+      - name: Get DOLFINx
         uses: actions/checkout@v2
         with:
-          path: ./basix
-          repository: FEniCS/basix
+          path: ./dolfinx
+          repository: FEniCS/dolfinx
           ref: main
 
       - name: Install FEniCS Python components
         run: |
           apt-get -qq update
           apt-get -y install libboost-program-options-dev
-          cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -B build-dir -S ./basix
-          cmake --build build-dir
-          cmake --install build-dir
-          pip3 install ./basix/python
+          pip3 install pip --upgrade
           pip3 install git+https://github.com/FEniCS/ufl.git
+          pip3 install git+https://github.com/FEniCS/basix.git
           pip3 install git+https://github.com/FEniCS/ffcx
       - name: Build dolfinx cpp
         run: |
-          git clone -b main --single-branch https://github.com/FEniCS/dolfinx.git
-          cd $(mktemp -d)
-          cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS_RELEASE='-O2 -Wall -Wextra -pedantic -Werror'  $OLDPWD/dolfinx/cpp
-          ninja install
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Developer -B build -S dolfinx/cpp/
+          cmake --build build
+          cmake --install build
       - name: Build performance test
         run: |
-          mkdir build
-          cd build
-          cmake -G Ninja -DCMAKE_BUILD_TYPE=Release  ../src
-          ninja -j 1
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Developer -B build-dir -S src
+          cmake --build build-dir
+          cmake --install build-dir
       - name: Run Poisson test (BoomerAMG, serial)
         run: |
-          cd build/
-          ./dolfinx-scaling-test \
+          dolfinx-scaling-test \
           --problem_type poisson \
           --scaling_type weak \
           --ndofs 50000 \
@@ -74,11 +67,12 @@ jobs:
           -ksp_rtol 1.0e-8 \
           -pc_type hypre \
           -pc_hypre_type boomeramg \
-          -pc_hypre_boomeramg_strong_threshold 0.5
+          -pc_hypre_boomeramg_strong_threshold 0.7 \
+          -pc_hypre_boomeramg_agg_nl 4 \
+          -pc_hypre_boomeramg_agg_num_paths 2
       - name: Run Poisson test (BoomerAMG, weak)
         run: |
-          cd build/
-          mpirun -np 2 ./dolfinx-scaling-test \
+          mpirun -np 2 dolfinx-scaling-test \
           --problem_type poisson \
           --scaling_type weak \
           --ndofs 5000 \
@@ -88,11 +82,28 @@ jobs:
           -ksp_rtol 1.0e-8 \
           -pc_type hypre \
           -pc_hypre_type boomeramg \
-          -pc_hypre_boomeramg_strong_threshold 0.5
+          -pc_hypre_boomeramg_strong_threshold 0.7 \
+          -pc_hypre_boomeramg_agg_nl 4 \
+          -pc_hypre_boomeramg_agg_num_paths 2
+      - name: Run Poisson test (BoomerAMG, 3rd order, weak)
+        run: |
+          mpirun -np 2 dolfinx-scaling-test \
+          --problem_type poisson \
+          --scaling_type weak \
+          --ndofs 50000 \
+          --order 3 \
+          -log_view \
+          -ksp_view \
+          -ksp_type cg \
+          -ksp_rtol 1.0e-8 \
+          -pc_type hypre \
+          -pc_hypre_type boomeramg \
+          -pc_hypre_boomeramg_strong_threshold 0.7 \
+          -pc_hypre_boomeramg_agg_nl 4 \
+          -pc_hypre_boomeramg_agg_num_paths 2
       - name: Run Poisson test (BoomerAMG, weak, unstructured mesh)
         run: |
-          cd build/
-          mpirun -np 2 ./dolfinx-scaling-test \
+          mpirun -np 2 dolfinx-scaling-test \
           --problem_type poisson \
           --mesh_type unstructured \
           --scaling_type weak \
@@ -103,11 +114,12 @@ jobs:
           -ksp_rtol 1.0e-8 \
           -pc_type hypre \
           -pc_hypre_type boomeramg \
-          -pc_hypre_boomeramg_strong_threshold 0.5
+          -pc_hypre_boomeramg_strong_threshold 0.7 \
+          -pc_hypre_boomeramg_agg_nl 4 \
+          -pc_hypre_boomeramg_agg_num_paths 2
       - name: Run Poisson test (BoomerAMG, strong)
         run: |
-          cd build/
-          mpirun -np 2 ./dolfinx-scaling-test \
+          mpirun -np 2 dolfinx-scaling-test \
           --problem_type poisson \
           --scaling_type strong \
           --ndofs 100000 \
@@ -117,11 +129,12 @@ jobs:
           -ksp_rtol 1.0e-8 \
           -pc_type hypre \
           -pc_hypre_type boomeramg \
-          -pc_hypre_boomeramg_strong_threshold 0.5
+          -pc_hypre_boomeramg_strong_threshold 0.7 \
+          -pc_hypre_boomeramg_agg_nl 4 \
+          -pc_hypre_boomeramg_agg_num_paths 2
       - name: Run elasticity test (GAMG, serial)
         run: |
-          cd build/
-          ./dolfinx-scaling-test \
+          dolfinx-scaling-test \
           --problem_type elasticity \
           --scaling_type weak \
           --ndofs 10000 \
@@ -137,8 +150,7 @@ jobs:
           -matptap_via scalable
       - name: Run elasticity test (GAMG, weak)
         run: |
-          cd build/
-          mpirun -np 2 ./dolfinx-scaling-test \
+          mpirun -np 2 dolfinx-scaling-test \
           --problem_type elasticity \
           --scaling_type weak \
           --ndofs 10000 \
@@ -152,10 +164,26 @@ jobs:
           -mg_levels_pc_type jacobi \
           -mg_levels_esteig_ksp_type cg \
           -matptap_via scalable
+      - name: Run elasticity test (GAMG, 3rd order, weak)
+        run: |
+          mpirun -np 2 dolfinx-scaling-test \
+          --problem_type elasticity \
+          --scaling_type weak \
+          --ndofs 100000 \
+          --order 3 \
+          -log_view \
+          -ksp_view \
+          -ksp_type cg \
+          -ksp_rtol 1.0e-8 \
+          -pc_type gamg \
+          -pc_gamg_coarse_eq_limit 1000 \
+          -mg_levels_ksp_type chebyshev \
+          -mg_levels_pc_type jacobi \
+          -mg_levels_esteig_ksp_type cg \
+          -matptap_via scalable
       - name: Run elasticity test (GAMG, strong)
         run: |
-          cd build/
-          mpirun -np 2 ./dolfinx-scaling-test \
+          mpirun -np 2 dolfinx-scaling-test \
           --problem_type elasticity \
           --scaling_type strong \
           --ndofs 50000 \

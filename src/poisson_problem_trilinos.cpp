@@ -24,20 +24,25 @@
 #include <dolfinx/mesh/Mesh.h>
 #include <memory>
 #include <utility>
-#include <xtensor/xarray.hpp>
-#include <xtensor/xview.hpp>
 
-std::tuple<std::shared_ptr<dolfinx::la::Vector<PetscScalar>>,
-           std::shared_ptr<dolfinx::fem::Function<PetscScalar>>,
-           std::function<int(dolfinx::fem::Function<PetscScalar>&,
-                             const dolfinx::la::Vector<PetscScalar>&)>>
-poisson_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
+using T = PetscScalar;
+
+std::tuple<std::shared_ptr<dolfinx::la::Vector<T>>,
+           std::shared_ptr<dolfinx::fem::Function<T>>,
+           std::function<int(dolfinx::fem::Function<T>&,
+                             const dolfinx::la::Vector<T>&)>>
+poisson_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
+                          int order)
 {
   dolfinx::common::Timer t0("ZZZ FunctionSpace");
   std::stringstream s;
 
-  auto V = dolfinx::fem::create_functionspace(functionspace_form_Poisson_a, "u",
-                                              mesh);
+  std::vector fs_poisson_a
+      = {functionspace_form_Poisson_a1, functionspace_form_Poisson_a2,
+         functionspace_form_Poisson_a3};
+
+  auto V = std::make_shared<fem::FunctionSpace<double>>(
+      fem::create_functionspace(*fs_poisson_a.at(order - 1), "v_0", mesh));
 
   t0.stop();
 
@@ -45,60 +50,87 @@ poisson_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 
   dolfinx::common::Timer t2("ZZZ Create boundary conditions");
   // Define boundary condition
-  auto u0 = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
+  auto u0 = std::make_shared<dolfinx::fem::Function<T>>(V);
   std::fill(u0->x()->mutable_array().begin(), u0->x()->mutable_array().end(),
             0.0);
 
-  const std::vector<std::int32_t> bdofs = dolfinx::fem::locate_dofs_geometrical(
-      {*V}, [](const xt::xtensor<double, 2>& x) -> xt::xtensor<bool, 1> {
-        auto x0 = xt::row(x, 0);
-        return xt::isclose(x0, 0.0) or xt::isclose(x0, 1.0);
+  // Find facets with bc applied
+  const int tdim = mesh->topology()->dim();
+  const std::vector<std::int32_t> bc_facets = mesh::locate_entities(
+      *mesh, tdim - 1,
+      [](auto x)
+      {
+        constexpr double eps = 1.0e-8;
+        std::vector<std::int8_t> marker(x.extent(1), false);
+        for (std::size_t p = 0; p < x.extent(1); ++p)
+        {
+          double x0 = x(0, p);
+          if (std::abs(x0) < eps or std::abs(x0 - 1) < eps)
+            marker[p] = true;
+        }
+        return marker;
       });
 
-  auto bc = std::make_shared<dolfinx::fem::DirichletBC<PetscScalar>>(u0, bdofs);
+  // Find constrained dofs
+  const std::vector<std::int32_t> bdofs = fem::locate_dofs_topological(
+      *V->mesh()->topology_mutable(), *V->dofmap(), tdim - 1, bc_facets);
+
+  auto bc = std::make_shared<fem::DirichletBC<T>>(u0, bdofs);
   t2.stop();
 
   // Define coefficients
   dolfinx::common::Timer t3("ZZZ Create RHS function");
-  auto f = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
-  auto g = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
+  auto f = std::make_shared<dolfinx::fem::Function<T>>(V);
+  auto g = std::make_shared<dolfinx::fem::Function<T>>(V);
   f->interpolate(
-      [](const xt::xtensor<double, 2>& x) -> xt::xarray<PetscScalar> {
-        auto dx
-            = xt::square(xt::row(x, 0) - 0.5) + xt::square(xt::row(x, 1) - 0.5);
-        return 10 * xt::exp(-(dx) / 0.02);
-      });
+      [](auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>>
+      {
+        std::vector<T> v(x.extent(1));
+        for (std::size_t p = 0; p < x.extent(1); ++p)
+        {
+          double dx = x(0, p) - 0.5;
+          double dy = x(1, p) - 0.5;
+          double dr = dx * dx + dy * dy;
+          v[p] = 10 * std::exp(-dr / 0.02);
+        }
 
+        return {std::move(v), {v.size()}};
+      });
   g->interpolate(
-      [](const xt::xtensor<double, 2>& x) -> xt::xarray<PetscScalar> {
-        return xt::sin(5.0 * xt::row(x, 0));
+      [](auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>>
+      {
+        std::vector<T> f(x.extent(1));
+        for (std::size_t p = 0; p < x.extent(1); ++p)
+          f[p] = std::sin(5 * x(0, p));
+        return {f, {f.size()}};
       });
   t3.stop();
 
+  std::vector form_poisson_L
+      = {form_Poisson_L1, form_Poisson_L2, form_Poisson_L3};
+  std::vector form_poisson_a
+      = {form_Poisson_a1, form_Poisson_a2, form_Poisson_a3};
+
   // Define variational forms
-  auto L = std::make_shared<dolfinx::fem::Form<PetscScalar>>(
-      dolfinx::fem::create_form<PetscScalar>(*form_Poisson_L, {V},
-                                             {{"f", f}, {"g", g}}, {}, {}));
-  auto a = std::make_shared<
-      dolfinx::fem::Form<PetscScalar>>(dolfinx::fem::create_form<PetscScalar>(
-      *form_Poisson_a, {V, V},
-      std::vector<std::shared_ptr<const dolfinx::fem::Function<PetscScalar>>>{},
-      {}, {}));
+  auto L = std::make_shared<fem::Form<T>>(fem::create_form<T>(
+      *form_poisson_L.at(order - 1), {V}, {{"w0", f}, {"w1", g}}, {}, {}));
+  auto a = std::make_shared<fem::Form<T>>(fem::create_form<T>(
+      *form_poisson_a.at(order - 1), {V, V},
+      std::vector<std::shared_ptr<const fem::Function<T>>>{}, {}, {}));
 
   Teuchos::RCP<const Teuchos::Comm<int>> comm
-      = Teuchos::rcp(new Teuchos::MpiComm<int>(mesh->mpi_comm()));
+      = Teuchos::rcp(new Teuchos::MpiComm<int>(mesh->comm()));
 
   dolfinx::la::SparsityPattern pattern
       = dolfinx::fem::create_sparsity_pattern(*a);
-  pattern.assemble();
-  const dolfinx::graph::AdjacencyList<std::int32_t>& diagonal_pattern
-      = pattern.diagonal_pattern();
-  const dolfinx::graph::AdjacencyList<std::int32_t>& off_diagonal_pattern
-      = pattern.off_diagonal_pattern();
+  pattern.finalize();
+  auto [sp_edges, sp_offsets] = pattern.graph();
+  const std::size_t nlocal = pattern.index_map(0)->size_local();
 
-  std::vector<std::size_t> nnz(diagonal_pattern.num_nodes());
-  for (int i = 0; i < diagonal_pattern.num_nodes(); ++i)
-    nnz[i] = diagonal_pattern.num_links(i) + off_diagonal_pattern.num_links(i);
+  // Get nnz on each local row
+  std::vector<std::size_t> nnz(nlocal);
+  for (int i = 0; i < nlocal; ++i)
+    nnz[i] = sp_offsets[i + 1] - sp_offsets[i];
 
   dolfinx::common::Timer tcre("Trilinos: create sparsity");
   std::vector<std::int64_t> global_indices = pattern.column_indices();
@@ -120,123 +152,127 @@ poisson_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   Teuchos::RCP<Tpetra::CrsGraph<std::int32_t, std::int64_t>> crs_graph(
       new Tpetra::CrsGraph<std::int32_t, std::int64_t>(vecMap, colMap, _nnz));
 
-  const std::int64_t nlocalrows = V->dofmap()->index_map->size_local();
-  for (std::size_t i = 0; i != diagonal_pattern.num_nodes(); ++i)
+  for (std::size_t i = 0; i != nlocal; ++i)
   {
-    std::vector<std::int32_t> indices(diagonal_pattern.links(i).begin(),
-                                      diagonal_pattern.links(i).end());
-    for (std::int32_t q : off_diagonal_pattern.links(i))
-      indices.push_back(q);
-
-    Teuchos::ArrayView<std::int32_t> _indices(indices.data(), indices.size());
+    Teuchos::ArrayView<const std::int32_t> _indices(
+        sp_edges.data() + sp_offsets[i], nnz[i]);
     crs_graph->insertLocalIndices(i, _indices);
   }
 
   crs_graph->fillComplete();
   tcre.stop();
 
-  Teuchos::RCP<Tpetra::CrsMatrix<PetscScalar, std::int32_t, std::int64_t>>
-      A_Tpetra = Teuchos::rcp(
-          new Tpetra::CrsMatrix<PetscScalar, std::int32_t, std::int64_t>(
-              crs_graph));
+  Teuchos::RCP<Tpetra::CrsMatrix<T, std::int32_t, std::int64_t>> A_Tpetra
+      = Teuchos::rcp(
+          new Tpetra::CrsMatrix<T, std::int32_t, std::int64_t>(crs_graph));
 
   // Temp storage for off-process row indices
   std::vector<std::int64_t> global_cols;
 
-  std::function<int(std::int32_t, const std::int32_t*, std::int32_t,
-                    const std::int32_t*, const PetscScalar*)>
-      tpetra_insert
-      = [&A_Tpetra, &global_indices, &global_cols, &nlocalrows](
-            std::int32_t nr, const std::int32_t* rows, const std::int32_t nc,
-            const std::int32_t* cols, const PetscScalar* data) {
-          for (std::int32_t i = 0; i < nr; ++i)
-          {
-            Teuchos::ArrayView<const double> data_view(data + i * nc, nc);
-            if (rows[i] < nlocalrows)
-            {
-              Teuchos::ArrayView<const int> col_view(cols, nc);
-              int nvalid
-                  = A_Tpetra->sumIntoLocalValues(rows[i], col_view, data_view);
-              if (nvalid != nc)
-                throw std::runtime_error(
-                    "Inserted " + std::to_string(nvalid) + "/"
-                    + std::to_string(nc)
-                    + " on row:" + std::to_string(global_indices[rows[i]]));
-            }
-            else
-            {
-              global_cols.resize(nc);
-              for (int j = 0; j < nc; ++j)
-                global_cols[j] = global_indices[cols[j]];
-              int nvalid = A_Tpetra->sumIntoGlobalValues(
-                  global_indices[rows[i]], global_cols, data_view);
-              if (nvalid != nc)
-                throw std::runtime_error(
-                    "Inserted " + std::to_string(nvalid) + "/"
-                    + std::to_string(nc)
-                    + " on row:" + std::to_string(global_indices[rows[i]]));
-            }
-          }
-          return 0;
-        };
+  std::function<int(const std::span<const std::int32_t>&,
+                    const std::span<const std::int32_t>&,
+                    const std::span<const T>&)>
+      tpetra_insert = [&A_Tpetra, &global_indices, &global_cols,
+                       &nlocal](const std::span<const std::int32_t>& rows,
+                                const std::span<const std::int32_t>& cols,
+                                const std::span<const T>& data)
+  {
+    const std::size_t nr = rows.size();
+    const std::size_t nc = cols.size();
+    for (std::int32_t i = 0; i < nr; ++i)
+    {
+      Teuchos::ArrayView<const double> data_view(data.data() + i * nc, nc);
+      if (rows[i] < nlocal)
+      {
+        Teuchos::ArrayView<const int> col_view(cols.data(), nc);
+        int nvalid = A_Tpetra->sumIntoLocalValues(rows[i], col_view, data_view);
+        if (nvalid != nc)
+          throw std::runtime_error("Inserted " + std::to_string(nvalid) + "/"
+                                   + std::to_string(nc) + " on row:"
+                                   + std::to_string(global_indices[rows[i]]));
+      }
+      else
+      {
+        global_cols.resize(nc);
+        for (int j = 0; j < nc; ++j)
+          global_cols[j] = global_indices[cols[j]];
+        int nvalid = A_Tpetra->sumIntoGlobalValues(global_indices[rows[i]],
+                                                   global_cols, data_view);
+        if (nvalid != nc)
+          throw std::runtime_error("Inserted " + std::to_string(nvalid) + "/"
+                                   + std::to_string(nc) + " on row:"
+                                   + std::to_string(global_indices[rows[i]]));
+      }
+    }
+    return 0;
+  };
 
-  std::function<int(std::int32_t, const std::int32_t*, std::int32_t,
-                    const std::int32_t*, const PetscScalar*)>
-      tpetra_set
-      = [&A_Tpetra, &global_indices, &global_cols, &nlocalrows](
-            std::int32_t nr, const std::int32_t* rows, const std::int32_t nc,
-            const std::int32_t* cols, const PetscScalar* data) {
-          if (*rows >= nlocalrows or nr > 1 or nc > 1)
-            throw std::runtime_error("Error setting diagonal");
-          Teuchos::ArrayView<const int> col_view(cols, 1);
-          Teuchos::ArrayView<const double> data_view(data, 1);
-          int nvalid = A_Tpetra->replaceLocalValues(*rows, col_view, data_view);
-          if (nvalid != nc)
-            throw std::runtime_error("Inserted " + std::to_string(nvalid) + "/"
-                                     + std::to_string(nc) + " on row:"
-                                     + std::to_string(global_indices[*rows]));
+  auto tpetra_set = [&A_Tpetra, &global_indices,
+                     &nlocal](const std::span<const std::int32_t>& rows,
+                              const std::span<const std::int32_t>& cols,
+                              const std::span<const T>& data)
+  {
+    const std::size_t nr = rows.size();
+    const std::size_t nc = cols.size();
+    if (rows[0] >= nlocal or nr > 1 or nc > 1)
+      throw std::runtime_error("Error setting diagonal");
+    Teuchos::ArrayView<const int> col_view(cols.data(), 1);
+    Teuchos::ArrayView<const double> data_view(data.data(), 1);
+    int nvalid = A_Tpetra->replaceLocalValues(rows[0], col_view, data_view);
+    if (nvalid != nc)
+      throw std::runtime_error("Inserted " + std::to_string(nvalid) + "/"
+                               + std::to_string(nc) + " on row:"
+                               + std::to_string(global_indices[rows[0]]));
 
-          return 0;
-        };
+    return 0;
+  };
 
   dolfinx::common::Timer tassm("Trilinos: assemble matrix");
-  dolfinx::fem::assemble_matrix(tpetra_insert, *a, {bc});
-  dolfinx::fem::set_diagonal(tpetra_set, *V, {bc});
+  const std::vector constants_a = fem::pack_constants(*a);
+  auto coeffs_a = fem::allocate_coefficient_storage(*a);
+  fem::pack_coefficients(*a, coeffs_a);
+  dolfinx::fem::assemble_matrix<T>(tpetra_insert, *a, constants_a,
+                                   fem::make_coefficients_span(coeffs_a), {bc});
+  dolfinx::fem::set_diagonal<T>(tpetra_set, *V, {bc});
 
   A_Tpetra->fillComplete(vecMap, vecMap);
   tassm.stop();
 
   double Tpetra_norm = A_Tpetra->getFrobeniusNorm();
-  if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
+  if (dolfinx::MPI::rank(mesh->comm()) == 0)
     s << "NormA(Tpetra) = " << Tpetra_norm << "\n";
 
-  using MV = Tpetra::MultiVector<PetscScalar, std::int32_t, std::int64_t>;
-  using OP = Tpetra::Operator<PetscScalar, std::int32_t, std::int64_t>;
+  using MV = Tpetra::MultiVector<T, std::int32_t, std::int64_t>;
+  using OP = Tpetra::Operator<T, std::int32_t, std::int64_t>;
 
-  dolfinx::common::Timer tassv("Trilinos: assemble vector");
-  std::shared_ptr<dolfinx::la::Vector<PetscScalar>> bx
-      = std::make_shared<dolfinx::la::Vector<PetscScalar>>(
-          L->function_spaces()[0]->dofmap()->index_map,
-          L->function_spaces()[0]->dofmap()->index_map_bs());
-  tcb::span<PetscScalar> b_(bx->mutable_array().data(),
-                            bx->mutable_array().size());
+  // Create la::Vector
+  la::Vector<T> b(L->function_spaces()[0]->dofmap()->index_map,
+                  L->function_spaces()[0]->dofmap()->index_map_bs());
+  b.set(0);
 
-  std::fill(b_.begin(), b_.end(), 0.0);
-  dolfinx::fem::assemble_vector(b_, *L);
-  dolfinx::fem::apply_lifting(b_, {a}, {{bc}}, {}, 1.0);
-  dolfinx::la::scatter_rev(*bx, dolfinx::common::IndexMap::Mode::add);
-  dolfinx::fem::set_bc(b_, {bc});
+  common::Timer t5("ZZZ Assemble vector");
+  const std::vector constants_L = fem::pack_constants(*L);
+  auto coeffs_L = fem::allocate_coefficient_storage(*L);
+  fem::pack_coefficients(*L, coeffs_L);
+  fem::assemble_vector<T>(b.mutable_array(), *L, constants_L,
+                          fem::make_coefficients_span(coeffs_L));
+  fem::apply_lifting<T, double>(b.mutable_array(), {a}, {constants_L},
+                                {fem::make_coefficients_span(coeffs_L)}, {{bc}},
+                                {}, 1.0);
+  b.scatter_rev(std::plus<>());
+  fem::set_bc<T, double>(b.mutable_array(), {bc});
+  t5.stop();
 
   const int size_local = V->dofmap()->index_map->size_local();
   double local_norm = std::transform_reduce(
-      b_.data(), b_.data() + size_local, 0.0, std::plus<double>(),
-      [](PetscScalar val) { return std::norm(val); });
+      b.array().data(), b.array().data() + size_local, 0.0, std::plus<double>(),
+      [](T val) { return std::norm(val); });
 
   double global_norm;
   MPI_Allreduce(&local_norm, &global_norm, 1, MPI_DOUBLE, MPI_SUM,
-                bx->map()->comm());
+                b.index_map()->comm());
 
-  if (dolfinx::MPI::rank(mesh->mpi_comm()) == 0)
+  if (dolfinx::MPI::rank(mesh->comm()) == 0)
     s << "Norm[b](Tpetra) = " << std::sqrt(global_norm) << "\n";
 
   //---
@@ -244,65 +280,62 @@ poisson_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh)
   std::cout << s.str();
 
   // Create Function to hold solution
-  auto u = std::make_shared<dolfinx::fem::Function<PetscScalar>>(V);
+  auto u = std::make_shared<dolfinx::fem::Function<T>>(V);
 
-  std::function<int(dolfinx::fem::Function<PetscScalar>&,
-                    const dolfinx::la::Vector<PetscScalar>&)>
-      solver_function = [A_Tpetra,
-                         vecMap](dolfinx::fem::Function<PetscScalar>& u,
-                                 const dolfinx::la::Vector<PetscScalar>& b) {
-        dolfinx::common::Timer ttri("Trilinos: solve");
+  std::function<int(dolfinx::fem::Function<T>&, const dolfinx::la::Vector<T>&)>
+      solver_function = [A_Tpetra, vecMap](dolfinx::fem::Function<T>& u,
+                                           const dolfinx::la::Vector<T>& b)
+  {
+    dolfinx::common::Timer ttri("Trilinos: solve");
 
-        // FIXME: how to wrap memory with MultiVector? - this is a copy
-        const Teuchos::ArrayView<const PetscScalar> b_view(b.array().data(),
-                                                           b.array().size());
-        Teuchos::RCP<MV> b_Tpetra(new MV(vecMap, b_view, b.array().size(), 1));
+    // FIXME: how to wrap memory with MultiVector? - this is a copy
+    const Teuchos::ArrayView<const T> b_view(b.array().data(),
+                                             b.array().size());
+    Teuchos::RCP<MV> b_Tpetra(new MV(vecMap, b_view, b.array().size(), 1));
 
-        // Muelu preconditioner, to be constructed from a Tpetra Operator
-        // or Matrix
-        Teuchos::RCP<Teuchos::ParameterList> muelu_paramList(
-            new Teuchos::ParameterList);
-        muelu_paramList->set("problem: type", "Poisson-3D");
-        Teuchos::RCP<
-            MueLu::TpetraOperator<PetscScalar, std::int32_t, std::int64_t>>
-            muelu_prec = MueLu::CreateTpetraPreconditioner(
-                Teuchos::rcp_dynamic_cast<
-                    Tpetra::Operator<PetscScalar, std::int32_t, std::int64_t>>(
-                    A_Tpetra),
-                *muelu_paramList);
+    // Muelu preconditioner, to be constructed from a Tpetra Operator
+    // or Matrix
+    Teuchos::RCP<Teuchos::ParameterList> muelu_paramList(
+        new Teuchos::ParameterList);
+    muelu_paramList->set("problem: type", "Poisson-3D");
+    Teuchos::RCP<MueLu::TpetraOperator<T, std::int32_t, std::int64_t>>
+        muelu_prec = MueLu::CreateTpetraPreconditioner(
+            Teuchos::rcp_dynamic_cast<
+                Tpetra::Operator<T, std::int32_t, std::int64_t>>(A_Tpetra),
+            *muelu_paramList);
 
-        Teuchos::RCP<Teuchos::ParameterList> solver_paramList(
-            new Teuchos::ParameterList);
-        solver_paramList->set("Convergence Tolerance", 1e-8);
-        solver_paramList->set("Verbosity",
-                              Belos::Warnings | Belos::IterationDetails
-                                  | Belos::StatusTestDetails
-                                  | Belos::TimingDetails | Belos::FinalSummary);
-        solver_paramList->set("Output Style", (int)Belos::Brief);
-        solver_paramList->set("Output Frequency", 1);
-        Belos::SolverFactory<PetscScalar, MV, OP> factory;
-        Teuchos::RCP<Belos::SolverManager<PetscScalar, MV, OP>> belos_solver
-            = factory.create("CG", solver_paramList);
+    Teuchos::RCP<Teuchos::ParameterList> solver_paramList(
+        new Teuchos::ParameterList);
+    solver_paramList->set("Convergence Tolerance", 1e-8);
+    solver_paramList->set("Verbosity", Belos::Warnings | Belos::IterationDetails
+                                           | Belos::StatusTestDetails
+                                           | Belos::TimingDetails
+                                           | Belos::FinalSummary);
+    solver_paramList->set("Output Style", (int)Belos::Brief);
+    solver_paramList->set("Output Frequency", 1);
+    Belos::SolverFactory<T, MV, OP> factory;
+    Teuchos::RCP<Belos::SolverManager<T, MV, OP>> belos_solver
+        = factory.create("CG", solver_paramList);
 
-        Teuchos::RCP<Belos::LinearProblem<double, MV, OP>> problem(
-            new Belos::LinearProblem<double, MV, OP>);
-        problem->setOperator(A_Tpetra);
-        problem->setLeftPrec(muelu_prec);
+    Teuchos::RCP<Belos::LinearProblem<double, MV, OP>> problem(
+        new Belos::LinearProblem<double, MV, OP>);
+    problem->setOperator(A_Tpetra);
+    problem->setLeftPrec(muelu_prec);
 
-        Teuchos::RCP<MV> x_Tpetra(new MV(vecMap, 1));
-        problem->setProblem(x_Tpetra, b_Tpetra);
-        belos_solver->setProblem(problem);
-        belos_solver->solve();
+    Teuchos::RCP<MV> x_Tpetra(new MV(vecMap, 1));
+    problem->setProblem(x_Tpetra, b_Tpetra);
+    belos_solver->setProblem(problem);
+    belos_solver->solve();
 
-        // Copy out solution vector
-        std::copy(x_Tpetra->getData(0).begin(), x_Tpetra->getData(0).end(),
-                  u.x()->mutable_array().data());
+    // Copy out solution vector
+    std::copy(x_Tpetra->getData(0).begin(), x_Tpetra->getData(0).end(),
+              u.x()->mutable_array().data());
 
-        const int num_iters = belos_solver->getNumIters();
-        std::cout << "num iters = " << num_iters << "\n";
+    const int num_iters = belos_solver->getNumIters();
+    std::cout << "num iters = " << num_iters << "\n";
 
-        return num_iters;
-      };
+    return num_iters;
+  };
 
-  return {bx, u, solver_function};
+  return {std::make_shared<la::Vector<T>>(std::move(b)), u, solver_function};
 }

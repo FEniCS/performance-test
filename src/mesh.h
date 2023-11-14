@@ -9,18 +9,20 @@
 
 namespace dolfinx::fem
 {
+template <std::floating_point T>
 class CoordinateElement;
 }
 
 namespace dolfinx::mesh
 {
+template <std::floating_point T>
 class Mesh;
 }
 
-std::shared_ptr<dolfinx::mesh::Mesh>
+dolfinx::mesh::Mesh<double>
 create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
-                 std::size_t dofs_per_node);
+                 std::size_t dofs_per_node, int order);
 
-std::shared_ptr<dolfinx::mesh::Mesh>
+std::shared_ptr<dolfinx::mesh::Mesh<double>>
 create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
                   bool target_dofs_total, std::size_t dofs_per_node);

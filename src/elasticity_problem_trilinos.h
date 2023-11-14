@@ -9,20 +9,24 @@
 #include <dolfinx/fem/Function.h>
 #include <dolfinx/la/Vector.h>
 #include <memory>
+#include <petscsys.h>
 #include <utility>
+
+using T = PetscScalar;
 
 namespace dolfinx::mesh
 {
+template <std::floating_point T>
 class Mesh;
 }
 
-namespace elastic_trilinos
+namespace elasticity_trilinos
 {
 
-std::tuple<std::shared_ptr<dolfinx::la::Vector<PetscScalar>>,
-           std::shared_ptr<dolfinx::fem::Function<PetscScalar>>,
-           std::function<int(dolfinx::fem::Function<PetscScalar>&,
-                             const dolfinx::la::Vector<PetscScalar>&)>>
-problem(std::shared_ptr<dolfinx::mesh::Mesh> mesh);
+std::tuple<std::shared_ptr<dolfinx::la::Vector<T>>,
+           std::shared_ptr<dolfinx::fem::Function<T>>,
+           std::function<int(dolfinx::fem::Function<T>&,
+                             const dolfinx::la::Vector<T>&)>>
+problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh, int order);
 
 } // namespace elastic_trilinos

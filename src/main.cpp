@@ -1,19 +1,19 @@
-// Copyright (C) 2017-2019 Chris N. Richardson and Garth N. Wells
+// Copyright (C) 2017-2022 Chris N. Richardson and Garth N. Wells
 //
 // This file is part of FEniCS-miniapp (https://www.fenicsproject.org)
 //
 // SPDX-License-Identifier:    MIT
 
-#include "Elasticity.h"
-#include "Poisson.h"
+#include "cgpoisson_problem.h"
 #include "elasticity_problem.h"
 #include "elasticity_problem_trilinos.h"
+#include "mem.h"
 #include "mesh.h"
 #include "poisson_problem.h"
 #include "poisson_problem_trilinos.h"
 #include <boost/program_options.hpp>
 #include <dolfinx/common/Timer.h>
-#include <dolfinx/common/subsystem.h>
+#include <dolfinx/common/log.h>
 #include <dolfinx/common/timing.h>
 #include <dolfinx/common/version.h>
 #include <dolfinx/fem/Form.h>
@@ -22,25 +22,55 @@
 #include <dolfinx/fem/utils.h>
 #include <dolfinx/io/XDMFFile.h>
 #include <dolfinx/la/Vector.h>
+#include <iomanip>
+#include <petscsys.h>
 #include <string>
+#include <thread>
 #include <utility>
 
 namespace po = boost::program_options;
 
+std::string int64_to_human(std::int64_t n)
+{
+  double r = static_cast<double>(n);
+  const std::string name[] = {"", "thousand", "million", "billion", "trillion"};
+
+  int i = 0;
+  while (r > 1000.0)
+  {
+    r /= 1000.0;
+    i++;
+  }
+  if (i > 4)
+    throw std::runtime_error("number too big");
+
+  std::stringstream s;
+  if (i == 0)
+    return s.str();
+  s << " (" << std::setprecision(3) << r << " " << name[i] << ")";
+  return s.str();
+}
+
 void solve(int argc, char* argv[])
 {
   po::options_description desc("Allowed options");
+  bool mem_profile;
   desc.add_options()("help,h", "print usage message")(
       "problem_type", po::value<std::string>()->default_value("poisson"),
-      "problem (poisson or elasticity)")(
+      "problem (poisson, cgpoisson, or elasticity)")(
       "mesh_type", po::value<std::string>()->default_value("cube"),
       "mesh (cube or unstructured)")(
-      "scaling_type", po::value<std::string>()->default_value("weak"),
-      "scaling (weak or strong)")(
+      "memory_profiling", po::bool_switch(&mem_profile)->default_value(false),
+      "turn on memory logging")("scaling_type",
+                                po::value<std::string>()->default_value("weak"),
+                                "scaling (weak or strong)")(
       "output", po::value<std::string>()->default_value(""),
       "output directory (no output unless this is set)")(
       "ndofs", po::value<std::size_t>()->default_value(50000),
-      "number of degrees of freedom");
+      "number of degrees of freedom")(
+      "order", po::value<std::size_t>()->default_value(1), "polynomial order")(
+      "scatterer", po::value<std::string>()->default_value("neighbor"),
+      "scatterer for CG (neighbor or p2p)");
 
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv)
@@ -52,7 +82,8 @@ void solve(int argc, char* argv[])
 
   if (vm.count("help"))
   {
-    std::cout << desc << "\n";
+    std::cout << desc << std::endl;
+    ;
     return;
   }
 
@@ -60,8 +91,19 @@ void solve(int argc, char* argv[])
   const std::string mesh_type = vm["mesh_type"].as<std::string>();
   const std::string scaling_type = vm["scaling_type"].as<std::string>();
   const std::size_t ndofs = vm["ndofs"].as<std::size_t>();
+  const int order = vm["order"].as<std::size_t>();
+  const std::string scatterer = vm["scatterer"].as<std::string>();
   const std::string output_dir = vm["output"].as<std::string>();
   const bool output = (output_dir.size() > 0);
+  const int mpi_rank = dolfinx::MPI::rank(MPI_COMM_WORLD);
+
+  bool quit_flag = false;
+  std::thread mem_thread;
+
+  if (mem_profile and mpi_rank == 0)
+  {
+    mem_thread = std::thread(process_mem_usage, std::ref(quit_flag));
+  }
 
   bool strong_scaling;
   if (scaling_type == "strong")
@@ -75,42 +117,58 @@ void solve(int argc, char* argv[])
   const std::size_t num_processes = dolfinx::MPI::size(MPI_COMM_WORLD);
 
   // Assemble problem
-  std::shared_ptr<dolfinx::mesh::Mesh> mesh;
+  std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh;
   std::shared_ptr<dolfinx::la::Vector<PetscScalar>> b;
   std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u;
   std::function<int(dolfinx::fem::Function<PetscScalar>&,
                     const dolfinx::la::Vector<PetscScalar>&)>
       solver_function;
 
-  int ndofs_per_node = 0;
-  if (problem_type == "elasticity" or problem_type == "elasticity_trilinos")
-    ndofs_per_node = 3;
-  else
-    ndofs_per_node = 1;
+  const int ndofs_per_node
+      = (problem_type == "elasticity" or problem_type == "elasticity_trilinos")
+            ? 3
+            : 1;
 
   dolfinx::common::Timer t0("ZZZ Create Mesh");
   if (mesh_type == "cube")
-    mesh = create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling,
-                            ndofs_per_node);
+  {
+    mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(create_cube_mesh(
+        MPI_COMM_WORLD, ndofs, strong_scaling, ndofs_per_node, order));
+  }
   else
+  {
     mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling,
                              ndofs_per_node);
+  }
   t0.stop();
 
-  // Create mesh entity permutations outside of the assembler
-  dolfinx::common::Timer tperm("ZZZ Create mesh entity permutations");
-  mesh->topology_mutable().create_entity_permutations();
-  tperm.stop();
+  dolfinx::common::Timer t_ent(
+      "ZZZ Create facets and facet->cell connectivity");
+  mesh->topology_mutable()->create_entities(2);
+  mesh->topology_mutable()->create_connectivity(2, 3);
+  t_ent.stop();
 
-  // Create problem
   if (problem_type == "poisson")
-    std::tie(b, u, solver_function) = poisson::problem(mesh);
-  else if (problem_type == "poisson_trilinos")
-    std::tie(b, u, solver_function) = poisson_trilinos::problem(mesh);
+  {
+    // Create Poisson problem
+    std::tie(b, u, solver_function) = poisson::problem(mesh, order);
+  }
+  else if (problem_type == "cgpoisson")
+  {
+    // Create Poisson problem
+    std::tie(b, u, solver_function)
+        = cgpoisson::problem(mesh, order, scatterer);
+  }
   else if (problem_type == "elasticity")
-    std::tie(b, u, solver_function) = elastic::problem(mesh);
+  {
+    // Create elasticity problem. Near-nullspace will be attached to the
+    // linear operator (matrix).
+    std::tie(b, u, solver_function) = elastic::problem(mesh, order);
+  }
   else if (problem_type == "elasticity_trilinos")
-    std::tie(b, u, solver_function) = elastic_trilinos::problem(mesh);
+     std::tie(b, u, solver_function) = elasticity_trilinos::problem(mesh, order);
+  else if (problem_type == "poisson_trilinos")
+    std::tie(b, u, solver_function) = poisson_trilinos::problem(mesh, order);
   else
     throw std::runtime_error("Unknown problem type: " + problem_type);
 
@@ -123,23 +181,26 @@ void solve(int argc, char* argv[])
     const std::int64_t num_dofs
         = u->function_space()->dofmap()->index_map->size_global()
           * u->function_space()->dofmap()->index_map_bs();
-    const int tdim = mesh->topology().dim();
+    const int tdim = mesh->topology()->dim();
     const std::int64_t num_cells
-        = mesh->topology().index_map(tdim)->size_global();
+        = mesh->topology()->index_map(tdim)->size_global();
+    const std::string num_cells_human = int64_to_human(num_cells);
+    const std::string num_dofs_human = int64_to_human(num_dofs);
     std::cout
         << "----------------------------------------------------------------"
         << std::endl;
     std::cout << "Test problem summary" << std::endl;
     std::cout << "  dolfinx version: " << DOLFINX_VERSION_STRING << std::endl;
     std::cout << "  dolfinx hash:    " << DOLFINX_VERSION_GIT << std::endl;
-    std::cout << "  ufl hash:        " << UFC_SIGNATURE << std::endl;
+    std::cout << "  ufl hash:        " << UFCX_SIGNATURE << std::endl;
     std::cout << "  petsc version:   " << petsc_version << std::endl;
     std::cout << "  Problem type:    " << problem_type << std::endl;
     std::cout << "  Scaling type:    " << scaling_type << std::endl;
     std::cout << "  Num processes:   " << num_processes << std::endl;
-    std::cout << "  Num cells        " << num_cells << std::endl;
-    std::cout << "  Total degrees of freedom:               " << num_dofs
+    std::cout << "  Num cells:       " << num_cells << num_cells_human
               << std::endl;
+    std::cout << "  Total degrees of freedom:               " << num_dofs
+              << num_dofs_human << std::endl;
     std::cout << "  Average degrees of freedom per process: "
               << num_dofs / dolfinx::MPI::size(MPI_COMM_WORLD) << std::endl;
     std::cout
@@ -165,25 +226,47 @@ void solve(int argc, char* argv[])
   // Display timings
   dolfinx::list_timings(MPI_COMM_WORLD, {dolfinx::TimingType::wall});
 
-  PetscReal norm = 0.0;
-  VecNorm(u->vector(), NORM_2, &norm);
   // Report number of Krylov iterations
+  double norm = dolfinx::la::norm(*(u->x()));
   if (dolfinx::MPI::rank(MPI_COMM_WORLD) == 0)
   {
     std::cout << "*** Number of Krylov iterations: " << num_iter << std::endl;
     std::cout << "*** Solution norm:  " << norm << std::endl;
   }
+
+  if (mem_profile and mpi_rank == 0)
+  {
+    quit_flag = true;
+    mem_thread.join();
+  }
 }
 
 int main(int argc, char* argv[])
 {
-  dolfinx::common::subsystem::init_logging(argc, argv);
-  dolfinx::common::subsystem::init_mpi();
-  dolfinx::common::subsystem::init_petsc(argc, argv);
+  dolfinx::common::Timer t0("Init MPI");
+  MPI_Init(&argc, &argv);
+  t0.stop();
+
+  dolfinx::common::Timer t1("Init logging");
+  dolfinx::init_logging(argc, argv);
+  t1.stop();
+
+  dolfinx::common::Timer t2("Init PETSc");
+  PetscInitialize(&argc, &argv, nullptr, nullptr);
+  t2.stop();
+
+  // Set the logging thread name to show the process rank and enable on
+  // rank 0 (add more here if desired)
+  const int mpi_rank = dolfinx::MPI::rank(MPI_COMM_WORLD);
+  std::string thread_name = "RANK: " + std::to_string(mpi_rank);
+  loguru::set_thread_name(thread_name.c_str());
+  if (mpi_rank == 0)
+    loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
 
   solve(argc, argv);
 
-  dolfinx::common::subsystem::finalize_petsc();
-  dolfinx::common::subsystem::finalize_mpi();
+  PetscFinalize();
+  MPI_Finalize();
+
   return 0;
 }
