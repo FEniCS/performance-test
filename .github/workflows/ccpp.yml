@@ -14,10 +14,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: fenicsproject/test-env:nightly-openmpi
+    container: fenicsproject/test-env:current-openmpi
 
     env:
-
       PETSC_ARCH: linux-gnu-real-64
       OMPI_ALLOW_RUN_AS_ROOT: 1
       OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
