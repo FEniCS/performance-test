@@ -17,7 +17,7 @@ jobs:
     container: fenicsproject/test-env:current-openmpi
 
     env:
-      PETSC_ARCH: linux-gnu-real-64
+      PETSC_ARCH: linux-gnu-real64-64
       OMPI_ALLOW_RUN_AS_ROOT: 1
       OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
       OMPI_MCA_rmaps_base_oversubscribe: 1
