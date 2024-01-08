@@ -332,18 +332,13 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   }
 
   // New Mesh
-  std::vector<std::int32_t> offsets(ncells + 1, 0);
-  for (std::size_t i = 0; i < offsets.size() - 1; ++i)
-    offsets[i + 1] = offsets[i] + 4;
-
   dolfinx::fem::CoordinateElement<double> element(
       dolfinx::mesh::CellType::tetrahedron, 1);
 
   auto mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(
-      dolfinx::mesh::create_mesh(comm,
-                                 dolfinx::graph::AdjacencyList<std::int64_t>(
-                                     std::move(topo), std::move(offsets)),
-                                 {element}, x, {x.size() / 3, 3},
+      dolfinx::mesh::create_mesh(comm, 
+                                 topo, 
+                                 element, x, {x.size() / 3, 3},
                                  dolfinx::mesh::GhostMode::none));
 
   mesh->topology_mutable()->create_entities(1);
