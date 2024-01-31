@@ -110,14 +110,14 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
       = {form_Poisson_M1, form_Poisson_M2, form_Poisson_M3};
 
   // Define variational forms
-  auto L = std::make_shared<fem::Form<T>>(fem::create_form<T>(
+  auto L = std::make_shared<fem::Form<T>>(fem::create_form_factory<T>(
       *form_poisson_L.at(order - 1), {V}, {{"w0", f}, {"w1", g}}, {}, {}));
   // auto a = std::make_shared<fem::Form<T>>(fem::create_form<T>(
   //     *form_poisson_a.at(order - 1), {V, V},
   //     std::vector<std::shared_ptr<const fem::Function<T>>>{}, {}, {}));
 
   auto un = std::make_shared<fem::Function<T>>(V);
-  auto M = std::make_shared<fem::Form<T>>(fem::create_form<T>(
+  auto M = std::make_shared<fem::Form<T>>(fem::create_form_factory<T>(
       *form_poisson_M.at(order - 1), {V}, {{"w0", un}}, {{}}, {}));
 
   // Create la::Vector
