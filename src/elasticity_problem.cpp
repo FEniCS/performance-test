@@ -178,9 +178,9 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
       = {form_Elasticity_L1, form_Elasticity_L2, form_Elasticity_L3};
   std::vector form_elasticity_a
       = {form_Elasticity_a1, form_Elasticity_a2, form_Elasticity_a3};
-  auto L = std::make_shared<fem::Form<T, double>>(fem::create_form_factory<T>(
+  auto L = std::make_shared<fem::Form<T, double>>(fem::create_form<T>(
       *form_elasticity_L.at(order - 1), {V}, {{"w0", f}}, {}, {}));
-  auto a = std::make_shared<fem::Form<T, double>>(fem::create_form_factory<T>(
+  auto a = std::make_shared<fem::Form<T, double>>(fem::create_form<T>(
       *form_elasticity_a.at(order - 1), {V, V},
       std::vector<std::shared_ptr<const fem::Function<T>>>{}, {}, {}));
   t0c.stop();
