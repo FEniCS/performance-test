@@ -73,7 +73,7 @@ std::int64_t num_pdofs(std::int64_t i, std::int64_t j, std::int64_t k,
 
 dolfinx::mesh::Mesh<double>
 create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
-                 std::size_t dofs_per_node, int order)
+                 std::size_t dofs_per_node, int order, bool use_subcomm)
 {
   // Get number of processes
   const std::size_t num_processes = dolfinx::MPI::size(comm);
@@ -157,11 +157,31 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
 #error "No mesh partitioner has been selected"
 #endif
 
+  MPI_Comm sub_comm;
+
+  if (use_subcomm)
+  {
+    // Create a sub-communicator for mesh partitioning
+    MPI_Comm shm_comm;
+    // Get a local comm on each node
+    MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL,
+                        &shm_comm);
+    int shm_comm_rank = dolfinx::MPI::rank(shm_comm);
+    MPI_Comm_free(&shm_comm);
+    // Create a comm across nodes, using rank 0 of the local comm on each node
+    int color = (shm_comm_rank == 0) ? 0 : MPI_UNDEFINED;
+    MPI_Comm_split(comm, color, 0, &sub_comm);
+  }
+  else
+    MPI_Comm_dup(comm, &sub_comm);
+
   auto cell_part = dolfinx::mesh::create_cell_partitioner(
       dolfinx::mesh::GhostMode::none, graph_part);
   auto mesh = dolfinx::mesh::create_box(
-      comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz},
+      comm, sub_comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz},
       dolfinx::mesh::CellType::tetrahedron, cell_part);
+
+  MPI_Comm_free(&sub_comm);
 
   if (dolfinx::MPI::rank(mesh.comm()) == 0)
   {
