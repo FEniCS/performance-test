@@ -21,7 +21,7 @@ class Mesh;
 
 dolfinx::mesh::Mesh<double>
 create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
-                 std::size_t dofs_per_node, int order);
+                 std::size_t dofs_per_node, int order, bool use_subcomm);
 
 std::shared_ptr<dolfinx::mesh::Mesh<double>>
 create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
