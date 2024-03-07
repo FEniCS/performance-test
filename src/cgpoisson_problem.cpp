@@ -27,19 +27,22 @@
 using namespace dolfinx;
 using T = PetscScalar;
 
+namespace
+{
 void pack_fn(std::span<const T> in, std::span<const std::int32_t> idx,
              std::span<T> out)
 {
   for (std::size_t i = 0; i < idx.size(); ++i)
-     out[i] = in[idx[i]];
+    out[i] = in[idx[i]];
 }
 
 void unpack_fn(std::span<const T> in, std::span<const std::int32_t> idx,
                std::span<T> out, std::function<T(T, T)> op)
 {
   for (std::size_t i = 0; i < idx.size(); ++i)
-     out[idx[i]] = op(out[idx[i]], in[i]);
+    out[idx[i]] = op(out[idx[i]], in[i]);
 }
+} // namespace
 
 std::tuple<std::shared_ptr<la::Vector<T>>, std::shared_ptr<fem::Function<T>>,
            std::function<int(fem::Function<T>&, const la::Vector<T>&)>>
