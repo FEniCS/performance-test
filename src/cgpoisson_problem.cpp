@@ -27,6 +27,23 @@
 using namespace dolfinx;
 using T = PetscScalar;
 
+namespace
+{
+void pack_fn(std::span<const T> in, std::span<const std::int32_t> idx,
+             std::span<T> out)
+{
+  for (std::size_t i = 0; i < idx.size(); ++i)
+    out[i] = in[idx[i]];
+}
+
+void unpack_fn(std::span<const T> in, std::span<const std::int32_t> idx,
+               std::span<T> out, std::function<T(T, T)> op)
+{
+  for (std::size_t i = 0; i < idx.size(); ++i)
+    out[idx[i]] = op(out[idx[i]], in[i]);
+}
+} // namespace
+
 std::tuple<std::shared_ptr<la::Vector<T>>, std::shared_ptr<fem::Function<T>>,
            std::function<int(fem::Function<T>&, const la::Vector<T>&)>>
 cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
@@ -164,16 +181,6 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
     std::vector<T> local_buffer(sct.local_buffer_size(), 0);
     std::vector<T> remote_buffer(sct.remote_buffer_size(), 0);
 
-    auto pack_fn = [](const auto& in, const auto& idx, auto& out)
-    {
-      for (std::size_t i = 0; i < idx.size(); ++i)
-        out[i] = in[idx[i]];
-    };
-    auto unpack_fn = [](const auto& in, const auto& idx, auto& out, auto op)
-    {
-      for (std::size_t i = 0; i < idx.size(); ++i)
-        out[idx[i]] = op(out[idx[i]], in[i]);
-    };
 
     common::Scatterer<>::type type;
     if (scatterer == "neighbor")
