@@ -157,10 +157,19 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
 #error "No mesh partitioner has been selected"
 #endif
 
+  // Create a sub-communicator for mesh partitioning
+  MPI_Comm shm_comm, sub_comm;
+  // Get a local comm on each node
+  MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &shm_comm);
+  int shm_comm_rank = dolfinx::MPI::rank(shm_comm);
+  // Create a comm across nodes, using rank 0 of the local comm on each node
+  int color = (shm_comm_rank == 0) ? 0 : MPI_UNDEFINED;
+  MPI_Comm_split(comm, color, 0, &sub_comm);
+
   auto cell_part = dolfinx::mesh::create_cell_partitioner(
       dolfinx::mesh::GhostMode::none, graph_part);
   auto mesh = dolfinx::mesh::create_box(
-      comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz},
+      comm, sub_comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz},
       dolfinx::mesh::CellType::tetrahedron, cell_part);
 
   if (dolfinx::MPI::rank(mesh.comm()) == 0)
