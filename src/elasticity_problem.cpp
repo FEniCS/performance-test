@@ -100,11 +100,13 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
 {
   common::Timer t0("ZZZ FunctionSpace");
 
-  std::vector fs_elasticity
-      = {functionspace_form_Elasticity_a1, functionspace_form_Elasticity_a2,
-         functionspace_form_Elasticity_a3};
+  auto element = basix::create_element<double>(
+      basix::element::family::P, basix::cell::type::tetrahedron, order,
+      basix::element::lagrange_variant::gll_warped,
+      basix::element::dpc_variant::unset, false);
+
   auto V = std::make_shared<fem::FunctionSpace<double>>(
-      fem::create_functionspace(*fs_elasticity.at(order - 1), "v_0", mesh));
+      fem::create_functionspace(mesh, element, {3}));
 
   t0.stop();
 

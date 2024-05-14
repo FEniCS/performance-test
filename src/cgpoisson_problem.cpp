@@ -51,12 +51,13 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
 {
   common::Timer t0("ZZZ FunctionSpace");
 
-  std::vector fs_poisson_a
-      = {functionspace_form_Poisson_a1, functionspace_form_Poisson_a2,
-         functionspace_form_Poisson_a3};
+  auto element = basix::create_element<double>(
+      basix::element::family::P, basix::cell::type::tetrahedron, order,
+      basix::element::lagrange_variant::gll_warped,
+      basix::element::dpc_variant::unset, false);
 
   auto V = std::make_shared<fem::FunctionSpace<double>>(
-      fem::create_functionspace(*fs_poisson_a.at(order - 1), "v_0", mesh));
+      fem::create_functionspace(mesh, element, {}));
 
   t0.stop();
 
@@ -180,7 +181,6 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
 
     std::vector<T> local_buffer(sct.local_buffer_size(), 0);
     std::vector<T> remote_buffer(sct.remote_buffer_size(), 0);
-
 
     common::Scatterer<>::type type;
     if (scatterer == "neighbor")
