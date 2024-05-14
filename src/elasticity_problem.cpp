@@ -6,6 +6,7 @@
 
 #include "elasticity_problem.h"
 #include "Elasticity.h"
+#include <basix/mdspan.hpp>
 #include <dolfinx/common/Timer.h>
 #include <dolfinx/fem/DirichletBC.h>
 #include <dolfinx/fem/DofMap.h>
@@ -70,8 +71,11 @@ MatNullSpace build_near_nullspace(const fem::FunctionSpace<double>& V)
   }
 
   // Orthonormalize basis
-  la::orthonormalize(std::span(basis));
-  if (!la::is_orthonormal(std::span<const decltype(basis)::value_type>(basis)))
+  la::orthonormalize(std::vector<std::reference_wrapper<la::Vector<T>>>(
+      basis.begin(), basis.end()));
+  if (!la::is_orthonormal(
+          std::vector<std::reference_wrapper<const la::Vector<T>>>(
+              basis.begin(), basis.end())))
   {
     throw std::runtime_error("Space not orthonormal");
   }
@@ -145,9 +149,12 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
       [](auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>>
       {
         std::vector<T> vdata(x.extent(0) * x.extent(1));
-        namespace stdex = std::experimental;
-        stdex::mdspan<double,
-                      stdex::extents<std::size_t, 3, stdex::dynamic_extent>>
+        namespace stdex
+            = MDSPAN_IMPL_STANDARD_NAMESPACE::MDSPAN_IMPL_PROPOSED_NAMESPACE;
+        MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
+            T,
+            MDSPAN_IMPL_STANDARD_NAMESPACE::extents<
+                std::size_t, 3, MDSPAN_IMPL_STANDARD_NAMESPACE::dynamic_extent>>
             v(vdata.data(), x.extent(0), x.extent(1));
         for (std::size_t p = 0; p < x.extent(1); ++p)
         {
@@ -174,8 +181,7 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
   auto L = std::make_shared<fem::Form<T, double>>(fem::create_form<T>(
       *form_elasticity_L.at(order - 1), {V}, {{"w0", f}}, {}, {}));
   auto a = std::make_shared<fem::Form<T, double>>(fem::create_form<T>(
-      *form_elasticity_a.at(order - 1), {V, V},
-      std::vector<std::shared_ptr<const fem::Function<T>>>{}, {}, {}));
+      *form_elasticity_a.at(order - 1), {V, V}, {}, {}, {}));
   t0c.stop();
 
   // Create matrices and vector, and assemble system

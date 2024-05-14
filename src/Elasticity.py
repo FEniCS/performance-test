@@ -4,8 +4,9 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from ufl import (Coefficient, Identity, TestFunction, TrialFunction,
-                 VectorElement, dx, grad, inner, tetrahedron, tr)
+import basix.ufl
+from ufl import (Coefficient, Identity, FunctionSpace, Mesh, TestFunction, TrialFunction,
+                 dx, grad, inner, tetrahedron, tr)
 
 # Elasticity parameters
 E = 1.0e6
@@ -19,16 +20,18 @@ ns = vars()
 
 forms = []
 for degree in range(1, 4):
-    element = VectorElement("Lagrange", cell, degree)
+    element = basix.ufl.element("Lagrange", "tetrahedron", degree, shape=(3, ))
+    domain = Mesh(basix.ufl.element("Lagrange", "tetrahedron", 1, shape=(3, )))
+    space = FunctionSpace(domain, element)
 
-    u, v = TrialFunction(element), TestFunction(element)
-    f = Coefficient(element)
+    u, v = TrialFunction(space), TestFunction(space)
+    f = Coefficient(space)
 
     def eps(v):
         return 0.5*(grad(v) + grad(v).T)
 
     def sigma(v):
-        return 2.0*mu*eps(v) + lmbda*tr(eps(v))*Identity(cell.geometric_dimension())
+        return 2.0*mu*eps(v) + lmbda*tr(eps(v))*Identity(3)
 
     # Add forms to namespace with names a1, a2, a3 etc.
     aname = 'a' + str(degree)

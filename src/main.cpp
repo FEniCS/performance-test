@@ -53,15 +53,18 @@ void solve(int argc, char* argv[])
 {
   po::options_description desc("Allowed options");
   bool mem_profile;
+  bool use_subcomm;
   desc.add_options()("help,h", "print usage message")(
       "problem_type", po::value<std::string>()->default_value("poisson"),
       "problem (poisson, cgpoisson, or elasticity)")(
       "mesh_type", po::value<std::string>()->default_value("cube"),
       "mesh (cube or unstructured)")(
       "memory_profiling", po::bool_switch(&mem_profile)->default_value(false),
-      "turn on memory logging")("scaling_type",
-                                po::value<std::string>()->default_value("weak"),
-                                "scaling (weak or strong)")(
+      "turn on memory logging")(
+      "subcomm_partition", po::bool_switch(&use_subcomm)->default_value(false),
+      "Use sub-communicator for partitioning")(
+      "scaling_type", po::value<std::string>()->default_value("weak"),
+      "scaling (weak or strong)")(
       "output", po::value<std::string>()->default_value(""),
       "output directory (no output unless this is set)")(
       "ndofs", po::value<std::size_t>()->default_value(50000),
@@ -127,8 +130,9 @@ void solve(int argc, char* argv[])
   dolfinx::common::Timer t0("ZZZ Create Mesh");
   if (mesh_type == "cube")
   {
-    mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(create_cube_mesh(
-        MPI_COMM_WORLD, ndofs, strong_scaling, ndofs_per_node, order));
+    mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(
+        create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, ndofs_per_node,
+                         order, use_subcomm));
   }
   else
   {
