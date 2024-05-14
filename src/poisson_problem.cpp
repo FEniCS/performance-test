@@ -31,12 +31,13 @@ poisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
 {
   common::Timer t0("ZZZ FunctionSpace");
 
-  std::vector fs_poisson_a
-      = {functionspace_form_Poisson_a1, functionspace_form_Poisson_a2,
-         functionspace_form_Poisson_a3};
+  auto element = basix::create_element<double>(
+      basix::element::family::P, basix::cell::type::tetrahedron, order,
+      basix::element::lagrange_variant::gll_warped,
+      basix::element::dpc_variant::unset, false);
 
   auto V = std::make_shared<fem::FunctionSpace<double>>(
-      fem::create_functionspace(*fs_poisson_a.at(order - 1), "v_0", mesh));
+      fem::create_functionspace(mesh, element, {}));
 
   t0.stop();
 
@@ -107,8 +108,8 @@ poisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
   // Define variational forms
   auto L = std::make_shared<fem::Form<T>>(fem::create_form<T>(
       *form_poisson_L.at(order - 1), {V}, {{"w0", f}, {"w1", g}}, {}, {}));
-  auto a = std::make_shared<fem::Form<T>>(fem::create_form<T>(
-      *form_poisson_a.at(order - 1), {V, V}, {}, {}, {}));
+  auto a = std::make_shared<fem::Form<T>>(
+      fem::create_form<T>(*form_poisson_a.at(order - 1), {V, V}, {}, {}, {}));
 
   // Create matrices and vector, and assemble system
   std::shared_ptr<la::petsc::Matrix> A = std::make_shared<la::petsc::Matrix>(
