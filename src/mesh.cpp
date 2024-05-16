@@ -346,9 +346,9 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     std::transform(x.begin(), x.end(), x.begin(),
                    [scale = 0.9 * x0max](auto x) { return x / scale; });
 
-    LOG(INFO) << "x range = " << x0min << " - " << x0max << std::endl;
-    LOG(INFO) << "y range = " << x1min << " - " << x1max << std::endl;
-    LOG(INFO) << "z range = " << x2min << " - " << x2max << std::endl;
+    spdlog::info("x range = {} - {}", x0min, x0max);
+    spdlog::info("y range = {} - {}", x1min, x1max);
+    spdlog::info("z range = {} - {}", x2min, x2max);
   }
 
   // New Mesh
@@ -356,9 +356,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
       dolfinx::mesh::CellType::tetrahedron, 1);
 
   auto mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(
-      dolfinx::mesh::create_mesh(comm, 
-                                 topo, 
-                                 element, x, {x.size() / 3, 3},
+      dolfinx::mesh::create_mesh(comm, topo, element, x, {x.size() / 3, 3},
                                  dolfinx::mesh::GhostMode::none));
 
   mesh->topology_mutable()->create_entities(1);
