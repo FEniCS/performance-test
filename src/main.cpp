@@ -254,9 +254,10 @@ int main(int argc, char* argv[])
   // rank 0 (add more here if desired)
   const int mpi_rank = dolfinx::MPI::rank(MPI_COMM_WORLD);
   std::string thread_name = "RANK: " + std::to_string(mpi_rank);
-  loguru::set_thread_name(thread_name.c_str());
+  std::string fmt = "[%Y-%m-%d %H:%M:%S.%e] [" + thread_name + "] [%l] %v";
+  spdlog::set_pattern(fmt);
   if (mpi_rank == 0)
-    loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
+    spdlog::set_level(spdlog::level::info);
 
   solve(argc, argv);
 
