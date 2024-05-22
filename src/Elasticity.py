@@ -9,8 +9,8 @@ from ufl import (Coefficient, Identity, FunctionSpace, Mesh, TestFunction, Trial
                  dx, grad, inner, tetrahedron, tr)
 
 # Elasticity parameters
-E = 1.0e6
-nu = 0.3
+E = 115000
+nu = 0.32
 mu = E / (2.0 * (1.0 + nu))
 lmbda = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu))
 cell = tetrahedron

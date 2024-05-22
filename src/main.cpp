@@ -6,6 +6,7 @@
 
 #include "cgpoisson_problem.h"
 #include "elasticity_problem.h"
+#include "crescendo_elasticity_problem.h"
 #include "mem.h"
 #include "mesh.h"
 #include "poisson_problem.h"
@@ -20,6 +21,7 @@
 #include <dolfinx/fem/utils.h>
 #include <dolfinx/io/XDMFFile.h>
 #include <dolfinx/la/Vector.h>
+#include <dolfinx/mesh/MeshTags.h>
 #include <iomanip>
 #include <petscsys.h>
 #include <string>
@@ -128,17 +130,30 @@ void solve(int argc, char* argv[])
   const int ndofs_per_node = (problem_type == "elasticity") ? 3 : 1;
 
   dolfinx::common::Timer t0("ZZZ Create Mesh");
+  std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>> facet_markers;
   if (mesh_type == "cube")
   {
     mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(
         create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, ndofs_per_node,
                          order, use_subcomm));
   }
-  else
+  else if (mesh_type == "spoke")
   {
     mesh = create_spoke_mesh(MPI_COMM_WORLD, ndofs, strong_scaling,
                              ndofs_per_node);
   }
+  else if (mesh_type == "crescendo")
+  {
+    dolfinx::io::XDMFFile xdmf(MPI_COMM_WORLD, "mesh.xdmf", "r");
+    dolfinx::fem::CoordinateElement<double> coordinate_element(dolfinx::mesh::CellType::tetrahedron, 1);
+    mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(xdmf.read_mesh(coordinate_element, dolfinx::mesh::GhostMode::none, "geometry", "/Xdmf/Domain"));
+
+    mesh->topology()->create_entities(2);
+
+    facet_markers = std::make_shared<dolfinx::mesh::MeshTags<std::int32_t>>(xdmf.read_meshtags(*mesh, "facet markers"));
+    
+  }
+  
   t0.stop();
 
   dolfinx::common::Timer t_ent(
@@ -162,7 +177,7 @@ void solve(int argc, char* argv[])
   {
     // Create elasticity problem. Near-nullspace will be attached to the
     // linear operator (matrix).
-    std::tie(b, u, solver_function) = elastic::problem(mesh, order);
+    std::tie(b, u, solver_function) = crescendo_elastic::problem(mesh, facet_markers);
   }
   else
     throw std::runtime_error("Unknown problem type: " + problem_type);
