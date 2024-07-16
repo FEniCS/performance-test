@@ -20,33 +20,37 @@
 
 namespace
 {
-// Calculate number of vertices, edges, facets, and cells for any given
-// level of refinement
+// The numbers of lower-dimensional cells of the CW complex of the right prism.
+//
+// The right prism with dimensions i x j x k is uniformly decomposed
+// into ijk unit cubes, and each cube is decomposed into 6 tetrahedra;
+// the decomposition procedure is described in Hatcher's "Algebraic
+// Topology", on the proof of Theorem 2.10 [1], although pictures of
+// the decomposition for the particular case of 3 dimensions simply
+// can be viewed online by searching for "tetrahedral decomposition of
+// cube".
+//
+// This decomposition of the right prism leads to a number of
+// vertices, edges, faces, and tetrahedra (cells). The counting of
+// edges and faces is complicated by the fact that many cells might
+// share an edge, and two cells might share a face.
+//
+// The variable @param nrefine controls the dyadic subdivision of the
+// prism; essentially equivalent to scaling up the prism by a factor
+// of 2^nrefine in all directions. It should be a nonnegative small
+// integer.
+//
+// 1. Available at <https://pi.math.cornell.edu/~hatcher/AT/ATpage.html>.
 constexpr std::tuple<std::int64_t, std::int64_t, std::int64_t, std::int64_t>
-num_entities(std::int64_t i, std::int64_t j, std::int64_t k, int nrefine)
-{
-  std::int64_t nv = (i + 1) * (j + 1) * (k + 1);
-  std::int64_t ne = 0;
-  std::int64_t nc = (i * j * k) * 6;
-  std::int64_t earr[3] = {1, 3, 7};
-  std::int64_t farr[2] = {2, 12};
-  for (int r = 0; r < nrefine; ++r)
-  {
-    ne = earr[0] * (i + j + k) + earr[1] * (i * j + j * k + k * i)
-         + earr[2] * i * j * k;
-    nv += ne;
-    nc *= 8;
-    earr[0] *= 2;
-    earr[1] *= 4;
-    earr[2] *= 8;
-    farr[0] *= 4;
-    farr[1] *= 8;
-  }
-  ne = earr[0] * (i + j + k) + earr[1] * (i * j + j * k + k * i)
-       + earr[2] * i * j * k;
-  std::int64_t nf = farr[0] * (i * j + j * k + k * i) + farr[1] * i * j * k;
-
-  return {nv, ne, nf, nc};
+num_entities(std::int64_t i, std::int64_t j, std::int64_t k, int nrefine) {
+  i <<= nrefine;
+  j <<= nrefine;
+  k <<= nrefine;
+  std::int64_t vertices = (i + 1) * (j + 1) * (k + 1);
+  std::int64_t edges = 7*i*j*k + 3*(i*j + i*k + j*k) + (i + j + k);
+  std::int64_t faces = 12*i*j*k + 2*(i*j + i*k + j*k);
+  std::int64_t cells = 6 * (i * j * k);
+  return {vertices, edges, faces, cells};
 }
 
 std::int64_t num_pdofs(std::int64_t i, std::int64_t j, std::int64_t k,
