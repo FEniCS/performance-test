@@ -192,7 +192,8 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
   for (int i = 0; i < r; ++i)
   {
     mesh.topology_mutable()->create_connectivity(3, 1);
-    mesh = dolfinx::refinement::refine(mesh, false);
+    auto [new_mesh, _x, _y] = dolfinx::refinement::refine(mesh, std::nullopt, false);
+    mesh = std::move(new_mesh);
   }
 
   return mesh;
@@ -365,8 +366,8 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
              + mesh->topology()->index_map(1)->size_global()
          < target)
   {
-    mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(
-        dolfinx::refinement::refine(*mesh, false));
+    auto [new_mesh, _x, _y] = dolfinx::refinement::refine(*mesh, std::nullopt, false);
+    mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(new_mesh);
     mesh->topology_mutable()->create_entities(1);
   }
 
@@ -400,8 +401,8 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
       if (i % 2000 < nmarked)
         marked_edges.push_back(i);
 
-    meshi = std::make_shared<dolfinx::mesh::Mesh<double>>(
-        dolfinx::refinement::refine(*mesh, marked_edges, false));
+    auto [new_mesh, _x, _y] = dolfinx::refinement::refine(*mesh, marked_edges, false);
+    meshi = std::make_shared<dolfinx::mesh::Mesh<double>>(new_mesh);
 
     double actual_fraction
         = (double)(meshi->topology()->index_map(0)->size_global()
