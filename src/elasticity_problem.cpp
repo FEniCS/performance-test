@@ -110,19 +110,6 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
 
   t0.stop();
 
-  spdlog::info("Collapse dofmap");
-  auto [V_0, _x] = V->sub({0}).collapse();
-
-  auto gh = V_0.dofmap()->index_map->ghosts();
-
-  // Check that all ghost indices are non-negative
-  std::for_each(gh.begin(), gh.end(),
-                [](auto idx)
-                {
-                  if (idx < 0)
-                    throw std::runtime_error("Negative ghost index");
-                });
-
   common::Timer t0a("ZZZ Create boundary conditions");
 
   // Define boundary condition
