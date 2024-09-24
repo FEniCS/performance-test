@@ -85,13 +85,13 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
   else
     N = target_dofs * num_processes / dofs_per_node;
 
-  std::size_t Nx, Ny, Nz;
+  std::int64_t Nx, Ny, Nz;
   int r = 0;
 
   // Choose Nx_max carefully. If too large, the base mesh may become too
   // large for the partitioner; likewise, if too small, it will fail on
   // large numbers of processes.
-  const std::size_t Nx_max = 200;
+  const std::int64_t Nx_max = 200;
 
   // Get initial guess for Nx, Ny, Nz, r
   Nx = 1;
@@ -128,11 +128,11 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
   // each dimension
 
   std::size_t mindiff = 1000000;
-  for (std::size_t i = Nx - 10; i < Nx + 10; ++i)
+  for (std::int64_t i = Nx - 10; i < Nx + 10; ++i)
   {
-    for (std::size_t j = i - 5; j < i + 5; ++j)
+    for (std::int64_t j = i - 5; j < i + 5; ++j)
     {
-      for (std::size_t k = i - 5; k < i + 5; ++k)
+      for (std::int64_t k = i - 5; k < i + 5; ++k)
       {
         std::size_t diff = std::abs(num_pdofs(i, j, k, r, order) - N);
         if (diff < mindiff)
