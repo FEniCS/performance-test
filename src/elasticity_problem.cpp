@@ -219,7 +219,7 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
                                 {fem::make_coefficients_span(coeffs_L)}, {{bc}},
                                 {}, 1.0);
   b.scatter_rev(std::plus<>());
-  bc->set(b.mutable_array(), std::nullopt, 0.0);
+  bc->set(b.mutable_array(), std::nullopt);
   t3.stop();
 
   common::Timer t4("ZZZ Create near-nullspace");
