@@ -12,6 +12,7 @@
 #include <dolfinx/fem/DirichletBC.h>
 #include <dolfinx/fem/Function.h>
 #include <dolfinx/fem/FunctionSpace.h>
+#
 #include <dolfinx/fem/assembler.h>
 #include <dolfinx/fem/petsc.h>
 #include <dolfinx/fem/utils.h>
@@ -144,7 +145,7 @@ poisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
                                 {fem::make_coefficients_span(coeffs_L)}, {{bc}},
                                 {}, 1.0);
   b.scatter_rev(std::plus<>());
-  fem::set_bc<T, double>(b.mutable_array(), {bc});
+  bc->set(b.mutable_array(), std::nullopt);
   t5.stop();
 
   t1.stop();
