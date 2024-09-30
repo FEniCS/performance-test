@@ -181,9 +181,9 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
   std::vector form_elasticity_a
       = {form_Elasticity_a1, form_Elasticity_a2, form_Elasticity_a3};
   auto L = std::make_shared<fem::Form<T, double>>(fem::create_form<T>(
-      *form_elasticity_L.at(order - 1), {V}, {{"w0", f}}, {}, {}));
+      *form_elasticity_L.at(order - 1), {V}, {{"w0", f}}, {}, {}, {}));
   auto a = std::make_shared<fem::Form<T, double>>(fem::create_form<T>(
-      *form_elasticity_a.at(order - 1), {V, V}, {}, {}, {}));
+      *form_elasticity_a.at(order - 1), {V, V}, {}, {}, {}, {}));
   t0c.stop();
 
   // Create matrices and vector, and assemble system
@@ -219,7 +219,7 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
                                 {fem::make_coefficients_span(coeffs_L)}, {{bc}},
                                 {}, 1.0);
   b.scatter_rev(std::plus<>());
-  fem::set_bc<T, double>(b.mutable_array(), {bc});
+  bc->set(b.mutable_array(), std::nullopt);
   t3.stop();
 
   common::Timer t4("ZZZ Create near-nullspace");
