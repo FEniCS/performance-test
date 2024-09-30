@@ -151,14 +151,14 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
 
   // Apply lifting to account for Dirichlet boundary condition
   // b <- b - A * x_bc
-  fem::set_bc<T, double>(un->x()->mutable_array(), {bc}, -1.0);
+  bc->set(un->x()->mutable_array(), std::nullopt, -1.0);
   fem::assemble_vector(b.mutable_array(), *M);
 
   // Communicate ghost values
   b.scatter_rev(std::plus<T>());
 
   // Set BC dofs to zero (effectively zeroes columns of A)
-  fem::set_bc<T, double>(b.mutable_array(), {bc}, 0.0);
+  bc->set(b.mutable_array(), std::nullopt, 0.0);
   b.scatter_fwd();
 
   // Pack coefficients and constants
@@ -206,7 +206,7 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
                            fem::make_coefficients_span(coeff));
 
       // Set BC dofs to zero (effectively zeroes rows of A)
-      fem::set_bc<T, double>(y.mutable_array(), {bc}, 0.0);
+      bc->set(y.mutable_array(), std::nullopt, 0.0);
 
       // Accumuate ghost values
       // y.scatter_rev(std::plus<T>());
