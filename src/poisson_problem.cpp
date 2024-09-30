@@ -12,6 +12,7 @@
 #include <dolfinx/fem/DirichletBC.h>
 #include <dolfinx/fem/Function.h>
 #include <dolfinx/fem/FunctionSpace.h>
+#
 #include <dolfinx/fem/assembler.h>
 #include <dolfinx/fem/petsc.h>
 #include <dolfinx/fem/utils.h>
@@ -107,9 +108,9 @@ poisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
 
   // Define variational forms
   auto L = std::make_shared<fem::Form<T>>(fem::create_form<T>(
-      *form_poisson_L.at(order - 1), {V}, {{"w0", f}, {"w1", g}}, {}, {}));
+                                                              *form_poisson_L.at(order - 1), {V}, {{"w0", f}, {"w1", g}}, {}, {}, {}));
   auto a = std::make_shared<fem::Form<T>>(
-      fem::create_form<T>(*form_poisson_a.at(order - 1), {V, V}, {}, {}, {}));
+                                          fem::create_form<T>(*form_poisson_a.at(order - 1), {V, V}, {}, {}, {}, {}));
 
   // Create matrices and vector, and assemble system
   std::shared_ptr<la::petsc::Matrix> A = std::make_shared<la::petsc::Matrix>(
@@ -144,7 +145,7 @@ poisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
                                 {fem::make_coefficients_span(coeffs_L)}, {{bc}},
                                 {}, 1.0);
   b.scatter_rev(std::plus<>());
-  fem::set_bc<T, double>(b.mutable_array(), {bc});
+  bc->set(b.mutable_array(), std::nullopt);
   t5.stop();
 
   t1.stop();
