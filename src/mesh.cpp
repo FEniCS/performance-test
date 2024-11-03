@@ -192,7 +192,10 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
   for (int i = 0; i < r; ++i)
   {
     mesh.topology_mutable()->create_connectivity(3, 1);
-    auto [new_mesh, _x, _y] = dolfinx::refinement::refine(mesh, std::nullopt, false);
+    auto [new_mesh, _parent_edges, _parent_facet] = dolfinx::refinement::refine(
+      mesh, std::nullopt,
+      dolfinx::mesh::create_cell_partitioner(dolfinx::mesh::GhostMode::shared_facet),
+      dolfinx::refinement::Option::parent_cell_and_facet);
     mesh = std::move(new_mesh);
   }
 
@@ -366,7 +369,10 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
              + mesh->topology()->index_map(1)->size_global()
          < target)
   {
-    auto [new_mesh, _x, _y] = dolfinx::refinement::refine(*mesh, std::nullopt, false);
+    auto [new_mesh, _parent_edges, _parent_facet] = dolfinx::refinement::refine(
+      *mesh, std::nullopt,
+      dolfinx::mesh::create_cell_partitioner(dolfinx::mesh::GhostMode::shared_facet),
+      dolfinx::refinement::Option::parent_cell_and_facet);
     mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(new_mesh);
     mesh->topology_mutable()->create_entities(1);
   }
@@ -401,7 +407,10 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
       if (i % 2000 < nmarked)
         marked_edges.push_back(i);
 
-    auto [new_mesh, _x, _y] = dolfinx::refinement::refine(*mesh, marked_edges, false);
+    auto [new_mesh, _parent_edges, _parent_facet] = dolfinx::refinement::refine(
+      *mesh, marked_edges,
+      dolfinx::mesh::create_cell_partitioner(dolfinx::mesh::GhostMode::shared_facet),
+      dolfinx::refinement::Option::parent_cell_and_facet);
     meshi = std::make_shared<dolfinx::mesh::Mesh<double>>(new_mesh);
 
     double actual_fraction

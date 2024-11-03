@@ -1,0 +1,9 @@
+CMakeCache.txt
+CMakeFiles/
+Elasticity.c
+Elasticity.h
+Makefile
+Poisson.c
+Poisson.h
+cmake_install.cmake
+dolfinx-scaling-test
