@@ -219,7 +219,7 @@ void solve(int argc, char* argv[])
   }
 
   // Display timings
-  dolfinx::list_timings(MPI_COMM_WORLD, {dolfinx::TimingType::wall});
+  dolfinx::list_timings(MPI_COMM_WORLD);
 
   // Report number of Krylov iterations
   double norm = dolfinx::la::norm(*(u->x()));
