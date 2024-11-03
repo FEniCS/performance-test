@@ -33,16 +33,16 @@ jobs:
         with:
           path: ./dolfinx
           repository: FEniCS/dolfinx
-          ref: main
+          ref: v0.9.0
 
       - name: Install FEniCS Python components
         run: |
           apt-get -qq update
           apt-get -y install libboost-program-options-dev
           pip3 install --break-system-packages pip --upgrade
-          pip3 install --break-system-packages git+https://github.com/FEniCS/ufl.git
-          pip3 install --break-system-packages git+https://github.com/FEniCS/basix.git
-          pip3 install --break-system-packages git+https://github.com/FEniCS/ffcx
+          pip3 install --break-system-packages git+https://github.com/FEniCS/ufl.git@2024.2.0
+          pip3 install --break-system-packages git+https://github.com/FEniCS/basix.git@v0.9.0
+          pip3 install --break-system-packages git+https://github.com/FEniCS/ffcx@v0.9.0
       - name: Build dolfinx cpp
         run: |
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Developer -B build -S dolfinx/cpp/
