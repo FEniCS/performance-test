@@ -111,6 +111,7 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
       fem::create_functionspace(mesh, dolfinx_element));
 
   t0.stop();
+  t0.flush();
 
   common::Timer t0a("ZZZ Create boundary conditions");
 
@@ -144,6 +145,7 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
   auto bc = std::make_shared<const fem::DirichletBC<T>>(u0, bdofs);
 
   t0a.stop();
+  t0a.flush();
 
   common::Timer t0b("ZZZ Create RHS function");
 
@@ -174,6 +176,7 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
       });
 
   t0b.stop();
+  t0b.flush();
 
   common::Timer t0c("ZZZ Create forms");
 
@@ -187,6 +190,7 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
   auto a = std::make_shared<const fem::Form<T, double>>(fem::create_form<T>(
       *form_elasticity_a.at(order - 1), {V, V}, {}, {}, {}, {}));
   t0c.stop();
+  t0c.flush();
 
   // Create matrices and vector, and assemble system
   std::shared_ptr<la::petsc::Matrix> A = std::make_shared<la::petsc::Matrix>(
@@ -206,6 +210,7 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
   MatAssemblyBegin(A->mat(), MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(A->mat(), MAT_FINAL_ASSEMBLY);
   t2.stop();
+  t2.flush();
 
   // Wrap la::Vector with Petsc Vec
   la::Vector<T> b(L->function_spaces()[0]->dofmap()->index_map,
@@ -223,6 +228,7 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
   b.scatter_rev(std::plus<>());
   bc->set(b.mutable_array(), std::nullopt);
   t3.stop();
+  t3.flush();
 
   common::Timer t4("ZZZ Create near-nullspace");
 
@@ -235,6 +241,7 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
   MatNullSpaceDestroy(&ns);
 
   t4.stop();
+  t4.flush();
 
   std::function<int(fem::Function<T>&, const la::Vector<T>&)> solver_function
       = [A](fem::Function<T>& u, const la::Vector<T>& b)
