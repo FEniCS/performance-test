@@ -44,6 +44,7 @@ poisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
       fem::create_functionspace(mesh, dolfinx_element));
 
   t0.stop();
+  t0.flush();
 
   common::Timer t1("ZZZ Assemble");
 
@@ -75,6 +76,7 @@ poisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
 
   auto bc = std::make_shared<fem::DirichletBC<T>>(u0, bdofs);
   t2.stop();
+  t2.flush();
 
   // Define coefficients
   common::Timer t3("ZZZ Create RHS function");
@@ -103,6 +105,7 @@ poisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
         return {f, {f.size()}};
       });
   t3.stop();
+  t3.flush();
 
   std::vector form_poisson_L
       = {form_Poisson_L1, form_Poisson_L2, form_Poisson_L3};
@@ -133,6 +136,7 @@ poisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
   MatAssemblyBegin(A->mat(), MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(A->mat(), MAT_FINAL_ASSEMBLY);
   t4.stop();
+  t4.flush();
 
   // Create la::Vector
   la::Vector<T> b(L->function_spaces()[0]->dofmap()->index_map,
@@ -150,8 +154,10 @@ poisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
   b.scatter_rev(std::plus<>());
   bc->set(b.mutable_array(), std::nullopt);
   t5.stop();
+  t5.flush();
 
   t1.stop();
+  t1.flush();
 
   // Create Function to hold solution
   auto u = std::make_shared<fem::Function<T>>(V);

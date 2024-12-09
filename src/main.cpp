@@ -140,12 +140,14 @@ void solve(int argc, char* argv[])
                              ndofs_per_node);
   }
   t0.stop();
+  t0.flush();
 
   dolfinx::common::Timer t_ent(
       "ZZZ Create facets and facet->cell connectivity");
   mesh->topology_mutable()->create_entities(2);
   mesh->topology_mutable()->create_connectivity(2, 3);
   t_ent.stop();
+  t_ent.flush();
 
   if (problem_type == "poisson")
   {
@@ -206,6 +208,7 @@ void solve(int argc, char* argv[])
   dolfinx::common::Timer t5("ZZZ Solve");
   int num_iter = solver_function(*u, *b);
   t5.stop();
+  t5.flush();
 
   if (output)
   {
@@ -216,6 +219,7 @@ void solve(int argc, char* argv[])
     file.write_mesh(*mesh);
     file.write_function(*u, 0.0);
     t6.stop();
+    t6.flush();
   }
 
   // Display timings
@@ -241,14 +245,17 @@ int main(int argc, char* argv[])
   dolfinx::common::Timer t0("Init MPI");
   MPI_Init(&argc, &argv);
   t0.stop();
+  t0.flush();
 
   dolfinx::common::Timer t1("Init logging");
   dolfinx::init_logging(argc, argv);
   t1.stop();
+  t1.flush();
 
   dolfinx::common::Timer t2("Init PETSc");
   PetscInitialize(&argc, &argv, nullptr, nullptr);
   t2.stop();
+  t2.flush();
 
   // Set the logging thread name to show the process rank and enable on
   // rank 0 (add more here if desired)
