@@ -233,7 +233,18 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
       sct.scatter_fwd_end<T>(remote_buffer, remote_data, unpack_fn, request);
     };
 
+    common::Timer tcg;
     int num_it = linalg::cg(*u.x(), b, action, 100, 1e-6);
+    tcg.stop();
+    tcg.flush();
+    double time = std::chrono::duration<double>(tcg.elapsed()).count();
+    double ndofs_global
+        = static_cast<double>(V->dofmap()->index_map->size_global());
+    double gdofs = (num_it * ndofs_global) / time / 1e9;
+
+    std::cout << "Processed " << gdofs << " Gdofs/s\n";
+    std::cout << "dofs=" << ndofs_global << " time = " << time << "\n";
+
     return num_it;
   };
 
