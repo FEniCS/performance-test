@@ -1,3 +1,7 @@
+# Copyright(C) 2023-2025 Igor A. Baratta, Chris N. Richardson, Joseph P. Dean,
+# Garth N. Wells
+# SPDX-License-Identifier:    MIT
+
 from ufl import (Coefficient, Constant, FunctionSpace, Mesh, Measure,
                  TestFunction, TrialFunction, dx, grad, inner)
 import basix
