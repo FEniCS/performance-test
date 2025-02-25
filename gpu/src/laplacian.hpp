@@ -11,7 +11,6 @@
 #include <basix/finite-element.h>
 #include <basix/interpolation.h>
 #include <basix/quadrature.h>
-#include <iomanip>
 
 template <typename T, int P, int Q>
 __constant__ T phi0_const[Q * (P + 1)];
@@ -72,7 +71,6 @@ bool matrix_is_identity(const std::vector<T>& mat,
           return false;
       }
     }
-
     return true;
   }
   else
@@ -746,15 +744,6 @@ public:
     // Compute interpolation matrix from element0 to element1
     auto [mat, shape_I]
         = basix::compute_interpolation_operator(element0, element1);
-    for (int i = 0; i < shape_I[0]; ++i)
-    {
-      std::cout << "[ ";
-      for (int j = 0; j < shape_I[1]; ++j)
-        std::cout << std::fixed << std::setw(8) << mat[i * shape_I[1] + j]
-                  << " ";
-      std::cout << "]\n";
-      std::cout << std::defaultfloat;
-    }
 
     T precision = std::numeric_limits<T>::epsilon();
     for (auto& v : mat)
@@ -991,23 +980,12 @@ public:
         T* x = in.mutable_array().data();
         T* y = out.mutable_array().data();
 
-#ifdef USE_SLICED
-        constexpr int quad_per_thread = SLICE_SIZE;
-        dim3 block_size(Q, Q, (Q + quad_per_thread - 1) / quad_per_thread);
-        dim3 grid_size(cell_list_d.size());
-        sliced::stiffness_operator<T, P, Q, quad_per_thread>
-            <<<grid_size, block_size>>>(x, cell_constants.data(), y,
-                                        geometry_ptr, cell_dofmap.data(),
-                                        cell_list_d.data(), cell_list_d.size(),
-                                        bc_marker.data(), is_identity);
-#else
         dim3 block_size(Q, Q, Q);
         dim3 grid_size(cell_list_d.size());
         stiffness_operator<T, P, Q><<<grid_size, block_size>>>(
             x, cell_constants.data(), y, geometry_ptr, cell_dofmap.data(),
             cell_list_d.data(), cell_list_d.size(), bc_marker.data(),
             is_identity);
-#endif
 
         check_device_last_error();
       }
@@ -1044,24 +1022,13 @@ public:
       T* x = in.mutable_array().data();
       T* y = out.mutable_array().data();
 
-      // FIXME: Should have NQ as a template parameter
-#ifdef USE_SLICED
-      constexpr int quad_per_thread = SLICE_SIZE;
-      dim3 block_size(Q, Q, (Q + quad_per_thread - 1) / quad_per_thread);
-      dim3 grid_size(cell_list_d.size());
-      sliced::stiffness_operator<T, P, Q, quad_per_thread>
-          <<<grid_size, block_size>>>(x, cell_constants.data(), y, geometry_ptr,
-                                      cell_dofmap.data(), cell_list_d.data(),
-                                      cell_list_d.size(), bc_marker.data(),
-                                      is_identity);
-#else
       dim3 block_size(Q, Q, Q);
       dim3 grid_size(cell_list_d.size());
       stiffness_operator<T, P, Q><<<grid_size, block_size>>>(
           x, cell_constants.data(), y, geometry_ptr, cell_dofmap.data(),
           cell_list_d.data(), cell_list_d.size(), bc_marker.data(),
           is_identity);
-#endif
+
       check_device_last_error();
     }
 

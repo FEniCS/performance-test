@@ -373,12 +373,19 @@ int main(int argc, char* argv[])
       op(u, y);
     auto stop = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> duration = stop - start;
-    std::cout << "Mat-free Matvec time: " << duration.count() << std::endl;
-    std::cout << "Mat-free action Gdofs/s: "
-              << ndofs_global * nreps / (1e9 * duration.count()) << std::endl;
 
-    std::cout << "Norm of u = " << acc::norm(u) << std::endl;
-    std::cout << "Norm of y = " << acc::norm(y) << std::endl;
+    T unorm = acc::norm(u);
+    T ynorm = acc::norm(y);
+
+    if (rank == 0)
+    {
+      std::cout << "Mat-free Matvec time: " << duration.count() << std::endl;
+      std::cout << "Mat-free action Gdofs/s: "
+                << ndofs_global * nreps / (1e9 * duration.count()) << std::endl;
+
+      std::cout << "Norm of u = " << unorm << std::endl;
+      std::cout << "Norm of y = " << ynorm << std::endl;
+    }
 
     if (matrix_comparison)
     {
