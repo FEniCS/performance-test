@@ -242,8 +242,7 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
         = static_cast<double>(V->dofmap()->index_map->size_global());
     double gdofs = (num_it * ndofs_global) / time / 1e9;
 
-    std::cout << "Processed " << gdofs << " Gdofs/s\n";
-    std::cout << "dofs=" << ndofs_global << " time = " << time << "\n";
+    std::cout << "CG matrix-free action processed: " << gdofs << " Gdof/s\n";
 
     return num_it;
   };
