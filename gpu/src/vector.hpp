@@ -1,16 +1,15 @@
-/// Copyright (C) 2023 Igor A. Baratta
-/// SPDX-License-Identifier:    MIT
+// Copyright(C) 2023-2025 Igor A. Baratta, Chris N. Richardson, Joseph P. Dean,
+// Garth N. Wells
+// SPDX-License-Identifier:    MIT
 
 #pragma once
 
 #include "util.hpp"
 
-#undef __noinline__
-
 #include <dolfinx/common/Scatterer.h>
 #include <dolfinx/common/log.h>
 #include <dolfinx/la/dolfinx_la.h>
-#include <iostream>
+
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
 #include <thrust/extrema.h>
@@ -18,12 +17,15 @@
 #include <thrust/host_vector.h>
 #include <thrust/inner_product.h>
 #include <thrust/transform_reduce.h>
+
+#include <iostream>
 #include <type_traits>
 
 namespace
 {
 template <typename T>
-static __global__ void pack(const int N, const std::int32_t* __restrict__ indices,
+static __global__ void pack(const int N,
+                            const std::int32_t* __restrict__ indices,
                             const T* __restrict__ in, T* __restrict__ out)
 {
   int gid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -34,7 +36,8 @@ static __global__ void pack(const int N, const std::int32_t* __restrict__ indice
 }
 
 template <typename T>
-static __global__ void unpack(const int N, const std::int32_t* __restrict__ indices,
+static __global__ void unpack(const int N,
+                              const std::int32_t* __restrict__ indices,
                               const T* __restrict__ in, T* __restrict__ out)
 {
   int gid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -45,7 +48,8 @@ static __global__ void unpack(const int N, const std::int32_t* __restrict__ indi
 }
 
 template <typename T>
-static __global__ void unpack_add(std::int32_t N, const int32_t* __restrict__ indices,
+static __global__ void unpack_add(std::int32_t N,
+                                  const int32_t* __restrict__ indices,
                                   const T* __restrict__ in, T* __restrict__ out)
 {
   int gid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -59,38 +63,30 @@ static __global__ void unpack_add(std::int32_t N, const int32_t* __restrict__ in
 namespace dolfinx::acc
 {
 
-enum class Device
-{
-  CUDA,
-  HIP,
-  CPP
-};
-
-// Container for local data
-template <typename T, Device D>
-using container
-    = std::conditional_t<D == Device::CPP, thrust::host_vector<T>, thrust::device_vector<T>>;
-
 /// Distributed vector
-template <typename T, Device D>
+template <typename T>
 class Vector
 {
 public:
   /// The value type
   using value_type = T;
-  constexpr static Device device = D;
 
   /// Create a distributed vector
   Vector(std::shared_ptr<const common::IndexMap> map, int bs)
-      : _map(map), _bs(bs), _scatterer(std::make_shared<common::Scatterer<>>(*_map, bs))
+      : _map(map), _bs(bs),
+        _scatterer(std::make_shared<common::Scatterer<>>(*_map, bs))
   {
     int size = bs * (map->size_local() + map->num_ghosts());
-    _x = container<T, D>(size, 0);
+    _x = thrust::device_vector<T>(size, 0);
 
-    _buffer_local = container<T, D>(_scatterer->local_buffer_size(), 0);
-    _buffer_remote = container<T, D>(_scatterer->remote_buffer_size(), 0);
-    _local_indices = container<std::int32_t, D>(_scatterer->local_indices());
-    _remote_indices = container<std::int32_t, D>(_scatterer->remote_indices());
+    _buffer_local
+        = thrust::device_vector<T>(_scatterer->local_buffer_size(), 0);
+    _buffer_remote
+        = thrust::device_vector<T>(_scatterer->remote_buffer_size(), 0);
+    _local_indices
+        = thrust::device_vector<std::int32_t>(_scatterer->local_indices());
+    _remote_indices
+        = thrust::device_vector<std::int32_t>(_scatterer->remote_indices());
 
     auto scatterer_type = common::Scatterer<>::type::p2p;
     _request = _scatterer->create_request_vector(scatterer_type);
@@ -107,19 +103,14 @@ public:
 
   /// Set all entries (including ghosts)
   /// @param[in] v The value to set all entries to (on calling rank)
-  void set(T v)
-  {
-    if constexpr (D == Device::CPP)
-      std::fill(_x.begin(), _x.end(), v);
-    else
-      thrust::fill(thrust::device, _x.begin(), _x.end(), v);
-  }
+  void set(T v) { thrust::fill(thrust::device, _x.begin(), _x.end(), v); }
 
   template <typename OtherVector>
   void copy_from_host(const OtherVector& other)
   {
     // Copies only local data
-    thrust::copy(other.array().begin(), other.array().begin() + _map->size_local(), _x.begin());
+    thrust::copy(other.array().begin(),
+                 other.array().begin() + _map->size_local(), _x.begin());
   }
 
   template <typename OtherVector>
@@ -141,25 +132,15 @@ public:
   /// Get local part of the vector (const version)
   std::span<const T> array() const
   {
-    if constexpr (D == Device::CPP)
-      return std::span<const T>(_x.data(), _x.size());
-    else
-    {
-      auto* ptr = thrust::raw_pointer_cast(_x.data());
-      return std::span<const T>(ptr, _x.size());
-    }
+    auto* ptr = thrust::raw_pointer_cast(_x.data());
+    return std::span<const T>(ptr, _x.size());
   }
 
   /// Get local part of the vector
   std::span<T> mutable_array()
   {
-    if constexpr (D == Device::CPP)
-      return std::span<T>(_x.data(), _x.size());
-    else
-    {
-      auto* ptr = thrust::raw_pointer_cast(_x.data());
-      return std::span<T>(ptr, _x.size());
-    }
+    auto* ptr = thrust::raw_pointer_cast(_x.data());
+    return std::span<T>(ptr, _x.size());
   }
 
   void print() const
@@ -175,7 +156,8 @@ public:
       if (rank == i)
       {
         std::cout << "Rank " << rank << " :" << std::endl;
-        thrust::copy(_x.begin(), _x.end(), std::ostream_iterator<value_type>(std::cout, " "));
+        thrust::copy(_x.begin(), _x.end(),
+                     std::ostream_iterator<value_type>(std::cout, " "));
         std::cout << "\n-----------\n";
       }
       MPI_Barrier(comm);
@@ -187,24 +169,28 @@ public:
   void scatter_fwd_begin(int block_size = 512)
   {
     // TODO: which block_size to use??
-    const int num_blocks = (_local_indices.size() + block_size - 1) / block_size;
+    const int num_blocks
+        = (_local_indices.size() + block_size - 1) / block_size;
     dim3 dim_block(block_size);
     dim3 dim_grid(num_blocks);
 
     if (!_local_indices.empty())
     {
-      const std::int32_t* indices = thrust::raw_pointer_cast(_local_indices.data());
+      const std::int32_t* indices
+          = thrust::raw_pointer_cast(_local_indices.data());
       const T* in = this->array().data();
       T* out = thrust::raw_pointer_cast(_buffer_local.data());
-      pack<T><<<dim_grid, dim_block, 0, 0>>>(_local_indices.size(), indices, in, out);
+      pack<T><<<dim_grid, dim_block, 0, 0>>>(_local_indices.size(), indices, in,
+                                             out);
       device_synchronize();
     }
 
     T* remote = thrust::raw_pointer_cast(_buffer_remote.data());
     _scatterer->scatter_fwd_begin(
-        std::span<const T>(thrust::raw_pointer_cast(_buffer_local.data()), _buffer_local.size()),
-        std::span<T>(remote, _buffer_remote.size()), std::span<MPI_Request>(_request),
-        common::Scatterer<>::type::p2p);
+        std::span<const T>(thrust::raw_pointer_cast(_buffer_local.data()),
+                           _buffer_local.size()),
+        std::span<T>(remote, _buffer_remote.size()),
+        std::span<MPI_Request>(_request), common::Scatterer<>::type::p2p);
   }
 
   void scatter_fwd_end(int block_size = 512)
@@ -217,22 +203,26 @@ public:
 
     spdlog::debug("scatter_fwd_end step 1");
 
-    spdlog::debug("scatter_fwd_end local buf size = {}, remote buf size {}", _buffer_local.size(),
-                  _buffer_remote.size());
+    spdlog::debug("scatter_fwd_end local buf size = {}, remote buf size {}",
+                  _buffer_local.size(), _buffer_remote.size());
 
-    const int num_blocks = (_remote_indices.size() + block_size - 1) / block_size;
+    const int num_blocks
+        = (_remote_indices.size() + block_size - 1) / block_size;
     dim3 dim_block(block_size);
     dim3 dim_grid(num_blocks);
-    std::span<T> x_remote(this->mutable_array().data() + local_size, num_ghosts);
+    std::span<T> x_remote(this->mutable_array().data() + local_size,
+                          num_ghosts);
 
     spdlog::debug("scatter_fwd_end step 2");
 
     if (!_remote_indices.empty())
     {
-      const std::int32_t* indices = thrust::raw_pointer_cast(_remote_indices.data());
+      const std::int32_t* indices
+          = thrust::raw_pointer_cast(_remote_indices.data());
       const T* in = thrust::raw_pointer_cast(_buffer_remote.data());
       T* out = x_remote.data();
-      unpack<T><<<dim_grid, dim_block, 0, 0>>>(_remote_indices.size(), indices, in, out);
+      unpack<T><<<dim_grid, dim_block, 0, 0>>>(_remote_indices.size(), indices,
+                                               in, out);
       device_synchronize();
     }
     spdlog::debug("scatter_fwd_end end");
@@ -250,21 +240,25 @@ public:
   void scatter_rev_begin(int block_size = 512)
   {
     // TODO: which block_size to use??
-    const int num_blocks = (_remote_indices.size() + block_size - 1) / block_size;
+    const int num_blocks
+        = (_remote_indices.size() + block_size - 1) / block_size;
     dim3 dim_block(block_size);
     dim3 dim_grid(num_blocks);
 
     const std::int32_t local_size = _bs * _map->size_local();
-    const std::int32_t* indices = thrust::raw_pointer_cast(_remote_indices.data());
+    const std::int32_t* indices
+        = thrust::raw_pointer_cast(_remote_indices.data());
     const T* in = this->array().data() + local_size;
     T* out = thrust::raw_pointer_cast(_buffer_remote.data());
-    pack<T><<<dim_grid, dim_block, 0, 0>>>(_remote_indices.size(), indices, in, out);
+    pack<T><<<dim_grid, dim_block, 0, 0>>>(_remote_indices.size(), indices, in,
+                                           out);
     device_synchronize();
 
     T* local = thrust::raw_pointer_cast(_buffer_local.data());
-    _scatterer->scatter_rev_begin(std::span<const T>(out, _buffer_remote.size()),
-                                  std::span<T>(local, _buffer_local.size()),
-                                  std::span<MPI_Request>(_request), common::Scatterer<>::type::p2p);
+    _scatterer->scatter_rev_begin(
+        std::span<const T>(out, _buffer_remote.size()),
+        std::span<T>(local, _buffer_local.size()),
+        std::span<MPI_Request>(_request), common::Scatterer<>::type::p2p);
   }
 
   // Finalize reverse scatter, unpack data
@@ -274,15 +268,18 @@ public:
     const std::int32_t local_size = _bs * _map->size_local();
     _scatterer->scatter_rev_end(std::span<MPI_Request>(_request));
 
-    const int num_blocks = (_local_indices.size() + block_size - 1) / block_size;
+    const int num_blocks
+        = (_local_indices.size() + block_size - 1) / block_size;
     dim3 dim_block(block_size);
     dim3 dim_grid(num_blocks);
     std::span<T> x_local(this->mutable_array().data(), local_size);
 
-    const std::int32_t* indices = thrust::raw_pointer_cast(_local_indices.data());
+    const std::int32_t* indices
+        = thrust::raw_pointer_cast(_local_indices.data());
     const T* in = thrust::raw_pointer_cast(_buffer_local.data());
     T* out = x_local.data();
-    unpack_add<T><<<dim_grid, dim_block, 0, 0>>>(_local_indices.size(), indices, in, out);
+    unpack_add<T><<<dim_grid, dim_block, 0, 0>>>(_local_indices.size(), indices,
+                                                 in, out);
     device_synchronize();
   }
 
@@ -316,13 +313,13 @@ private:
   std::vector<MPI_Request> _request = {MPI_REQUEST_NULL};
 
   // Buffers for ghost scatters
-  container<T, D> _buffer_local, _buffer_remote;
+  thrust::device_vector<T> _buffer_local, _buffer_remote;
 
   // indices for ghost scatters
-  container<std::int32_t, D> _local_indices, _remote_indices;
+  thrust::device_vector<std::int32_t> _local_indices, _remote_indices;
 
   // Vector data
-  container<T, D> _x;
+  thrust::device_vector<T> _x;
 };
 
 /// Compute the inner product of two vectors. The two vectors must have
@@ -343,12 +340,12 @@ auto inner_product(const Vector& a, const Vector& b)
   if (local_size != b.bs() * b.map()->size_local())
     throw std::runtime_error("Incompatible vector sizes");
 
-  T local = 0;
-  if constexpr (Vector::device != Device::CPP)
-    local = thrust::inner_product(thrust::device, x_a.begin(), x_a.end(), x_b.begin(), T{0.0});
+  T local = thrust::inner_product(thrust::device, x_a.begin(), x_a.end(),
+                                  x_b.begin(), T{0.0});
 
   T result;
-  MPI_Allreduce(&local, &result, 1, dolfinx::MPI::mpi_t<T>, MPI_SUM, a.map()->comm());
+  MPI_Allreduce(&local, &result, 1, dolfinx::MPI::mpi_t<T>, MPI_SUM,
+                a.map()->comm());
   return result;
 }
 
@@ -382,8 +379,8 @@ auto norm(const Vector& a, dolfinx::la::Norm type = dolfinx::la::Norm::l2)
     auto max_pos = thrust::max_element(thrust::device, x_a.begin(), x_a.end());
     auto local_linf = std::abs(*max_pos);
     decltype(local_linf) linf = 0;
-    MPI_Allreduce(&local_linf, &linf, 1, dolfinx::MPI::mpi_t<decltype(linf)>, MPI_MAX,
-                  a.map()->comm());
+    MPI_Allreduce(&local_linf, &linf, 1, dolfinx::MPI::mpi_t<decltype(linf)>,
+                  MPI_MAX, a.map()->comm());
     return linf;
   }
   default:
@@ -401,7 +398,8 @@ void axpy(Vector& r, S alpha, const Vector& x, const Vector& y)
 {
   spdlog::debug("AXPY start");
   using T = typename Vector::value_type;
-  thrust::transform(thrust::device, x.array().begin(), x.array().begin() + x.map()->size_local(),
+  thrust::transform(thrust::device, x.array().begin(),
+                    x.array().begin() + x.map()->size_local(),
                     y.array().begin(), r.mutable_array().begin(),
                     [alpha] __host__ __device__(const T& vx, const T& vy)
                     { return vx * alpha + vy; });
@@ -415,7 +413,8 @@ template <typename Vector, typename S>
 void scale(Vector& r, S alpha)
 {
   using T = typename Vector::value_type;
-  thrust::for_each(thrust::device, r.mutable_array().begin(), r.mutable_array().end(),
+  thrust::for_each(thrust::device, r.mutable_array().begin(),
+                   r.mutable_array().end(),
                    [alpha] __host__ __device__(T & v) { v *= alpha; });
 }
 
@@ -442,16 +441,19 @@ void pointwise_mult(Vector& w, const Vector& x, const Vector& y)
   spdlog::debug("pointwise_mult start");
 
   using T = typename Vector::value_type;
-  thrust::transform(thrust::device, x.array().begin(), x.array().begin() + x.map()->size_local(),
+  thrust::transform(thrust::device, x.array().begin(),
+                    x.array().begin() + x.map()->size_local(),
                     y.array().begin(), w.mutable_array().begin(),
-                    [] __host__ __device__(const T& xi, const T& yi) { return xi * yi; });
+                    [] __host__ __device__(const T& xi, const T& yi)
+                    { return xi * yi; });
   spdlog::debug("pointwise_mult end");
 }
 
 template <typename Vector, typename UnaryFunction>
 void transform(Vector& x, UnaryFunction op)
 {
-  thrust::transform(thrust::device, x.array().begin(), x.array().begin() + x.map()->size_local(),
+  thrust::transform(thrust::device, x.array().begin(),
+                    x.array().begin() + x.map()->size_local(),
                     x.mutable_array().begin(), op);
 }
 

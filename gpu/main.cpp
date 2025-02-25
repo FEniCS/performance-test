@@ -307,7 +307,7 @@ int main(int argc, char* argv[])
                  dofmap_d.size() * sizeof(std::int32_t));
 
     // Define vectors
-    using DeviceVector = dolfinx::acc::Vector<T, acc::Device::HIP>;
+    using DeviceVector = dolfinx::acc::Vector<T>;
 
     // Input vector
     auto map = V->dofmap()->index_map;

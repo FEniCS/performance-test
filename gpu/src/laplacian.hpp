@@ -863,7 +863,9 @@ public:
     spdlog::debug("Done MatFreeLaplacian constructor");
   }
 
-  // Compute weighted geometry data on GPU
+  /// @brief Compute weighted geometry data on GPU
+  /// @param nq Number of quadrature points in 1D
+  /// @param cell_list_d List of cell indices to compute for
   template <int Q = 2>
   void compute_geometry(int nq, std::span<int> cell_list_d)
   {
@@ -900,7 +902,9 @@ public:
       throw std::runtime_error("Unsupported degree [geometry]");
   }
 
-  /// Compute matrix diagonal entries
+  /// @brief Compute matrix diagonal entries
+  /// @param out Vector containing diagonal entries of the matrix
+  /// @note Only works for qmode=0, i.e. when Q=P+1
   template <int P, typename Vector>
   void compute_mat_diag_inv(Vector& out)
   {
@@ -1066,6 +1070,9 @@ public:
     spdlog::debug("impl_operator done bcells");
   }
 
+  /// @brief Apply Laplacian operator
+  /// @param in Input vector
+  /// @param out Output vector
   template <typename Vector>
   void operator()(Vector& in, Vector& out)
   {

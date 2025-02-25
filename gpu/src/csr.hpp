@@ -1,3 +1,7 @@
+// Copyright(C) 2023-2025 Igor A. Baratta, Chris N. Richardson, Joseph P. Dean,
+// Garth N. Wells
+// SPDX-License-Identifier:    MIT
+
 #pragma once
 
 #include <dolfinx.h>
@@ -11,7 +15,7 @@
 
 namespace
 {
-// // /// Computes y += A*x for a local CSR matrix A and local dense vectors x,y
+/// Computes y += A*x for a local CSR matrix A and local dense vectors x,y
 /// @param[in] values Nonzero values of A
 /// @param[in] row_begin First index of each row in the arrays values and
 /// indices.
@@ -21,8 +25,8 @@ namespace
 /// @param[in, out] y Output vector
 template <typename T>
 __global__ void spmv_impl(int N, const T* values, const std::int32_t* row_begin,
-                          const std::int32_t* row_end, const std::int32_t* indices, const T* x,
-                          T* y)
+                          const std::int32_t* row_end,
+                          const std::int32_t* indices, const T* x, T* y)
 {
   // Calculate the row index for this thread.
   int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -38,9 +42,10 @@ __global__ void spmv_impl(int N, const T* values, const std::int32_t* row_begin,
 }
 
 template <typename T>
-__global__ void spmvT_impl(int N, const T* values, const std::int32_t* row_begin,
-                           const std::int32_t* row_end, const std::int32_t* indices, const T* x,
-                           T* y)
+__global__ void spmvT_impl(int N, const T* values,
+                           const std::int32_t* row_begin,
+                           const std::int32_t* row_end,
+                           const std::int32_t* indices, const T* x, T* y)
 {
   // Calculate the row index for this thread.
   int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -65,8 +70,9 @@ public:
   using value_type = T;
 
   /// Create a distributed vector
-  MatrixOperator(std::shared_ptr<fem::Form<T, T>> a,
-                 std::vector<std::reference_wrapper<const fem::DirichletBC<T>>> bcs)
+  MatrixOperator(
+      std::shared_ptr<fem::Form<T, T>> a,
+      std::vector<std::reference_wrapper<const fem::DirichletBC<T>>> bcs)
   {
 
     dolfinx::common::Timer t0("~setup phase MatrixOperator");
@@ -77,12 +83,13 @@ public:
     auto V = a->function_spaces()[0];
     la::SparsityPattern pattern = fem::create_sparsity_pattern(*a);
     pattern.finalize();
-    _col_map = std::make_shared<const common::IndexMap>(pattern.column_index_map());
+    _col_map
+        = std::make_shared<const common::IndexMap>(pattern.column_index_map());
     _row_map = V->dofmap()->index_map;
 
     _A = std::make_unique<
-        la::MatrixCSR<T, std::vector<T>, std::vector<std::int32_t>, std::vector<std::int32_t>>>(
-        pattern);
+        la::MatrixCSR<T, std::vector<T>, std::vector<std::int32_t>,
+                      std::vector<std::int32_t>>>(pattern);
     fem::assemble_matrix(_A->mat_add_values(), *a, bcs);
     _A->scatter_rev();
     fem::set_diagonal<T>(_A->mat_set_values(), *V, bcs, T(1.0));
@@ -120,19 +127,24 @@ public:
 
     // Copy data from host to device
     spdlog::warn("Creating Device matrix with {} non zeros", _nnz);
-    spdlog::warn("Creating row_ptr with {} to {}", num_rows + 1, _row_ptr.size());
-    thrust::copy(_A->row_ptr().begin(), _A->row_ptr().begin() + num_rows + 1, _row_ptr.begin());
-    spdlog::warn("Creating off_diag with {} to {}", _A->off_diag_offset().size(),
-                 _off_diag_offset.size());
-    thrust::copy(_A->off_diag_offset().begin(), _A->off_diag_offset().begin() + num_rows,
+    spdlog::warn("Creating row_ptr with {} to {}", num_rows + 1,
+                 _row_ptr.size());
+    thrust::copy(_A->row_ptr().begin(), _A->row_ptr().begin() + num_rows + 1,
+                 _row_ptr.begin());
+    spdlog::warn("Creating off_diag with {} to {}",
+                 _A->off_diag_offset().size(), _off_diag_offset.size());
+    thrust::copy(_A->off_diag_offset().begin(),
+                 _A->off_diag_offset().begin() + num_rows,
                  _off_diag_offset.begin());
     spdlog::warn("Creating cols with {} to {}", nnz, _cols.size());
     thrust::copy(_A->cols().begin(), _A->cols().begin() + nnz, _cols.begin());
     spdlog::warn("Creating values with {} to {}", nnz, _values.size());
-    thrust::copy(_A->values().begin(), _A->values().begin() + nnz, _values.begin());
+    thrust::copy(_A->values().begin(), _A->values().begin() + nnz,
+                 _values.begin());
   }
 
-  MatrixOperator(const fem::FunctionSpace<T>& V0, const fem::FunctionSpace<T>& V1)
+  MatrixOperator(const fem::FunctionSpace<T>& V0,
+                 const fem::FunctionSpace<T>& V1)
   {
     dolfinx::common::Timer t0("~setup phase Interpolation Operators");
     _comm = V0.mesh()->comm();
@@ -150,8 +162,9 @@ public:
     assert(dofmap0->index_map);
     assert(dofmap1->index_map);
 
-    la::SparsityPattern pattern(_comm, {dofmap1->index_map, dofmap0->index_map},
-                                {dofmap1->index_map_bs(), dofmap0->index_map_bs()});
+    la::SparsityPattern pattern(
+        _comm, {dofmap1->index_map, dofmap0->index_map},
+        {dofmap1->index_map_bs(), dofmap0->index_map_bs()});
 
     int tdim = mesh->topology()->dim();
     auto map = mesh->topology()->index_map(tdim);
@@ -163,14 +176,15 @@ public:
 
     // Build operator
     _A = std::make_unique<
-        la::MatrixCSR<T, std::vector<T>, std::vector<std::int32_t>, std::vector<std::int32_t>>>(
-        pattern);
+        la::MatrixCSR<T, std::vector<T>, std::vector<std::int32_t>,
+                      std::vector<std::int32_t>>>(pattern);
 
     // FIXME: should this be mat_add or mat_set?
     fem::interpolation_matrix<T>(V0, V1, _A->mat_set_values());
 
     // Create HIP/CUDA matrix
-    _col_map = std::make_shared<const common::IndexMap>(pattern.column_index_map());
+    _col_map
+        = std::make_shared<const common::IndexMap>(pattern.column_index_map());
     _row_map = V1.dofmap()->index_map;
     std::int32_t num_rows = _row_map->size_local();
     std::int32_t nnz = _A->row_ptr()[num_rows];
@@ -180,7 +194,8 @@ public:
     spdlog::warn("Operator Number of rows {}", num_rows);
     spdlog::warn("Operator dm0 size {}", V0.dofmap()->index_map->size_global());
     spdlog::warn("Operator dm1 size {}", V1.dofmap()->index_map->size_global());
-    spdlog::warn("Max column = {}", *std::max_element(_A->cols().begin(), _A->cols().end()));
+    spdlog::warn("Max column = {}",
+                 *std::max_element(_A->cols().begin(), _A->cols().end()));
 
     T norm = 0.0;
     auto v = _A->values();
@@ -197,17 +212,21 @@ public:
     _values = thrust::device_vector<T>(nnz);
 
     // Copy data from host to device
-    thrust::copy(_A->row_ptr().begin(), _A->row_ptr().begin() + num_rows + 1, _row_ptr.begin());
-    thrust::copy(_A->off_diag_offset().begin(), _A->off_diag_offset().begin() + num_rows,
+    thrust::copy(_A->row_ptr().begin(), _A->row_ptr().begin() + num_rows + 1,
+                 _row_ptr.begin());
+    thrust::copy(_A->off_diag_offset().begin(),
+                 _A->off_diag_offset().begin() + num_rows,
                  _off_diag_offset.begin());
     thrust::copy(_A->cols().begin(), _A->cols().begin() + nnz, _cols.begin());
-    thrust::copy(_A->values().begin(), _A->values().begin() + nnz, _values.begin());
+    thrust::copy(_A->values().begin(), _A->values().begin() + nnz,
+                 _values.begin());
   }
 
   template <typename Vector>
   void get_diag_inverse(Vector& diag_inv)
   {
-    thrust::copy(_diag_inv.begin(), _diag_inv.end(), diag_inv.mutable_array().begin());
+    thrust::copy(_diag_inv.begin(), _diag_inv.end(),
+                 diag_inv.mutable_array().begin());
   }
 
   /**
@@ -234,19 +253,19 @@ public:
       dim3 block_size(256);
       dim3 grid_size((num_rows + block_size.x - 1) / block_size.x);
       x.scatter_fwd_begin();
-      spmvT_impl<T>
-          <<<grid_size, block_size, 0, 0>>>(num_rows, thrust::raw_pointer_cast(_values.data()),
-                                            thrust::raw_pointer_cast(_row_ptr.data()),
-                                            thrust::raw_pointer_cast(_off_diag_offset.data()),
-                                            thrust::raw_pointer_cast(_cols.data()), _x, _y);
+      spmvT_impl<T><<<grid_size, block_size, 0, 0>>>(
+          num_rows, thrust::raw_pointer_cast(_values.data()),
+          thrust::raw_pointer_cast(_row_ptr.data()),
+          thrust::raw_pointer_cast(_off_diag_offset.data()),
+          thrust::raw_pointer_cast(_cols.data()), _x, _y);
       check_device_last_error();
       x.scatter_fwd_end();
 
-      spmvT_impl<T>
-          <<<grid_size, block_size, 0, 0>>>(num_rows, thrust::raw_pointer_cast(_values.data()),
-                                            thrust::raw_pointer_cast(_off_diag_offset.data()),
-                                            thrust::raw_pointer_cast(_row_ptr.data()) + 1,
-                                            thrust::raw_pointer_cast(_cols.data()), _x, _y);
+      spmvT_impl<T><<<grid_size, block_size, 0, 0>>>(
+          num_rows, thrust::raw_pointer_cast(_values.data()),
+          thrust::raw_pointer_cast(_off_diag_offset.data()),
+          thrust::raw_pointer_cast(_row_ptr.data()) + 1,
+          thrust::raw_pointer_cast(_cols.data()), _x, _y);
       check_device_last_error();
     }
     else
@@ -255,29 +274,35 @@ public:
       dim3 block_size(256);
       dim3 grid_size((num_rows + block_size.x - 1) / block_size.x);
       x.scatter_fwd_begin();
-      spmv_impl<T>
-          <<<grid_size, block_size, 0, 0>>>(num_rows, thrust::raw_pointer_cast(_values.data()),
-                                            thrust::raw_pointer_cast(_row_ptr.data()),
-                                            thrust::raw_pointer_cast(_off_diag_offset.data()),
-                                            thrust::raw_pointer_cast(_cols.data()), _x, _y);
+      spmv_impl<T><<<grid_size, block_size, 0, 0>>>(
+          num_rows, thrust::raw_pointer_cast(_values.data()),
+          thrust::raw_pointer_cast(_row_ptr.data()),
+          thrust::raw_pointer_cast(_off_diag_offset.data()),
+          thrust::raw_pointer_cast(_cols.data()), _x, _y);
       check_device_last_error();
       x.scatter_fwd_end();
 
-      spmv_impl<T>
-          <<<grid_size, block_size, 0, 0>>>(num_rows, thrust::raw_pointer_cast(_values.data()),
-                                            thrust::raw_pointer_cast(_off_diag_offset.data()),
-                                            thrust::raw_pointer_cast(_row_ptr.data()) + 1,
-                                            thrust::raw_pointer_cast(_cols.data()), _x, _y);
+      spmv_impl<T><<<grid_size, block_size, 0, 0>>>(
+          num_rows, thrust::raw_pointer_cast(_values.data()),
+          thrust::raw_pointer_cast(_off_diag_offset.data()),
+          thrust::raw_pointer_cast(_row_ptr.data()) + 1,
+          thrust::raw_pointer_cast(_cols.data()), _x, _y);
       check_device_last_error();
     }
 
     device_synchronize();
   }
 
-  std::shared_ptr<const common::IndexMap> column_index_map() { return _col_map; }
+  /// @brief IndexMap for the column space of the matrix
+  std::shared_ptr<const common::IndexMap> column_index_map()
+  {
+    return _col_map;
+  }
 
+  /// @brief IndexMap for the row space of the matrix
   std::shared_ptr<const common::IndexMap> row_index_map() { return _row_map; }
 
+  /// @brief Number of non-zeros in the matrix
   std::size_t nnz() { return _nnz; }
 
   ~MatrixOperator() {}
@@ -290,8 +315,8 @@ private:
   thrust::device_vector<std::int32_t> _cols;
   thrust::device_vector<std::int32_t> _off_diag_offset;
   std::shared_ptr<const common::IndexMap> _col_map, _row_map;
-  std::unique_ptr<
-      la::MatrixCSR<T, std::vector<T>, std::vector<std::int32_t>, std::vector<std::int32_t>>>
+  std::unique_ptr<la::MatrixCSR<T, std::vector<T>, std::vector<std::int32_t>,
+                                std::vector<std::int32_t>>>
       _A;
 
   MPI_Comm _comm;
