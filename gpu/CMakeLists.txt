@@ -103,3 +103,5 @@ elseif(nvidia)
   add_definitions(-DUSE_CUDA=1)
   set_source_files_properties(main.cpp PROPERTIES LANGUAGE CUDA)
 endif()
+
+install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
