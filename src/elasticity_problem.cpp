@@ -44,15 +44,15 @@ MatNullSpace build_near_nullspace(const fem::FunctionSpace<double>& V)
   std::int32_t length_block = map->size_local() + map->num_ghosts();
   for (int k = 0; k < 3; ++k)
   {
-    std::span<T> x = basis[k].mutable_array();
+    std::span<T> x = basis[k].array();
     for (std::int32_t i = 0; i < length_block; ++i)
       x[bs * i + k] = 1.0;
   }
 
   // Rotations
-  auto x3 = basis[3].mutable_array();
-  auto x4 = basis[4].mutable_array();
-  auto x5 = basis[5].mutable_array();
+  auto x3 = basis[3].array();
+  auto x4 = basis[4].array();
+  auto x5 = basis[5].array();
 
   const std::vector<double> x = V.tabulate_dof_coordinates(false);
   const std::int32_t* dofs = V.dofmap()->map().data_handle();
@@ -220,13 +220,12 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
   const std::vector constants_L = fem::pack_constants(*L);
   auto coeffs_L = fem::allocate_coefficient_storage(*L);
   fem::pack_coefficients(*L, coeffs_L);
-  fem::assemble_vector<T>(b.mutable_array(), *L, constants_L,
-                          fem::make_coefficients_span(coeffs_L));
-  fem::apply_lifting<T, double>(b.mutable_array(), {*a}, {constants_L},
-                                {fem::make_coefficients_span(coeffs_L)},
-                                {{*bc}}, {}, 1.0);
+  fem::assemble_vector(b.array(), *L, std::span<const T>(constants_L),
+                       fem::make_coefficients_span(coeffs_L));
+  fem::apply_lifting(b.array(), {*a}, {constants_L},
+                     {fem::make_coefficients_span(coeffs_L)}, {{*bc}}, {}, 1.0);
   b.scatter_rev(std::plus<>());
-  bc->set(b.mutable_array(), std::nullopt);
+  bc->set(b.array(), std::nullopt);
   t3.stop();
   t3.flush();
 
