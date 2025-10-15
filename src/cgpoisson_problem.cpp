@@ -70,7 +70,7 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
   common::Timer t2("ZZZ Create boundary conditions");
   // Define boundary condition
   auto u0 = std::make_shared<fem::Function<T>>(V);
-  u0->x()->set(0);
+  std::ranges::fill(u0->x()->array(), 0.0);
 
   // Find facets with bc applied
   const int tdim = mesh->topology()->dim();
@@ -147,24 +147,25 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
   // Create la::Vector
   la::Vector<T> b(L->function_spaces()[0]->dofmap()->index_map,
                   L->function_spaces()[0]->dofmap()->index_map_bs());
-  b.set(0);
+  std::ranges::fill(b.array(), 0.0);
+
   common::Timer t5("ZZZ Assemble vector");
   const std::vector constants_L = fem::pack_constants(*L);
   auto coeffs_L = fem::allocate_coefficient_storage(*L);
   fem::pack_coefficients(*L, coeffs_L);
-  fem::assemble_vector<T>(b.mutable_array(), *L, constants_L,
-                          fem::make_coefficients_span(coeffs_L));
+  fem::assemble_vector(b.array(), *L, std::span<const T>(constants_L),
+                       fem::make_coefficients_span(coeffs_L));
 
   // Apply lifting to account for Dirichlet boundary condition
   // b <- b - A * x_bc
-  bc->set(un->x()->mutable_array(), std::nullopt, -1.0);
-  fem::assemble_vector(b.mutable_array(), *M);
+  bc->set(un->x()->array(), std::nullopt, -1.0);
+  fem::assemble_vector(b.array(), *M);
 
   // Communicate ghost values
   b.scatter_rev(std::plus<T>());
 
   // Set BC dofs to zero (effectively zeroes columns of A)
-  bc->set(b.mutable_array(), std::nullopt, 0.0);
+  bc->set(b.array(), std::nullopt, 0.0);
   b.scatter_fwd();
 
   // Pack coefficients and constants
@@ -185,52 +186,47 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
     int bs = V->dofmap()->bs();
     common::Scatterer sct(*idx_map, bs);
 
-    std::vector<T> local_buffer(sct.local_buffer_size(), 0);
-    std::vector<T> remote_buffer(sct.remote_buffer_size(), 0);
-
-    common::Scatterer<>::type type;
-    if (scatterer == "neighbor")
-      type = common::Scatterer<>::type::neighbor;
-    if (scatterer == "p2p")
-      type = common::Scatterer<>::type::p2p;
-
-    std::vector<MPI_Request> request = sct.create_request_vector(type);
+    std::vector<T> local_buffer(sct.local_indices().size(), 0);
+    std::vector<T> remote_buffer(sct.remote_indices().size(), 0);
 
     // Create function for computing the action of A on x (y = Ax)
     auto action = [&](la::Vector<T>& x, la::Vector<T>& y)
     {
       // Zero y
-      y.set(0.0);
+      std::ranges::fill(y.array(), 0.0);
 
       // Update coefficient un (just copy data from x to un)
-      std::copy(x.array().begin(), x.array().end(),
-                un->x()->mutable_array().begin());
+      std::copy(x.array().begin(), x.array().end(), un->x()->array().begin());
 
       // Compute action of A on x
       fem::pack_coefficients(*M, coeff);
-      fem::assemble_vector(y.mutable_array(), *M, std::span<const T>(constants),
+      fem::assemble_vector(y.array(), *M, std::span<const T>(constants),
                            fem::make_coefficients_span(coeff));
 
       // Set BC dofs to zero (effectively zeroes rows of A)
-      bc->set(y.mutable_array(), std::nullopt, 0.0);
+      bc->set(y.array(), std::nullopt, 0.0);
 
       // Accumuate ghost values
       // y.scatter_rev(std::plus<T>());
 
       const std::int32_t local_size = bs * idx_map->size_local();
       const std::int32_t num_ghosts = bs * idx_map->num_ghosts();
-      std::span<T> remote_data(y.mutable_array().data() + local_size,
-                               num_ghosts);
-      std::span<T> local_data(y.mutable_array().data(), local_size);
-      sct.scatter_rev_begin<T>(remote_data, remote_buffer, local_buffer,
-                               pack_fn, request, type);
-      sct.scatter_rev_end<T>(local_buffer, local_data, unpack_fn,
-                             std::plus<T>(), request);
+      std::span<T> remote_data(y.array().data() + local_size, num_ghosts);
+      std::span<T> local_data(y.array().data(), local_size);
+
+      MPI_Request request = MPI_REQUEST_NULL;
+      pack_fn(remote_data, sct.remote_indices(), remote_buffer);
+      sct.scatter_rev_begin(remote_buffer.data(), local_buffer.data(), request);
+      sct.scatter_end(request);
+      unpack_fn(local_buffer, sct.local_indices(), local_data, std::plus<T>());
 
       // Update ghost values
-      sct.scatter_fwd_begin<T>(local_data, local_buffer, remote_buffer, pack_fn,
-                               request, type);
-      sct.scatter_fwd_end<T>(remote_buffer, remote_data, unpack_fn, request);
+      request = MPI_REQUEST_NULL;
+      pack_fn(local_data, sct.local_indices(), local_buffer);
+      sct.scatter_fwd_begin(local_buffer.data(), remote_buffer.data(), request);
+      sct.scatter_end(request);
+      unpack_fn(remote_buffer, sct.remote_indices(), remote_data,
+                [](auto x, auto y) { return y; });
     };
 
     common::Timer tcg;
