@@ -50,9 +50,9 @@ MatNullSpace build_near_nullspace(const fem::FunctionSpace<double>& V)
   }
 
   // Rotations
-  auto x3 = basis[3].array();
-  auto x4 = basis[4].array();
-  auto x5 = basis[5].array();
+  std::vector<T>& x3 = basis[3].array();
+  std::vector<T>& x4 = basis[4].array();
+  std::vector<T>& x5 = basis[5].array();
 
   const std::vector<double> x = V.tabulate_dof_coordinates(false);
   const std::int32_t* dofs = V.dofmap()->map().data_handle();
