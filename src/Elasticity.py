@@ -31,7 +31,7 @@ for degree in range(1, 4):
         return 0.5*(grad(v) + grad(v).T)
 
     def sigma(v):
-        return 2.0*mu*eps(v) + lmbda*tr(eps(v))*Identity(cell.geometric_dimension())
+        return 2.0*mu*eps(v) + lmbda*tr(eps(v))*Identity(3)
 
     # Add forms to namespace with names a1, a2, a3 etc.
     aname = 'a' + str(degree)

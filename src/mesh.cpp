@@ -20,33 +20,37 @@
 
 namespace
 {
-// Calculate number of vertices, edges, facets, and cells for any given
-// level of refinement
+// The numbers of lower-dimensional cells of the CW complex of the right prism.
+//
+// The right prism with dimensions i x j x k is uniformly decomposed
+// into ijk unit cubes, and each cube is decomposed into 6 tetrahedra;
+// the decomposition procedure is described in Hatcher's "Algebraic
+// Topology", on the proof of Theorem 2.10 [1], although pictures of
+// the decomposition for the particular case of 3 dimensions simply
+// can be viewed online by searching for "tetrahedral decomposition of
+// cube".
+//
+// This decomposition of the right prism leads to a number of
+// vertices, edges, faces, and tetrahedra (cells). The counting of
+// edges and faces is complicated by the fact that many cells might
+// share an edge, and two cells might share a face.
+//
+// The variable @param nrefine controls the dyadic subdivision of the
+// prism; essentially equivalent to scaling up the prism by a factor
+// of 2^nrefine in all directions. It should be a nonnegative small
+// integer.
+//
+// 1. Available at <https://pi.math.cornell.edu/~hatcher/AT/ATpage.html>.
 constexpr std::tuple<std::int64_t, std::int64_t, std::int64_t, std::int64_t>
-num_entities(std::int64_t i, std::int64_t j, std::int64_t k, int nrefine)
-{
-  std::int64_t nv = (i + 1) * (j + 1) * (k + 1);
-  std::int64_t ne = 0;
-  std::int64_t nc = (i * j * k) * 6;
-  std::int64_t earr[3] = {1, 3, 7};
-  std::int64_t farr[2] = {2, 12};
-  for (int r = 0; r < nrefine; ++r)
-  {
-    ne = earr[0] * (i + j + k) + earr[1] * (i * j + j * k + k * i)
-         + earr[2] * i * j * k;
-    nv += ne;
-    nc *= 8;
-    earr[0] *= 2;
-    earr[1] *= 4;
-    earr[2] *= 8;
-    farr[0] *= 4;
-    farr[1] *= 8;
-  }
-  ne = earr[0] * (i + j + k) + earr[1] * (i * j + j * k + k * i)
-       + earr[2] * i * j * k;
-  std::int64_t nf = farr[0] * (i * j + j * k + k * i) + farr[1] * i * j * k;
-
-  return {nv, ne, nf, nc};
+num_entities(std::int64_t i, std::int64_t j, std::int64_t k, int nrefine) {
+  i <<= nrefine;
+  j <<= nrefine;
+  k <<= nrefine;
+  std::int64_t vertices = (i + 1) * (j + 1) * (k + 1);
+  std::int64_t edges = 7*i*j*k + 3*(i*j + i*k + j*k) + (i + j + k);
+  std::int64_t faces = 12*i*j*k + 2*(i*j + i*k + j*k);
+  std::int64_t cells = 6 * (i * j * k);
+  return {vertices, edges, faces, cells};
 }
 
 std::int64_t num_pdofs(std::int64_t i, std::int64_t j, std::int64_t k,
@@ -73,7 +77,7 @@ std::int64_t num_pdofs(std::int64_t i, std::int64_t j, std::int64_t k,
 
 dolfinx::mesh::Mesh<double>
 create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
-                 std::size_t dofs_per_node, int order)
+                 std::size_t dofs_per_node, int order, bool use_subcomm)
 {
   // Get number of processes
   const std::size_t num_processes = dolfinx::MPI::size(comm);
@@ -85,13 +89,13 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
   else
     N = target_dofs * num_processes / dofs_per_node;
 
-  std::size_t Nx, Ny, Nz;
+  std::int64_t Nx, Ny, Nz;
   int r = 0;
 
   // Choose Nx_max carefully. If too large, the base mesh may become too
   // large for the partitioner; likewise, if too small, it will fail on
   // large numbers of processes.
-  const std::size_t Nx_max = 200;
+  const std::int64_t Nx_max = 200;
 
   // Get initial guess for Nx, Ny, Nz, r
   Nx = 1;
@@ -128,11 +132,11 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
   // each dimension
 
   std::size_t mindiff = 1000000;
-  for (std::size_t i = Nx - 10; i < Nx + 10; ++i)
+  for (std::int64_t i = Nx - 10; i < Nx + 10; ++i)
   {
-    for (std::size_t j = i - 5; j < i + 5; ++j)
+    for (std::int64_t j = i - 5; j < i + 5; ++j)
     {
-      for (std::size_t k = i - 5; k < i + 5; ++k)
+      for (std::int64_t k = i - 5; k < i + 5; ++k)
       {
         std::size_t diff = std::abs(num_pdofs(i, j, k, r, order) - N);
         if (diff < mindiff)
@@ -157,11 +161,31 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
 #error "No mesh partitioner has been selected"
 #endif
 
+  MPI_Comm sub_comm;
+
+  if (use_subcomm)
+  {
+    // Create a sub-communicator for mesh partitioning
+    MPI_Comm shm_comm;
+    // Get a local comm on each node
+    MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL,
+                        &shm_comm);
+    int shm_comm_rank = dolfinx::MPI::rank(shm_comm);
+    MPI_Comm_free(&shm_comm);
+    // Create a comm across nodes, using rank 0 of the local comm on each node
+    int color = (shm_comm_rank == 0) ? 0 : MPI_UNDEFINED;
+    MPI_Comm_split(comm, color, 0, &sub_comm);
+  }
+  else
+    MPI_Comm_dup(comm, &sub_comm);
+
   auto cell_part = dolfinx::mesh::create_cell_partitioner(
       dolfinx::mesh::GhostMode::none, graph_part);
   auto mesh = dolfinx::mesh::create_box(
-      comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz},
+      comm, sub_comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz},
       dolfinx::mesh::CellType::tetrahedron, cell_part);
+
+  MPI_Comm_free(&sub_comm);
 
   if (dolfinx::MPI::rank(mesh.comm()) == 0)
   {
@@ -172,7 +196,11 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
   for (int i = 0; i < r; ++i)
   {
     mesh.topology_mutable()->create_connectivity(3, 1);
-    mesh = dolfinx::refinement::refine(mesh, false);
+    auto [new_mesh, _parent_edges, _parent_facet] = dolfinx::refinement::refine(
+      mesh, std::nullopt,
+      dolfinx::mesh::create_cell_partitioner(dolfinx::mesh::GhostMode::shared_facet),
+      dolfinx::refinement::Option::parent_cell_and_facet);
+    mesh = std::move(new_mesh);
   }
 
   return mesh;
@@ -326,24 +354,17 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
     std::transform(x.begin(), x.end(), x.begin(),
                    [scale = 0.9 * x0max](auto x) { return x / scale; });
 
-    LOG(INFO) << "x range = " << x0min << " - " << x0max << std::endl;
-    LOG(INFO) << "y range = " << x1min << " - " << x1max << std::endl;
-    LOG(INFO) << "z range = " << x2min << " - " << x2max << std::endl;
+    spdlog::info("x range = {} - {}", x0min, x0max);
+    spdlog::info("y range = {} - {}", x1min, x1max);
+    spdlog::info("z range = {} - {}", x2min, x2max);
   }
 
   // New Mesh
-  std::vector<std::int32_t> offsets(ncells + 1, 0);
-  for (std::size_t i = 0; i < offsets.size() - 1; ++i)
-    offsets[i + 1] = offsets[i] + 4;
-
   dolfinx::fem::CoordinateElement<double> element(
       dolfinx::mesh::CellType::tetrahedron, 1);
 
   auto mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(
-      dolfinx::mesh::create_mesh(comm,
-                                 dolfinx::graph::AdjacencyList<std::int64_t>(
-                                     std::move(topo), std::move(offsets)),
-                                 {element}, x, {x.size() / 3, 3},
+      dolfinx::mesh::create_mesh(comm, topo, element, x, {x.size() / 3, 3},
                                  dolfinx::mesh::GhostMode::none));
 
   mesh->topology_mutable()->create_entities(1);
@@ -352,8 +373,11 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
              + mesh->topology()->index_map(1)->size_global()
          < target)
   {
-    mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(
-        dolfinx::refinement::refine(*mesh, false));
+    auto [new_mesh, _parent_edges, _parent_facet] = dolfinx::refinement::refine(
+      *mesh, std::nullopt,
+      dolfinx::mesh::create_cell_partitioner(dolfinx::mesh::GhostMode::shared_facet),
+      dolfinx::refinement::Option::parent_cell_and_facet);
+    mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(new_mesh);
     mesh->topology_mutable()->create_entities(1);
   }
 
@@ -387,8 +411,11 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
       if (i % 2000 < nmarked)
         marked_edges.push_back(i);
 
-    meshi = std::make_shared<dolfinx::mesh::Mesh<double>>(
-        dolfinx::refinement::refine(*mesh, marked_edges, false));
+    auto [new_mesh, _parent_edges, _parent_facet] = dolfinx::refinement::refine(
+      *mesh, marked_edges,
+      dolfinx::mesh::create_cell_partitioner(dolfinx::mesh::GhostMode::shared_facet),
+      dolfinx::refinement::Option::parent_cell_and_facet);
+    meshi = std::make_shared<dolfinx::mesh::Mesh<double>>(new_mesh);
 
     double actual_fraction
         = (double)(meshi->topology()->index_map(0)->size_global()

@@ -145,6 +145,22 @@ mpirun -np 8 ./dolfinx-scaling-test \
 -options_left
 ```
 
+## Interpreting the output
+
+The default loglevel diagnostic messages from DOLFINx will be present, and if `-log_view` is specified, there will be a performance profile from PETSc. There's also a "Test problem summary" summarizing the test parameters and environment to aid with reproducibility. Finally, there's a table labeled "Summary of timings" that contains various times (in units of seconds) of interest, the parts that are explicit to this test are labeled `ZZZ`. We elaborate on some:
+
+- `ZZZ Create Mesh`: Create the mesh to be used as the spatial discretisation of the domain in the FE problem
+- `ZZZ Create facets and facet->cell connectivity`: Compute the topology connectivity of the mesh's graph, i.e. compute the relationship between which cells are connected to each facet.
+- `ZZZ FunctionSpace`: Create the function space in which the finite element method solution will be sought along with appropriate index maps for each degree of freedom and their relationship with the mesh.
+- `ZZZ Assemble`: Encompassing timer for:
+  - `ZZZ Create boundary conditions`: Find the mesh’s topological indices and corresponding degree of freedom indices on which to impose boundary data in a strong Dirichlet sense.
+  - `ZZZ Create RHS function`: This is the step computing the function $f$ in the cases where $\nabla^2u=-f$ (Poisson) and $\nabla\cdot u=-f$ (elasticity, i.e. elastostatics in this case).
+  - `ZZZ Assemble matrix`: Assemble the finite element matrix $A$ underlying finite element formulation, such that we seek to later solve $A\vec{x}=\vec{b}$.
+  - `ZZZ Assemble vector`: Assemble the right-hand-side vector $\vec{b}$.
+- `ZZZ Solve`: Compute the solution of the linear system. This is typically the dominant stage taking the greatest computational effort.
+- `ZZZ Output`: Postprocess and potentially output (with `--output`) results to disk.
+
+
 ## Reference performance data
 
 Reference performance data is provided [here](performance.md) to help

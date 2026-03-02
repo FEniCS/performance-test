@@ -27,6 +27,23 @@
 using namespace dolfinx;
 using T = PetscScalar;
 
+namespace
+{
+void pack_fn(std::span<const T> in, std::span<const std::int32_t> idx,
+             std::span<T> out)
+{
+  for (std::size_t i = 0; i < idx.size(); ++i)
+    out[i] = in[idx[i]];
+}
+
+void unpack_fn(std::span<const T> in, std::span<const std::int32_t> idx,
+               std::span<T> out, std::function<T(T, T)> op)
+{
+  for (std::size_t i = 0; i < idx.size(); ++i)
+    out[idx[i]] = op(out[idx[i]], in[i]);
+}
+} // namespace
+
 std::tuple<std::shared_ptr<la::Vector<T>>, std::shared_ptr<fem::Function<T>>,
            std::function<int(fem::Function<T>&, const la::Vector<T>&)>>
 cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
@@ -34,14 +51,19 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
 {
   common::Timer t0("ZZZ FunctionSpace");
 
-  std::vector fs_poisson_a
-      = {functionspace_form_Poisson_a1, functionspace_form_Poisson_a2,
-         functionspace_form_Poisson_a3};
+  auto element = basix::create_element<double>(
+      basix::element::family::P, basix::cell::type::tetrahedron, order,
+      basix::element::lagrange_variant::gll_warped,
+      basix::element::dpc_variant::unset, false);
+
+  auto dolfinx_element
+      = std::make_shared<const fem::FiniteElement<double>>(element);
 
   auto V = std::make_shared<fem::FunctionSpace<double>>(
-      fem::create_functionspace(*fs_poisson_a.at(order - 1), "v_0", mesh));
+      fem::create_functionspace(mesh, dolfinx_element));
 
   t0.stop();
+  t0.flush();
 
   common::Timer t1("ZZZ Assemble");
 
@@ -73,6 +95,7 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
 
   auto bc = std::make_shared<fem::DirichletBC<T>>(u0, bdofs);
   t2.stop();
+  t2.flush();
 
   // Define coefficients
   common::Timer t3("ZZZ Create RHS function");
@@ -101,6 +124,7 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
         return {f, {f.size()}};
       });
   t3.stop();
+  t3.flush();
 
   std::vector form_poisson_L
       = {form_Poisson_L1, form_Poisson_L2, form_Poisson_L3};
@@ -111,14 +135,14 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
 
   // Define variational forms
   auto L = std::make_shared<fem::Form<T>>(fem::create_form<T>(
-      *form_poisson_L.at(order - 1), {V}, {{"w0", f}, {"w1", g}}, {}, {}));
+      *form_poisson_L.at(order - 1), {V}, {{"w0", f}, {"w1", g}}, {}, {}, {}));
   // auto a = std::make_shared<fem::Form<T>>(fem::create_form<T>(
   //     *form_poisson_a.at(order - 1), {V, V},
   //     std::vector<std::shared_ptr<const fem::Function<T>>>{}, {}, {}));
 
   auto un = std::make_shared<fem::Function<T>>(V);
   auto M = std::make_shared<fem::Form<T>>(fem::create_form<T>(
-      *form_poisson_M.at(order - 1), {V}, {{"w0", un}}, {{}}, {}));
+      *form_poisson_M.at(order - 1), {V}, {{"w0", un}}, {{}}, {}, {}));
 
   // Create la::Vector
   la::Vector<T> b(L->function_spaces()[0]->dofmap()->index_map,
@@ -133,14 +157,14 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
 
   // Apply lifting to account for Dirichlet boundary condition
   // b <- b - A * x_bc
-  fem::set_bc<T, double>(un->x()->mutable_array(), {bc}, -1.0);
+  bc->set(un->x()->mutable_array(), std::nullopt, -1.0);
   fem::assemble_vector(b.mutable_array(), *M);
 
   // Communicate ghost values
   b.scatter_rev(std::plus<T>());
 
   // Set BC dofs to zero (effectively zeroes columns of A)
-  fem::set_bc<T, double>(b.mutable_array(), {bc}, 0.0);
+  bc->set(b.mutable_array(), std::nullopt, 0.0);
   b.scatter_fwd();
 
   // Pack coefficients and constants
@@ -163,17 +187,6 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
 
     std::vector<T> local_buffer(sct.local_buffer_size(), 0);
     std::vector<T> remote_buffer(sct.remote_buffer_size(), 0);
-
-    auto pack_fn = [](const auto& in, const auto& idx, auto& out)
-    {
-      for (std::size_t i = 0; i < idx.size(); ++i)
-        out[i] = in[idx[i]];
-    };
-    auto unpack_fn = [](const auto& in, const auto& idx, auto& out, auto op)
-    {
-      for (std::size_t i = 0; i < idx.size(); ++i)
-        out[idx[i]] = op(out[idx[i]], in[i]);
-    };
 
     common::Scatterer<>::type type;
     if (scatterer == "neighbor")
@@ -199,7 +212,7 @@ cgpoisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order,
                            fem::make_coefficients_span(coeff));
 
       // Set BC dofs to zero (effectively zeroes rows of A)
-      fem::set_bc<T, double>(y.mutable_array(), {bc}, 0.0);
+      bc->set(y.mutable_array(), std::nullopt, 0.0);
 
       // Accumuate ghost values
       // y.scatter_rev(std::plus<T>());

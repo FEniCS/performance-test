@@ -100,13 +100,18 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
 {
   common::Timer t0("ZZZ FunctionSpace");
 
-  std::vector fs_elasticity
-      = {functionspace_form_Elasticity_a1, functionspace_form_Elasticity_a2,
-         functionspace_form_Elasticity_a3};
+  auto element = basix::create_element<double>(
+      basix::element::family::P, basix::cell::type::tetrahedron, order,
+      basix::element::lagrange_variant::gll_warped,
+      basix::element::dpc_variant::unset, false);
+
+  auto dolfinx_element = std::make_shared<const fem::FiniteElement<double>>(
+      element, std::vector<std::size_t>{3});
   auto V = std::make_shared<fem::FunctionSpace<double>>(
-      fem::create_functionspace(*fs_elasticity.at(order - 1), "v_0", mesh));
+      fem::create_functionspace(mesh, dolfinx_element));
 
   t0.stop();
+  t0.flush();
 
   common::Timer t0a("ZZZ Create boundary conditions");
 
@@ -137,9 +142,10 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
       *V->mesh()->topology_mutable(), *V->dofmap(), tdim - 1, bc_facets);
 
   // Bottom (x[1] = 0) surface
-  auto bc = std::make_shared<fem::DirichletBC<T>>(u0, bdofs);
+  auto bc = std::make_shared<const fem::DirichletBC<T>>(u0, bdofs);
 
   t0a.stop();
+  t0a.flush();
 
   common::Timer t0b("ZZZ Create RHS function");
 
@@ -170,6 +176,7 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
       });
 
   t0b.stop();
+  t0b.flush();
 
   common::Timer t0c("ZZZ Create forms");
 
@@ -179,11 +186,11 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
   std::vector form_elasticity_a
       = {form_Elasticity_a1, form_Elasticity_a2, form_Elasticity_a3};
   auto L = std::make_shared<fem::Form<T, double>>(fem::create_form<T>(
-      *form_elasticity_L.at(order - 1), {V}, {{"w0", f}}, {}, {}));
-  auto a = std::make_shared<fem::Form<T, double>>(fem::create_form<T>(
-      *form_elasticity_a.at(order - 1), {V, V},
-      std::vector<std::shared_ptr<const fem::Function<T>>>{}, {}, {}));
+      *form_elasticity_L.at(order - 1), {V}, {{"w0", f}}, {}, {}, {}));
+  auto a = std::make_shared<const fem::Form<T, double>>(fem::create_form<T>(
+      *form_elasticity_a.at(order - 1), {V, V}, {}, {}, {}, {}));
   t0c.stop();
+  t0c.flush();
 
   // Create matrices and vector, and assemble system
   std::shared_ptr<la::petsc::Matrix> A = std::make_shared<la::petsc::Matrix>(
@@ -195,14 +202,15 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
   fem::pack_coefficients(*a, coeffs_a);
   fem::assemble_matrix(la::petsc::Matrix::set_block_fn(A->mat(), ADD_VALUES),
                        *a, std::span(constants_a),
-                       fem::make_coefficients_span(coeffs_a), {bc});
+                       fem::make_coefficients_span(coeffs_a), {*bc});
   MatAssemblyBegin(A->mat(), MAT_FLUSH_ASSEMBLY);
   MatAssemblyEnd(A->mat(), MAT_FLUSH_ASSEMBLY);
   fem::set_diagonal<T>(la::petsc::Matrix::set_fn(A->mat(), INSERT_VALUES), *V,
-                       {bc});
+                       {*bc});
   MatAssemblyBegin(A->mat(), MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(A->mat(), MAT_FINAL_ASSEMBLY);
   t2.stop();
+  t2.flush();
 
   // Wrap la::Vector with Petsc Vec
   la::Vector<T> b(L->function_spaces()[0]->dofmap()->index_map,
@@ -214,12 +222,13 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
   fem::pack_coefficients(*L, coeffs_L);
   fem::assemble_vector<T>(b.mutable_array(), *L, constants_L,
                           fem::make_coefficients_span(coeffs_L));
-  fem::apply_lifting<T, double>(b.mutable_array(), {a}, {constants_L},
-                                {fem::make_coefficients_span(coeffs_L)}, {{bc}},
-                                {}, 1.0);
+  fem::apply_lifting<T, double>(b.mutable_array(), {*a}, {constants_L},
+                                {fem::make_coefficients_span(coeffs_L)},
+                                {{*bc}}, {}, 1.0);
   b.scatter_rev(std::plus<>());
-  fem::set_bc<T, double>(b.mutable_array(), {bc});
+  bc->set(b.mutable_array(), std::nullopt);
   t3.stop();
+  t3.flush();
 
   common::Timer t4("ZZZ Create near-nullspace");
 
@@ -232,6 +241,7 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
   MatNullSpaceDestroy(&ns);
 
   t4.stop();
+  t4.flush();
 
   std::function<int(fem::Function<T>&, const la::Vector<T>&)> solver_function
       = [A](fem::Function<T>& u, const la::Vector<T>& b)

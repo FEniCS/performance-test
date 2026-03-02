@@ -55,15 +55,18 @@ void solve(int argc, char* argv[])
 {
   po::options_description desc("Allowed options");
   bool mem_profile;
+  bool use_subcomm;
   desc.add_options()("help,h", "print usage message")(
       "problem_type", po::value<std::string>()->default_value("poisson"),
       "problem (poisson, cgpoisson, or elasticity)")(
       "mesh_type", po::value<std::string>()->default_value("cube"),
       "mesh (cube or unstructured)")(
       "memory_profiling", po::bool_switch(&mem_profile)->default_value(false),
-      "turn on memory logging")("scaling_type",
-                                po::value<std::string>()->default_value("weak"),
-                                "scaling (weak or strong)")(
+      "turn on memory logging")(
+      "subcomm_partition", po::bool_switch(&use_subcomm)->default_value(false),
+      "Use sub-communicator for partitioning")(
+      "scaling_type", po::value<std::string>()->default_value("weak"),
+      "scaling (weak or strong)")(
       "output", po::value<std::string>()->default_value(""),
       "output directory (no output unless this is set)")(
       "ndofs", po::value<std::size_t>()->default_value(50000),
@@ -132,8 +135,9 @@ void solve(int argc, char* argv[])
   dolfinx::common::Timer t0("ZZZ Create Mesh");
   if (mesh_type == "cube")
   {
-    mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(create_cube_mesh(
-        MPI_COMM_WORLD, ndofs, strong_scaling, ndofs_per_node, order));
+    mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(
+        create_cube_mesh(MPI_COMM_WORLD, ndofs, strong_scaling, ndofs_per_node,
+                         order, use_subcomm));
   }
   else
   {
@@ -141,12 +145,14 @@ void solve(int argc, char* argv[])
                              ndofs_per_node);
   }
   t0.stop();
+  t0.flush();
 
   dolfinx::common::Timer t_ent(
       "ZZZ Create facets and facet->cell connectivity");
   mesh->topology_mutable()->create_entities(2);
   mesh->topology_mutable()->create_connectivity(2, 3);
   t_ent.stop();
+  t_ent.flush();
 
   if (problem_type == "poisson")
   {
@@ -211,6 +217,7 @@ void solve(int argc, char* argv[])
   dolfinx::common::Timer t5("ZZZ Solve");
   int num_iter = solver_function(*u, *b);
   t5.stop();
+  t5.flush();
 
   if (output)
   {
@@ -221,10 +228,11 @@ void solve(int argc, char* argv[])
     file.write_mesh(*mesh);
     file.write_function(*u, 0.0);
     t6.stop();
+    t6.flush();
   }
 
   // Display timings
-  dolfinx::list_timings(MPI_COMM_WORLD, {dolfinx::TimingType::wall});
+  dolfinx::list_timings(MPI_COMM_WORLD);
 
   // Report number of Krylov iterations
   double norm = dolfinx::la::norm(*(u->x()));
@@ -246,22 +254,26 @@ int main(int argc, char* argv[])
   dolfinx::common::Timer t0("Init MPI");
   MPI_Init(&argc, &argv);
   t0.stop();
+  t0.flush();
 
   dolfinx::common::Timer t1("Init logging");
   dolfinx::init_logging(argc, argv);
   t1.stop();
+  t1.flush();
 
   dolfinx::common::Timer t2("Init PETSc");
   PetscInitialize(&argc, &argv, nullptr, nullptr);
   t2.stop();
+  t2.flush();
 
   // Set the logging thread name to show the process rank and enable on
   // rank 0 (add more here if desired)
   const int mpi_rank = dolfinx::MPI::rank(MPI_COMM_WORLD);
   std::string thread_name = "RANK: " + std::to_string(mpi_rank);
-  loguru::set_thread_name(thread_name.c_str());
+  std::string fmt = "[%Y-%m-%d %H:%M:%S.%e] [" + thread_name + "] [%l] %v";
+  spdlog::set_pattern(fmt);
   if (mpi_rank == 0)
-    loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
+    spdlog::set_level(spdlog::level::info);
 
   solve(argc, argv);
 
