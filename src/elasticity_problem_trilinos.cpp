@@ -30,6 +30,8 @@
 
 using T = PetscScalar;
 
+using namespace dolfinx;
+
 std::tuple<std::shared_ptr<dolfinx::la::Vector<T>>,
            std::shared_ptr<dolfinx::fem::Function<T>>,
            std::function<int(dolfinx::fem::Function<T>&,
@@ -39,11 +41,15 @@ elasticity_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
 {
   dolfinx::common::Timer t0("ZZZ FunctionSpace");
 
-  std::vector fs_elasticity
-      = {functionspace_form_Elasticity_a1, functionspace_form_Elasticity_a2,
-         functionspace_form_Elasticity_a3};
+  auto element = basix::create_element<double>(
+      basix::element::family::P, basix::cell::type::tetrahedron, order,
+      basix::element::lagrange_variant::gll_warped,
+      basix::element::dpc_variant::unset, false);
+
+  auto dolfinx_element = std::make_shared<const fem::FiniteElement<double>>(
+      element, std::vector<std::size_t>{3});
   auto V = std::make_shared<fem::FunctionSpace<double>>(
-      fem::create_functionspace(*fs_elasticity.at(order - 1), "v_0", mesh));
+      fem::create_functionspace(mesh, dolfinx_element));
 
   t0.stop();
 
@@ -51,7 +57,7 @@ elasticity_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
 
   // Define boundary condition
   auto u0 = std::make_shared<dolfinx::fem::Function<T>>(V);
-  u0->x()->set(0);
+   std::ranges::fill(u0->x()->array(), 0.0);
 
   const int tdim = mesh->topology()->dim();
 
@@ -116,11 +122,12 @@ elasticity_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
       = {form_Elasticity_L1, form_Elasticity_L2, form_Elasticity_L3};
   std::vector form_elasticity_a
       = {form_Elasticity_a1, form_Elasticity_a2, form_Elasticity_a3};
+
   auto L = std::make_shared<fem::Form<T, double>>(fem::create_form<T>(
-      *form_elasticity_L.at(order - 1), {V}, {{"w0", f}}, {}, {}));
-  auto a = std::make_shared<fem::Form<T, double>>(fem::create_form<T>(
-      *form_elasticity_a.at(order - 1), {V, V},
-      std::vector<std::shared_ptr<const fem::Function<T>>>{}, {}, {}));
+      *form_elasticity_L.at(order - 1), {V}, {{"w0", f}}, {}, {}, {}));
+  auto a = std::make_shared<const fem::Form<T, double>>(fem::create_form<T>(
+      *form_elasticity_a.at(order - 1), {V, V}, {}, {}, {}, {}));
+
   t0c.stop();
 
   dolfinx::common::Timer tassm("ZZZ Assemble matrix");
@@ -131,9 +138,9 @@ elasticity_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
   auto [sp_edges, sp_offsets] = pattern.graph();
 
   const int bs = 3;
-  const int num_local = pattern.index_map(0)->size_local();
+  const std::size_t num_local = pattern.index_map(0)->size_local();
   std::vector<std::size_t> nnz(num_local * bs);
-  for (int i = 0; i < num_local; ++i)
+  for (std::size_t i = 0; i < num_local; ++i)
     for (int j = 0; j < bs; ++j)
       nnz[i * bs + j] = bs * (sp_offsets[i + 1] - sp_offsets[i]);
 
@@ -162,7 +169,7 @@ elasticity_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
   Teuchos::RCP<Tpetra::CrsGraph<std::int32_t, std::int64_t>> crs_graph(
       new Tpetra::CrsGraph<std::int32_t, std::int64_t>(vecMap, colMap, _nnz));
 
-  const std::int64_t r0 = V->dofmap()->index_map->local_range()[0];
+  //  const std::int64_t r0 = V->dofmap()->index_map->local_range()[0];
   for (std::size_t i = 0; i != num_local; ++i)
   {
     std::vector<std::int32_t> indices;
@@ -194,18 +201,18 @@ elasticity_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
     const std::size_t nc = cols.size();
     const std::size_t nr = rows.size();
     std::vector<std::int32_t> col_view(nc * bs);
-    for (int k = 0; k < nc; ++k)
+    for (std::size_t k = 0; k < nc; ++k)
       for (int j = 0; j < bs; ++j)
         col_view[k * bs + j] = cols[k] * bs + j;
-    for (std::int32_t i = 0; i < nr; ++i)
+    for (std::size_t i = 0; i < nr; ++i)
     {
-      if (rows[i] < num_local)
+      if ((std::size_t)rows[i] < num_local)
       {
         for (int j = 0; j < bs; ++j)
         {
           Teuchos::ArrayView<const double> data_view(
               data.data() + (i * bs + j) * nc * bs, nc * bs);
-          int nvalid = A_Tpetra->sumIntoLocalValues(rows[i] * bs + j, col_view,
+	  std::size_t nvalid = A_Tpetra->sumIntoLocalValues(rows[i] * bs + j, col_view,
                                                     data_view);
           if (nvalid != nc * bs)
             throw std::runtime_error("L Inserted " + std::to_string(nvalid)
@@ -216,14 +223,14 @@ elasticity_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
       else
       {
         std::vector<std::int64_t> global_col_view(nc * bs);
-        for (int k = 0; k < nc; ++k)
+        for (std::size_t k = 0; k < nc; ++k)
           for (int j = 0; j < bs; ++j)
             global_col_view[k * bs + j] = global_indices[cols[k]] * bs + j;
         for (int j = 0; j < bs; ++j)
         {
           Teuchos::ArrayView<const double> data_view(
               data.data() + (i * bs + j) * nc * bs, nc * bs);
-          int nvalid = A_Tpetra->sumIntoGlobalValues(
+	  std::size_t nvalid = A_Tpetra->sumIntoGlobalValues(
               global_indices[rows[i]] * bs + j, global_col_view, data_view);
           if (nvalid != nc * bs)
             throw std::runtime_error("G Inserted " + std::to_string(nvalid)
@@ -247,7 +254,7 @@ elasticity_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
     for (int i = 0; i < nr; ++i)
     {
       Teuchos::ArrayView<const double> data_view(data + i * nc, nc);
-      if (rows[i] < num_local * bs)
+      if ((std::size_t)rows[i] < num_local * bs)
       {
 
         int nvalid = A_Tpetra->sumIntoLocalValues(rows[i], col_view, data_view);
@@ -282,14 +289,14 @@ elasticity_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
   {
     const std::size_t nr = rows.size();
     const std::size_t nc = cols.size();
-    if (rows[0] >= (num_local * bs) or nr > 1 or nc > 1)
+    if ((std::size_t)rows[0] >= (num_local * bs) or nr > 1 or nc > 1)
       throw std::runtime_error("Error setting diagonal: " + std::to_string(nr)
                                + " " + std::to_string(nc) + " "
                                + std::to_string(rows[0]) + "/"
                                + std::to_string(num_local));
     Teuchos::ArrayView<const int> col_view(cols.data(), 1);
     Teuchos::ArrayView<const double> data_view(data.data(), 1);
-    int nvalid = A_Tpetra->replaceLocalValues(rows[0], col_view, data_view);
+    std::size_t nvalid = A_Tpetra->replaceLocalValues(rows[0], col_view, data_view);
     if (nvalid != nc)
       throw std::runtime_error("Inserted " + std::to_string(nvalid) + "/"
                                + std::to_string(nc) + " on row:"
@@ -298,8 +305,8 @@ elasticity_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
     return 0;
   };
 
-  dolfinx::fem::assemble_matrix<T>(tpetra_insert_block, *a, {bc});
-  dolfinx::fem::set_diagonal<T>(tpetra_set, *V, {bc});
+  dolfinx::fem::assemble_matrix<T>(tpetra_insert_block, *a, {*bc});
+  dolfinx::fem::set_diagonal<T>(tpetra_set, *V, {*bc});
   A_Tpetra->fillComplete();
   tassm.stop();
 
@@ -308,18 +315,18 @@ elasticity_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
 
   la::Vector<T> b(L->function_spaces()[0]->dofmap()->index_map,
                   L->function_spaces()[0]->dofmap()->index_map_bs());
-  b.set(0);
+  std::ranges::fill(b.array(), 0.0);
   common::Timer t3("ZZZ Assemble vector");
   const std::vector constants_L = fem::pack_constants(*L);
   auto coeffs_L = fem::allocate_coefficient_storage(*L);
   fem::pack_coefficients(*L, coeffs_L);
-  fem::assemble_vector<T>(b.array(), *L, constants_L,
-                          fem::make_coefficients_span(coeffs_L));
-  fem::apply_lifting<T, double>(b.array(), {a}, {constants_L},
-                                {fem::make_coefficients_span(coeffs_L)}, {{bc}},
-                                {}, 1.0);
+
+  fem::assemble_vector(b.array(), *L, std::span<const T>(constants_L),
+                       fem::make_coefficients_span(coeffs_L));
+  fem::apply_lifting(b.array(), {*a}, {constants_L},
+                     {fem::make_coefficients_span(coeffs_L)}, {{*bc}}, {}, 1.0);
   b.scatter_rev(std::plus<>());
-  fem::set_bc<T, double>(b.array(), {bc});
+  bc->set(b.array(), std::nullopt);
 
   // Create Function to hold solution
   auto u = std::make_shared<dolfinx::fem::Function<T>>(V);
