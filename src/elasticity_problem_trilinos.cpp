@@ -313,13 +313,13 @@ elasticity_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
   const std::vector constants_L = fem::pack_constants(*L);
   auto coeffs_L = fem::allocate_coefficient_storage(*L);
   fem::pack_coefficients(*L, coeffs_L);
-  fem::assemble_vector<T>(b.mutable_array(), *L, constants_L,
+  fem::assemble_vector<T>(b.array(), *L, constants_L,
                           fem::make_coefficients_span(coeffs_L));
-  fem::apply_lifting<T, double>(b.mutable_array(), {a}, {constants_L},
+  fem::apply_lifting<T, double>(b.array(), {a}, {constants_L},
                                 {fem::make_coefficients_span(coeffs_L)}, {{bc}},
                                 {}, 1.0);
   b.scatter_rev(std::plus<>());
-  fem::set_bc<T, double>(b.mutable_array(), {bc});
+  fem::set_bc<T, double>(b.array(), {bc});
 
   // Create Function to hold solution
   auto u = std::make_shared<dolfinx::fem::Function<T>>(V);
@@ -370,7 +370,7 @@ elasticity_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
 
     // Copy out solution vector
     std::copy(x_Tpetra->getData(0).begin(), x_Tpetra->getData(0).end(),
-              u.x()->mutable_array().data());
+              u.x()->array().data());
 
     const int num_iters = belos_solver->getNumIters();
 

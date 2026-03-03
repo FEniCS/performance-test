@@ -27,6 +27,8 @@
 
 using T = PetscScalar;
 
+using namespace dolfinx;
+
 std::tuple<std::shared_ptr<dolfinx::la::Vector<T>>,
            std::shared_ptr<dolfinx::fem::Function<T>>,
            std::function<int(dolfinx::fem::Function<T>&,
@@ -37,12 +39,17 @@ poisson_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
   dolfinx::common::Timer t0("ZZZ FunctionSpace");
   std::stringstream s;
 
-  std::vector fs_poisson_a
-      = {functionspace_form_Poisson_a1, functionspace_form_Poisson_a2,
-         functionspace_form_Poisson_a3};
+
+  auto element = basix::create_element<double>(
+      basix::element::family::P, basix::cell::type::tetrahedron, order,
+      basix::element::lagrange_variant::gll_warped,
+      basix::element::dpc_variant::unset, false);
+
+  auto dolfinx_element
+      = std::make_shared<const fem::FiniteElement<double>>(element);
 
   auto V = std::make_shared<fem::FunctionSpace<double>>(
-      fem::create_functionspace(*fs_poisson_a.at(order - 1), "v_0", mesh));
+      fem::create_functionspace(mesh, dolfinx_element));
 
   t0.stop();
 
@@ -51,7 +58,7 @@ poisson_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
   dolfinx::common::Timer t2("ZZZ Create boundary conditions");
   // Define boundary condition
   auto u0 = std::make_shared<dolfinx::fem::Function<T>>(V);
-  std::fill(u0->x()->mutable_array().begin(), u0->x()->mutable_array().end(),
+  std::fill(u0->x()->array().begin(), u0->x()->array().end(),
             0.0);
 
   // Find facets with bc applied
@@ -113,10 +120,9 @@ poisson_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
 
   // Define variational forms
   auto L = std::make_shared<fem::Form<T>>(fem::create_form<T>(
-      *form_poisson_L.at(order - 1), {V}, {{"w0", f}, {"w1", g}}, {}, {}));
+      *form_poisson_L.at(order - 1), {V}, {{"w0", f}, {"w1", g}}, {}, {}, {}));
   auto a = std::make_shared<fem::Form<T>>(fem::create_form<T>(
-      *form_poisson_a.at(order - 1), {V, V},
-      std::vector<std::shared_ptr<const fem::Function<T>>>{}, {}, {}));
+      *form_poisson_a.at(order - 1), {V, V}, {}, {}, {}, {}));
 
   Teuchos::RCP<const Teuchos::Comm<int>> comm
       = Teuchos::rcp(new Teuchos::MpiComm<int>(mesh->comm()));
@@ -129,7 +135,7 @@ poisson_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
 
   // Get nnz on each local row
   std::vector<std::size_t> nnz(nlocal);
-  for (int i = 0; i < nlocal; ++i)
+  for (std::size_t i = 0; i < nlocal; ++i)
     nnz[i] = sp_offsets[i + 1] - sp_offsets[i];
 
   dolfinx::common::Timer tcre("Trilinos: create sparsity");
@@ -179,13 +185,13 @@ poisson_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
   {
     const std::size_t nr = rows.size();
     const std::size_t nc = cols.size();
-    for (std::int32_t i = 0; i < nr; ++i)
+    for (std::size_t i = 0; i < nr; ++i)
     {
       Teuchos::ArrayView<const double> data_view(data.data() + i * nc, nc);
-      if (rows[i] < nlocal)
+      if ((std::size_t)rows[i] < nlocal)
       {
         Teuchos::ArrayView<const int> col_view(cols.data(), nc);
-        int nvalid = A_Tpetra->sumIntoLocalValues(rows[i], col_view, data_view);
+	std::size_t nvalid = A_Tpetra->sumIntoLocalValues(rows[i], col_view, data_view);
         if (nvalid != nc)
           throw std::runtime_error("Inserted " + std::to_string(nvalid) + "/"
                                    + std::to_string(nc) + " on row:"
@@ -194,9 +200,9 @@ poisson_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
       else
       {
         global_cols.resize(nc);
-        for (int j = 0; j < nc; ++j)
+        for (std::size_t j = 0; j < nc; ++j)
           global_cols[j] = global_indices[cols[j]];
-        int nvalid = A_Tpetra->sumIntoGlobalValues(global_indices[rows[i]],
+        std::size_t nvalid = A_Tpetra->sumIntoGlobalValues(global_indices[rows[i]],
                                                    global_cols, data_view);
         if (nvalid != nc)
           throw std::runtime_error("Inserted " + std::to_string(nvalid) + "/"
@@ -214,11 +220,11 @@ poisson_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
   {
     const std::size_t nr = rows.size();
     const std::size_t nc = cols.size();
-    if (rows[0] >= nlocal or nr > 1 or nc > 1)
+    if ((std::size_t)rows[0] >= nlocal or nr > 1 or nc > 1)
       throw std::runtime_error("Error setting diagonal");
     Teuchos::ArrayView<const int> col_view(cols.data(), 1);
     Teuchos::ArrayView<const double> data_view(data.data(), 1);
-    int nvalid = A_Tpetra->replaceLocalValues(rows[0], col_view, data_view);
+    std::size_t nvalid = A_Tpetra->replaceLocalValues(rows[0], col_view, data_view);
     if (nvalid != nc)
       throw std::runtime_error("Inserted " + std::to_string(nvalid) + "/"
                                + std::to_string(nc) + " on row:"
@@ -232,8 +238,8 @@ poisson_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
   auto coeffs_a = fem::allocate_coefficient_storage(*a);
   fem::pack_coefficients(*a, coeffs_a);
   dolfinx::fem::assemble_matrix<T>(tpetra_insert, *a, constants_a,
-                                   fem::make_coefficients_span(coeffs_a), {bc});
-  dolfinx::fem::set_diagonal<T>(tpetra_set, *V, {bc});
+                                   fem::make_coefficients_span(coeffs_a), {*bc});
+  dolfinx::fem::set_diagonal<T>(tpetra_set, *V, {*bc});
 
   A_Tpetra->fillComplete(vecMap, vecMap);
   tassm.stop();
@@ -248,19 +254,18 @@ poisson_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
   // Create la::Vector
   la::Vector<T> b(L->function_spaces()[0]->dofmap()->index_map,
                   L->function_spaces()[0]->dofmap()->index_map_bs());
-  b.set(0);
+  std::ranges::fill(b.array(), 0.0);
 
   common::Timer t5("ZZZ Assemble vector");
   const std::vector constants_L = fem::pack_constants(*L);
   auto coeffs_L = fem::allocate_coefficient_storage(*L);
   fem::pack_coefficients(*L, coeffs_L);
-  fem::assemble_vector<T>(b.mutable_array(), *L, constants_L,
-                          fem::make_coefficients_span(coeffs_L));
-  fem::apply_lifting<T, double>(b.mutable_array(), {a}, {constants_L},
-                                {fem::make_coefficients_span(coeffs_L)}, {{bc}},
-                                {}, 1.0);
+  fem::assemble_vector(b.array(), *L, std::span<const T>(constants_L),
+                       fem::make_coefficients_span(coeffs_L));
+  fem::apply_lifting(b.array(), {*a}, {constants_L},
+                     {fem::make_coefficients_span(coeffs_L)}, {{*bc}}, {}, 1.0);
   b.scatter_rev(std::plus<>());
-  fem::set_bc<T, double>(b.mutable_array(), {bc});
+  bc->set(b.array(), std::nullopt);
   t5.stop();
 
   const int size_local = V->dofmap()->index_map->size_local();
@@ -329,7 +334,7 @@ poisson_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
 
     // Copy out solution vector
     std::copy(x_Tpetra->getData(0).begin(), x_Tpetra->getData(0).end(),
-              u.x()->mutable_array().data());
+              u.x()->array().data());
 
     const int num_iters = belos_solver->getNumIters();
     std::cout << "num iters = " << num_iters << "\n";

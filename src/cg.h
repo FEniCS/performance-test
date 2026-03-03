@@ -20,7 +20,7 @@ void axpy(la::Vector<U>& r, U alpha, const la::Vector<U>& x,
           const la::Vector<U>& y)
 {
   std::transform(x.array().begin(), x.array().end(), y.array().begin(),
-                 r.mutable_array().begin(),
+                 r.array().begin(),
                  [alpha](auto x, auto y) { return alpha * x + y; });
 }
 

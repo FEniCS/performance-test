@@ -50,9 +50,9 @@ MatNullSpace build_near_nullspace(const fem::FunctionSpace<double>& V)
   }
 
   // Rotations
-  auto x3 = basis[3].array();
-  auto x4 = basis[4].array();
-  auto x5 = basis[5].array();
+  std::vector<T>& x3 = basis[3].array();
+  std::vector<T>& x4 = basis[4].array();
+  std::vector<T>& x5 = basis[5].array();
 
   const std::vector<double> x = V.tabulate_dof_coordinates(false);
   const std::int32_t* dofs = V.dofmap()->map().data_handle();
@@ -117,7 +117,7 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
 
   // Define boundary condition
   auto u0 = std::make_shared<fem::Function<T>>(V);
-  u0->x()->set(0);
+  std::ranges::fill(u0->x()->array(), 0.0);
 
   const int tdim = mesh->topology()->dim();
 
@@ -215,16 +215,16 @@ elastic::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
   // Wrap la::Vector with Petsc Vec
   la::Vector<T> b(L->function_spaces()[0]->dofmap()->index_map,
                   L->function_spaces()[0]->dofmap()->index_map_bs());
-  b.set(0);
+  std::ranges::fill(b.array(), 0.0);
+
   common::Timer t3("ZZZ Assemble vector");
   const std::vector constants_L = fem::pack_constants(*L);
   auto coeffs_L = fem::allocate_coefficient_storage(*L);
   fem::pack_coefficients(*L, coeffs_L);
-  fem::assemble_vector<T>(b.array(), *L, constants_L,
-                          fem::make_coefficients_span(coeffs_L));
-  fem::apply_lifting<T, double>(b.array(), {*a}, {constants_L},
-                                {fem::make_coefficients_span(coeffs_L)},
-                                {{*bc}}, {}, 1.0);
+  fem::assemble_vector(b.array(), *L, std::span<const T>(constants_L),
+                       fem::make_coefficients_span(coeffs_L));
+  fem::apply_lifting(b.array(), {*a}, {constants_L},
+                     {fem::make_coefficients_span(coeffs_L)}, {{*bc}}, {}, 1.0);
   b.scatter_rev(std::plus<>());
   bc->set(b.array(), std::nullopt);
   t3.stop();

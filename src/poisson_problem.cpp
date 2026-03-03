@@ -51,7 +51,7 @@ poisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
   common::Timer t2("ZZZ Create boundary conditions");
   // Define boundary condition
   auto u0 = std::make_shared<fem::Function<T>>(V);
-  u0->x()->set(0);
+  std::ranges::fill(u0->x()->array(), 0.0);
 
   // Find facets with bc applied
   const int tdim = mesh->topology()->dim();
@@ -141,18 +141,18 @@ poisson::problem(std::shared_ptr<mesh::Mesh<double>> mesh, int order)
   // Create la::Vector
   la::Vector<T> b(L->function_spaces()[0]->dofmap()->index_map,
                   L->function_spaces()[0]->dofmap()->index_map_bs());
-  b.set(0);
+  std::ranges::fill(b.array(), 0.0);
+
   common::Timer t5("ZZZ Assemble vector");
   const std::vector constants_L = fem::pack_constants(*L);
   auto coeffs_L = fem::allocate_coefficient_storage(*L);
   fem::pack_coefficients(*L, coeffs_L);
-  fem::assemble_vector<T>(b.mutable_array(), *L, constants_L,
-                          fem::make_coefficients_span(coeffs_L));
-  fem::apply_lifting<T, double>(b.mutable_array(), {*a}, {constants_L},
-                                {fem::make_coefficients_span(coeffs_L)},
-                                {{*bc}}, {}, 1.0);
+  fem::assemble_vector(b.array(), *L, std::span<const T>(constants_L),
+                       fem::make_coefficients_span(coeffs_L));
+  fem::apply_lifting(b.array(), {*a}, {constants_L},
+                     {fem::make_coefficients_span(coeffs_L)}, {{*bc}}, {}, 1.0);
   b.scatter_rev(std::plus<>());
-  bc->set(b.mutable_array(), std::nullopt);
+  bc->set(b.array(), std::nullopt);
   t5.stop();
   t5.flush();
 
