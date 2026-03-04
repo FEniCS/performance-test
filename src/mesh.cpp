@@ -179,8 +179,8 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
   else
     MPI_Comm_dup(comm, &sub_comm);
 
-  auto cell_part = dolfinx::mesh::create_cell_partitioner(
-      dolfinx::mesh::GhostMode::none, graph_part);
+  auto cell_part = dolfinx::mesh::create_cell_partitioner(dolfinx::mesh::GhostMode::none,
+							  graph_part, 2);
   auto mesh = dolfinx::mesh::create_box(
       comm, sub_comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz},
       dolfinx::mesh::CellType::tetrahedron, cell_part);
