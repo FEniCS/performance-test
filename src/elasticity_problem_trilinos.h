@@ -6,6 +6,7 @@
 
 #pragma once
 
+#ifdef HAS_TRILINOS
 #include <dolfinx/fem/Function.h>
 #include <dolfinx/la/Vector.h>
 #include <memory>
@@ -30,3 +31,4 @@ std::tuple<std::shared_ptr<dolfinx::la::Vector<T>>,
 problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh, int order);
 
 } // namespace elastic_trilinos
+#endif

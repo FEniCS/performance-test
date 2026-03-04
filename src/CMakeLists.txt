@@ -34,14 +34,24 @@ add_custom_command(
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
+find_package(Trilinos)
+
+get_cmake_property(_variableNames VARIABLES)
+list (SORT _variableNames)
+foreach (_variableName ${_variableNames})
+    message(STATUS "${_variableName}=${${_variableName}}")
+endforeach()
+
 # Executable
-add_executable(${PROJECT_NAME} main.cpp mesh.cpp mem.cpp elasticity_problem.cpp poisson_problem.cpp cgpoisson_problem.cpp poisson_problem_trilinos.cpp
-  elasticity_problem_trilinos.cpp
+add_executable(${PROJECT_NAME} main.cpp mesh.cpp mem.cpp elasticity_problem.cpp poisson_problem.cpp cgpoisson_problem.cpp
   ${CMAKE_CURRENT_BINARY_DIR}/Elasticity.c
   ${CMAKE_CURRENT_BINARY_DIR}/Poisson.c)
 
-find_package(Trilinos)
-target_include_directories(${PROJECT_NAME} PRIVATE ${Trilinos_INCLUDE_DIRS})
+if(Trilinos_FOUND)
+  target_sources(${PROJECT_NAME} PRIVATE poisson_problem_trilinos.cpp  elasticity_problem_trilinos.cpp)
+  target_include_directories(${PROJECT_NAME} PRIVATE ${Trilinos_INCLUDE_DIRS})
+  target_compile_definitions(${PROJECT_NAME} PUBLIC HAS_TRILINOS)
+endif()
 
 # Find Boost program_options
 if(DEFINED ENV{BOOST_ROOT} OR DEFINED BOOST_ROOT)

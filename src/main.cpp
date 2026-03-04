@@ -56,9 +56,16 @@ void solve(int argc, char* argv[])
   po::options_description desc("Allowed options");
   bool mem_profile;
   bool use_subcomm;
+
+#ifdef HAS_TRILINOS
+  std::string problems = "problem (poisson, cgpoisson, or elasticity, poisson_trilinos, elasticity_trilinos)";
+#else
+  std::string problems = "problem (poisson, cgpoisson, or elasticity)";
+#endif
+
   desc.add_options()("help,h", "print usage message")(
       "problem_type", po::value<std::string>()->default_value("poisson"),
-      "problem (poisson, cgpoisson, or elasticity)")(
+      problems.c_str())(
       "mesh_type", po::value<std::string>()->default_value("cube"),
       "mesh (cube or unstructured)")(
       "memory_profiling", po::bool_switch(&mem_profile)->default_value(false),
@@ -171,10 +178,12 @@ void solve(int argc, char* argv[])
     // linear operator (matrix).
     std::tie(b, u, solver_function) = elastic::problem(mesh, order);
   }
+#ifdef HAS_TRILINOS
   else if (problem_type == "elasticity_trilinos")
      std::tie(b, u, solver_function) = elasticity_trilinos::problem(mesh, order);
   else if (problem_type == "poisson_trilinos")
     std::tie(b, u, solver_function) = poisson_trilinos::problem(mesh, order);
+#endif
   else
     throw std::runtime_error("Unknown problem type: " + problem_type);
 
@@ -272,8 +281,8 @@ int main(int argc, char* argv[])
   std::string thread_name = "RANK: " + std::to_string(mpi_rank);
   std::string fmt = "[%Y-%m-%d %H:%M:%S.%e] [" + thread_name + "] [%l] %v";
   spdlog::set_pattern(fmt);
-  if (mpi_rank == 0)
-    spdlog::set_level(spdlog::level::info);
+  if (mpi_rank != 0)
+    spdlog::set_level(spdlog::level::err);
 
   solve(argc, argv);
 

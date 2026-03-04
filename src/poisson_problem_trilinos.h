@@ -5,7 +5,7 @@
 // SPDX-License-Identifier:    MIT
 
 #pragma once
-
+#ifdef HAS_TRILINOS
 #include <dolfinx/fem/Function.h>
 #include <dolfinx/la/Vector.h>
 #include <dolfinx/mesh/Mesh.h>
@@ -22,3 +22,4 @@ std::tuple<std::shared_ptr<dolfinx::la::Vector<PetscScalar>>,
                              const dolfinx::la::Vector<PetscScalar>&)>>
 problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh, int order);
 }
+#endif
