@@ -36,12 +36,6 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 find_package(Trilinos)
 
-get_cmake_property(_variableNames VARIABLES)
-list (SORT _variableNames)
-foreach (_variableName ${_variableNames})
-    message(STATUS "${_variableName}=${${_variableName}}")
-endforeach()
-
 # Executable
 add_executable(${PROJECT_NAME} main.cpp mesh.cpp mem.cpp elasticity_problem.cpp poisson_problem.cpp cgpoisson_problem.cpp
   ${CMAKE_CURRENT_BINARY_DIR}/Elasticity.c
