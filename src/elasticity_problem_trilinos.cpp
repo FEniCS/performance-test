@@ -57,7 +57,7 @@ elasticity_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
 
   // Define boundary condition
   auto u0 = std::make_shared<dolfinx::fem::Function<T>>(V);
-   std::ranges::fill(u0->x()->array(), 0.0);
+  std::ranges::fill(u0->x()->array(), 0.0);
 
   const int tdim = mesh->topology()->dim();
 
@@ -193,7 +193,7 @@ elasticity_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
           new Tpetra::CrsMatrix<T, std::int32_t, std::int64_t>(crs_graph));
 
   // Insert block
-  auto tpetra_insert_block = [&A_Tpetra, &bs, &num_local, &global_indices](
+  auto tpetra_insert_block = [&A_Tpetra, &num_local, &global_indices](
                                  const std::span<const std::int32_t>& rows,
                                  const std::span<const std::int32_t>& cols,
                                  const std::span<const T>& data)
@@ -212,8 +212,8 @@ elasticity_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
         {
           Teuchos::ArrayView<const double> data_view(
               data.data() + (i * bs + j) * nc * bs, nc * bs);
-	  std::size_t nvalid = A_Tpetra->sumIntoLocalValues(rows[i] * bs + j, col_view,
-                                                    data_view);
+          std::size_t nvalid = A_Tpetra->sumIntoLocalValues(
+              rows[i] * bs + j, col_view, data_view);
           if (nvalid != nc * bs)
             throw std::runtime_error("L Inserted " + std::to_string(nvalid)
                                      + "/" + std::to_string(nc)
@@ -230,7 +230,7 @@ elasticity_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
         {
           Teuchos::ArrayView<const double> data_view(
               data.data() + (i * bs + j) * nc * bs, nc * bs);
-	  std::size_t nvalid = A_Tpetra->sumIntoGlobalValues(
+          std::size_t nvalid = A_Tpetra->sumIntoGlobalValues(
               global_indices[rows[i]] * bs + j, global_col_view, data_view);
           if (nvalid != nc * bs)
             throw std::runtime_error("G Inserted " + std::to_string(nvalid)
@@ -242,47 +242,7 @@ elasticity_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
     return 0;
   };
 
-  // Insert individual values (for diagonal)
-  std::function<int(std::int32_t, const std::int32_t*, std::int32_t,
-                    const std::int32_t*, const T*)>
-      tpetra_insert
-      = [&A_Tpetra, &bs, &num_local, &global_index_view](
-            std::int32_t nr, const std::int32_t* rows, const std::int32_t nc,
-            const std::int32_t* cols, const T* data)
-  {
-    std::vector<std::int32_t> col_view(cols, cols + nc);
-    for (int i = 0; i < nr; ++i)
-    {
-      Teuchos::ArrayView<const double> data_view(data + i * nc, nc);
-      if ((std::size_t)rows[i] < num_local * bs)
-      {
-
-        int nvalid = A_Tpetra->sumIntoLocalValues(rows[i], col_view, data_view);
-
-        if (nvalid != nc)
-          throw std::runtime_error("LD Inserted " + std::to_string(nvalid) + "/"
-                                   + std::to_string(nc)
-                                   + " on row:" + std::to_string(rows[i]));
-      }
-      else
-      {
-        std::vector<std::int64_t> global_col_view(nc);
-        for (int j = 0; j < nc; ++j)
-          global_col_view[j] = global_index_view[cols[j]];
-        int nvalid = A_Tpetra->sumIntoGlobalValues(global_index_view[rows[i]],
-                                                   global_col_view, data_view);
-
-        if (nvalid != nc)
-          throw std::runtime_error("GD Inserted " + std::to_string(nvalid) + "/"
-                                   + std::to_string(nc)
-                                   + " on row:" + std::to_string(rows[i]));
-      }
-    }
-
-    return 0;
-  };
-
-  auto tpetra_set = [&A_Tpetra, &global_indices, &bs,
+  auto tpetra_set = [&A_Tpetra, &global_indices,
                      &num_local](const std::span<const std::int32_t>& rows,
                                  const std::span<const std::int32_t>& cols,
                                  const std::span<const T>& data)
@@ -296,7 +256,8 @@ elasticity_trilinos::problem(std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
                                + std::to_string(num_local));
     Teuchos::ArrayView<const int> col_view(cols.data(), 1);
     Teuchos::ArrayView<const double> data_view(data.data(), 1);
-    std::size_t nvalid = A_Tpetra->replaceLocalValues(rows[0], col_view, data_view);
+    std::size_t nvalid
+        = A_Tpetra->replaceLocalValues(rows[0], col_view, data_view);
     if (nvalid != nc)
       throw std::runtime_error("Inserted " + std::to_string(nvalid) + "/"
                                + std::to_string(nc) + " on row:"
