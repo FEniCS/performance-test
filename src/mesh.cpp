@@ -42,13 +42,15 @@ namespace
 //
 // 1. Available at <https://pi.math.cornell.edu/~hatcher/AT/ATpage.html>.
 constexpr std::tuple<std::int64_t, std::int64_t, std::int64_t, std::int64_t>
-num_entities(std::int64_t i, std::int64_t j, std::int64_t k, int nrefine) {
+num_entities(std::int64_t i, std::int64_t j, std::int64_t k, int nrefine)
+{
   i <<= nrefine;
   j <<= nrefine;
   k <<= nrefine;
   std::int64_t vertices = (i + 1) * (j + 1) * (k + 1);
-  std::int64_t edges = 7*i*j*k + 3*(i*j + i*k + j*k) + (i + j + k);
-  std::int64_t faces = 12*i*j*k + 2*(i*j + i*k + j*k);
+  std::int64_t edges
+      = 7 * i * j * k + 3 * (i * j + i * k + j * k) + (i + j + k);
+  std::int64_t faces = 12 * i * j * k + 2 * (i * j + i * k + j * k);
   std::int64_t cells = 6 * (i * j * k);
   return {vertices, edges, faces, cells};
 }
@@ -179,7 +181,8 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
   else
     MPI_Comm_dup(comm, &sub_comm);
 
-  auto cell_part = dolfinx::mesh::create_cell_partitioner(dolfinx::mesh::GhostMode::none, graph_part, 2);
+  auto cell_part = dolfinx::mesh::create_cell_partitioner(
+      dolfinx::mesh::GhostMode::none, graph_part, 2);
   auto mesh = dolfinx::mesh::create_box(
       comm, sub_comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz},
       dolfinx::mesh::CellType::tetrahedron, cell_part);
@@ -196,9 +199,10 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
   {
     mesh.topology_mutable()->create_connectivity(3, 1);
     auto [new_mesh, _parent_edges, _parent_facet] = dolfinx::refinement::refine(
-      mesh, std::nullopt,
-      dolfinx::mesh::create_cell_partitioner(dolfinx::mesh::GhostMode::shared_facet, 2),
-      dolfinx::refinement::Option::parent_cell_and_facet);
+        mesh, std::nullopt,
+        dolfinx::mesh::create_cell_partitioner(
+            dolfinx::mesh::GhostMode::shared_facet, 2),
+        dolfinx::refinement::Option::parent_cell_and_facet);
     mesh = std::move(new_mesh);
   }
 
@@ -373,9 +377,10 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
          < target)
   {
     auto [new_mesh, _parent_edges, _parent_facet] = dolfinx::refinement::refine(
-      *mesh, std::nullopt,
-      dolfinx::mesh::create_cell_partitioner(dolfinx::mesh::GhostMode::shared_facet, 2),
-      dolfinx::refinement::Option::parent_cell_and_facet);
+        *mesh, std::nullopt,
+        dolfinx::mesh::create_cell_partitioner(
+            dolfinx::mesh::GhostMode::shared_facet, 2),
+        dolfinx::refinement::Option::parent_cell_and_facet);
     mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(new_mesh);
     mesh->topology_mutable()->create_entities(1);
   }
@@ -411,9 +416,10 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
         marked_edges.push_back(i);
 
     auto [new_mesh, _parent_edges, _parent_facet] = dolfinx::refinement::refine(
-      *mesh, marked_edges,
-      dolfinx::mesh::create_cell_partitioner(dolfinx::mesh::GhostMode::shared_facet, 2),
-      dolfinx::refinement::Option::parent_cell_and_facet);
+        *mesh, marked_edges,
+        dolfinx::mesh::create_cell_partitioner(
+            dolfinx::mesh::GhostMode::shared_facet, 2),
+        dolfinx::refinement::Option::parent_cell_and_facet);
     meshi = std::make_shared<dolfinx::mesh::Mesh<double>>(new_mesh);
 
     double actual_fraction
