@@ -15,9 +15,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # DOLFIN_CMAKE_CONFIG_PATH)
 find_package(DOLFINX REQUIRED)
 
-# set(CMAKE_BUILD_TYPE "Release")
-set(CMAKE_CXX_FLAGS "-Ofast ${CMAKE_CXX_FLAGS} -g -Wall")
-set(CMAKE_C_FLAGS "-Ofast ${CMAKE_C_FLAGS} -g -Wall")
+set(CMAKE_CXX_FLAGS "-O3 -ffast-math ${CMAKE_CXX_FLAGS} -g -Wall")
+set(CMAKE_C_FLAGS "-O3 -ffast-math ${CMAKE_C_FLAGS} -g -Wall")
 
 # Compile UFL files
 add_custom_command(
