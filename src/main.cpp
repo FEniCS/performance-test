@@ -264,7 +264,8 @@ int main(int argc, char* argv[])
   std::string fmt = "[%Y-%m-%d %H:%M:%S.%e] [" + thread_name + "] [%l] %v";
   spdlog::set_pattern(fmt);
 
-  // Turn off logging except on rank 0, if set (e.g. use SPDLOG_LEVEL=info in CLI)
+  // Turn off logging except on rank 0, if set (e.g. use SPDLOG_LEVEL=info in
+  // CLI)
   if (mpi_rank != 0)
     spdlog::set_level(spdlog::level::err);
 
