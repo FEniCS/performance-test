@@ -179,8 +179,7 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
   else
     MPI_Comm_dup(comm, &sub_comm);
 
-  auto cell_part = dolfinx::mesh::create_cell_partitioner(dolfinx::mesh::GhostMode::none,
-							  graph_part, 2);
+  auto cell_part = dolfinx::mesh::create_cell_partitioner(dolfinx::mesh::GhostMode::none, graph_part, 2);
   auto mesh = dolfinx::mesh::create_box(
       comm, sub_comm, {{{0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}}}, {Nx, Ny, Nz},
       dolfinx::mesh::CellType::tetrahedron, cell_part);
@@ -198,7 +197,7 @@ create_cube_mesh(MPI_Comm comm, std::size_t target_dofs, bool target_dofs_total,
     mesh.topology_mutable()->create_connectivity(3, 1);
     auto [new_mesh, _parent_edges, _parent_facet] = dolfinx::refinement::refine(
       mesh, std::nullopt,
-      dolfinx::mesh::create_cell_partitioner(dolfinx::mesh::GhostMode::shared_facet),
+      dolfinx::mesh::create_cell_partitioner(dolfinx::mesh::GhostMode::shared_facet, 2),
       dolfinx::refinement::Option::parent_cell_and_facet);
     mesh = std::move(new_mesh);
   }
@@ -375,7 +374,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
   {
     auto [new_mesh, _parent_edges, _parent_facet] = dolfinx::refinement::refine(
       *mesh, std::nullopt,
-      dolfinx::mesh::create_cell_partitioner(dolfinx::mesh::GhostMode::shared_facet),
+      dolfinx::mesh::create_cell_partitioner(dolfinx::mesh::GhostMode::shared_facet, 2),
       dolfinx::refinement::Option::parent_cell_and_facet);
     mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(new_mesh);
     mesh->topology_mutable()->create_entities(1);
@@ -413,7 +412,7 @@ create_spoke_mesh(MPI_Comm comm, std::size_t target_dofs,
 
     auto [new_mesh, _parent_edges, _parent_facet] = dolfinx::refinement::refine(
       *mesh, marked_edges,
-      dolfinx::mesh::create_cell_partitioner(dolfinx::mesh::GhostMode::shared_facet),
+      dolfinx::mesh::create_cell_partitioner(dolfinx::mesh::GhostMode::shared_facet, 2),
       dolfinx::refinement::Option::parent_cell_and_facet);
     meshi = std::make_shared<dolfinx::mesh::Mesh<double>>(new_mesh);
 
