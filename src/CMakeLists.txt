@@ -41,11 +41,11 @@ add_executable(
   ${CMAKE_CURRENT_BINARY_DIR}/Poisson.c
 )
 
+target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)
+
 set_target_properties(
   ${PROJECT_NAME}
   PROPERTIES
-    CXX_STANDARD 20
-    CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
     INSTALL_RPATH_USE_LINK_PATH TRUE
 )
