@@ -29,7 +29,8 @@ endif()
 set(Boost_VERBOSE TRUE)
 find_package(Boost 1.70 REQUIRED program_options)
 
-add_executable(${PROJECT_NAME}
+add_executable(
+  ${PROJECT_NAME}
   main.cpp
   mesh.cpp
   elasticity_problem.cpp
@@ -40,11 +41,13 @@ add_executable(${PROJECT_NAME}
   ${CMAKE_CURRENT_BINARY_DIR}/Poisson.c
 )
 
-set_target_properties(${PROJECT_NAME} PROPERTIES
-  CXX_STANDARD 20
-  CXX_STANDARD_REQUIRED ON
-  CXX_EXTENSIONS OFF
-  INSTALL_RPATH_USE_LINK_PATH TRUE
+set_target_properties(
+  ${PROJECT_NAME}
+  PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+    INSTALL_RPATH_USE_LINK_PATH TRUE
 )
 
 set(COMPILE_FLAGS -O3 -ffast-math -g -Wall)
@@ -52,7 +55,8 @@ target_compile_options(${PROJECT_NAME} PRIVATE ${COMPILE_FLAGS})
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
-target_link_libraries(${PROJECT_NAME}
+target_link_libraries(
+  ${PROJECT_NAME}
   dolfinx::dolfinx
   Boost::program_options
   Threads::Threads
